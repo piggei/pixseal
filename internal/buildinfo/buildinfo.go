@@ -5,7 +5,7 @@ import "fmt"
 
 const (
 	Version = "0.2.0"
-	Build   = 2
+	Build   = 3
 )
 
 // String returns the human-readable development version.

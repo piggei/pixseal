@@ -21,9 +21,11 @@ STRICT ?= 0
 LIMIT_START ?= 95
 LIMIT_MIN ?= 10
 LIMIT_STEP ?= 5
+GEOMETRY_ANGLES ?= -45 -30 -15 -10 -5 -1 1 5 10 15 30 45 90 180 270
+GEOMETRY_MAX_MPIX ?= 50
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test extreme-test all build-all clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test all build-all clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -121,6 +123,22 @@ extreme-test: build
 	LIMIT_STEP="$(LIMIT_STEP)" \
 	RANDOM_SEED="$(RANDOM_SEED)" \
 	bash ./scripts/test-limits.sh
+
+# Experimental geometric robustness suite; intentionally excluded from make all.
+geometry-test: build
+	@echo "Running digital rotation geometry tests..."
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
+	TEST_KEY="$(TEST_KEY)" \
+	TEST_PROFILES="$(TEST_PROFILES)" \
+	TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	TEST_MESSAGE_BALANCED="$(TEST_MESSAGE_BALANCED)" \
+	TEST_MESSAGE_CAPACITY="$(TEST_MESSAGE_CAPACITY)" \
+	GEOMETRY_ANGLES="$(GEOMETRY_ANGLES)" \
+	GEOMETRY_MAX_MPIX="$(GEOMETRY_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
+	STRICT="$(STRICT)" \
+	bash ./scripts/test-geometry.sh
 
 # Run build + local round-trip tests + baseline transformation tests.
 all: test deep-test

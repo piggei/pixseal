@@ -5,6 +5,128 @@ results** and **corpus-specific experimental measurements**. None of the results
 below proves statistical steganographic undetectability or guarantees recovery
 for unseen images.
 
+## v0.2.0 build 3 validation status
+
+Development build: **v0.2.0 build 3**, 7 September 2026.
+
+Build 3 keeps the adaptive v3 on-image format unchanged and adds bounded digital
+rotation recovery around the v3-only decoder.
+
+### Deterministic rotation-search bounds
+
+The native crop/resize search is unchanged. Rotation adds two finite stages:
+
+```text
+Exact quarter turns:
+  up to 3 orientations x 64 direct grids = 192 grids
+
+Arbitrary-angle estimator:
+  -45 .. +45 degrees, step 0.25 = 361 sparse coarse probes
+  at most 2 peaks x 11 local refinements = 22 sparse refinement probes
+  383 sparse angle probes maximum
+
+Authenticated arbitrary-angle decode:
+  at most 2 rectified angles x 4 quadrants x 64 grids = 512 grids
+```
+
+Including every optional branch, the theoretical maximum is **857 full grid
+candidates** plus the fixed 383 sparse orientation probes. This is a worst-case
+bound, not the cost of a normal successful extraction. Unrotated valid carriers
+still return from the original native fast path before rotation analysis.
+
+Rotation rectification is skipped when the expanded canvas would exceed
+50,000,000 pixels.
+
+### Automated validation in this environment
+
+The following checks were executed successfully for build 3:
+
+```text
+gofmt
+go vet ./...
+go test ./...
+bash -n scripts/test-robustness.sh
+bash -n scripts/test-limits.sh
+bash -n scripts/test-geometry.sh
+make clean
+make
+make build-all
+```
+
+A temporary generated 560x512 corpus was also used only to validate shell-suite
+plumbing. `make geometry-test` passed 7.5, 12.3 and 90 degree robust-profile
+cases, and a reduced `make all` matrix passed round trips plus JPEG, 75% resize,
+75% center crop and 75% random crop for all three profiles. These generated
+checks do **not** count as private-corpus robustness results.
+
+With `original pics/` removed again, `make all`, `make extreme-test` and
+`make geometry-test` were each invoked and stopped at the expected missing-corpus
+check. They are therefore not reported as passed on PJ's photographic corpus.
+
+### Automated rotation regression results
+
+The Go regression suite includes independent bilinear image rotation fixtures and
+currently verifies:
+
+- lossless 90/180/270-degree recovery across robust/balanced/capacity profiles;
+- fractional arbitrary-angle recovery at 7.5, 12.3 and 22.7 degrees across the
+  three profiles;
+- profile auto-detection after rotation;
+- reported rotation-correction angle within 0.15 degree of the expected value in
+  those fixtures;
+- rejection of an unmarked synthetic image by the arbitrary-angle probe;
+- bounded failure for a rotated carrier extracted with the wrong key.
+
+These are generated deterministic regression images, not a substitute for the
+private photographic corpus.
+
+### Same-machine performance spot checks
+
+Build 2 and build 3 were compiled in the same environment and run against the
+same deterministic synthetic files. Times are engineering spot checks rather
+than guarantees:
+
+| Case | Size | Build 2 | Build 3 | Observation |
+|---|---:|---:|---:|---|
+| valid unrotated robust carrier | 560x512 | ~0.03 s | ~0.02 s | native positive fast path unchanged |
+| unmarked carrier | 560x512 | ~4.56 s | ~3.93 s | zero-degree lattice precheck skips the angle sweep |
+| valid carrier, wrong key | 560x512 | ~4.20 s | ~4.29 s | aligned wrong-key carrier avoids the angle sweep |
+| unmarked carrier | 1024x768 | ~12.19 s | ~13.11 s | larger DCT search still dominates |
+| robust carrier rotated 12.3 deg | 560x512 | unsupported | ~2.39 s | recovered, correction about -12.25 deg |
+| robust carrier rotated 44.4 deg | 560x512 | unsupported | ~3.09 s | recovered, correction about -44.40 deg |
+| robust carrier rotated 90 deg | 560x512 | unsupported | ~0.28 s | lossless quarter-turn fast path |
+| rotated 12.3 deg, wrong key | 560x512 | unsupported | ~10.24 s | bounded authenticated failure |
+
+The zero-degree lattice precheck avoids the expensive angle sweep when the carrier
+is already geometrically aligned, so ordinary unmarked and wrong-key spot checks
+remain close to the build-2 baseline. A genuinely rotated wrong-key carrier does
+pay the bounded orientation/rectification cost (~10.24 s in the 12.3-degree
+560x512 spot check). Future work should continue reducing that rotated-negative
+cost before adding affine/perspective dimensions.
+
+### Private `original pics` geometry suite
+
+Build 3 adds:
+
+```sh
+make geometry-test
+```
+
+The default matrix tests -45, -30, -15, -10, -5, -1, 1, 5, 10, 15, 30, 45,
+90, 180 and 270 degrees for every selected profile, using ImageMagick only to
+produce the transformed temporary carrier. The extractor receives no angle.
+
+The private `original pics/` corpus is absent from this development environment,
+so `make geometry-test`, `make all` and `make extreme-test` cannot be reported as
+passed here. They must be validated on PJ's Linux system.
+
+### Current geometry boundary
+
+Build 3 claims **experimental pure digital rotation recovery**. It does not yet
+claim combined arbitrary rotation + fractional resize/crop, affine deformation,
+perspective correction or print-camera recovery. Those remain staged research
+targets.
+
 ## v0.2.0 build 2 validation status
 
 Development build: **v0.2.0 build 2**, 7 September 2026.

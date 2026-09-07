@@ -5,7 +5,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits into luminance DCT coefficients while keeping the resulting changes
 visually unobtrusive under normal viewing conditions.
 
-Current development line: **v0.2.0 build 2**. The last stable release is
+Current development line: **v0.2.0 build 3**. The last stable release is
 **v0.1.0**.
 
 PixSeal is designed as a hidden-data channel rather than an ownership-marking
@@ -23,40 +23,51 @@ or claim compatibility with Google's SynthID algorithm.
 PixSeal does not claim statistical steganographic undetectability. It has not
 undergone a cryptographic or steganalytic security audit.
 
-## What's new in v0.2.0 build 2
+## What's new in v0.2.0 build 3
 
-Build 2 consolidates the **v3 adaptive format** as the only runtime format. The
-experimental v1 and v2 decoders have been removed because there are no known
-external carriers or interoperability commitments for those formats. This reduces decoder complexity and makes v3 the clean
-baseline for the upcoming geometric-synchronization work.
+Build 3 adds the first **geometric rotation recovery layer** without changing
+format v3 or its adaptive profile math.
 
-The v3 format keeps the 64-byte maximum payload while spending unused capacity
-on additional observations of protected bits.
+The extractor now handles two rotation classes:
 
-| Profile | Maximum payload | Protected frame | Average observations per coded bit in one logical tile | Goal |
-|---|---:|---:|---:|---|
-| `robust` | 16 bytes | 448 bits | 2.50x | Maximum redundancy |
-| `balanced` | 32 bytes | 672 bits | 1.67x | General compromise |
-| `capacity` | 64 bytes | 1120 bits | 1.00x | Maximum capacity |
-| `auto` | automatic | automatic | automatic | Most robust compatible profile |
+- exact 90/180/270-degree turns through lossless quarter-turn correction;
+- arbitrary digital rotations through a bounded two-stage orientation search.
 
-`auto` is the default and is not stored as a fourth on-image profile. It resolves
-to `robust`, `balanced` or `capacity` before embedding.
+For arbitrary angles PixSeal does **not** brute-force full decoding at every
+possible rotation. A cheap zero-degree lattice check first rejects the common
+already-aligned case before the angle sweep. Otherwise, PixSeal samples a fixed
+set of oriented 8x8 blocks and uses the DCT coefficient separation already
+imposed by embedding as a lightweight lattice-orientation signal. The coarse probe covers -45 to +45 degrees at
+0.25-degree increments (rotation modulo 90 degrees), then refines only the
+strongest peaks at 0.05-degree resolution. At most two refined angles are passed
+to authenticated v3 decoding; quarter-turn variants resolve the final quadrant.
 
-The thresholds are therefore deterministic:
+This keeps rotation search explicitly bounded and preserves a fast path for
+unrotated carriers. Successful extraction reports the geometric correction when
+one was required, for example:
 
-- 1-16 bytes -> `robust`;
-- 17-32 bytes -> `balanced`;
-- 33-64 bytes -> `capacity`;
-- more than 64 bytes -> rejected.
+```text
+hidden message
+confidence-margin: 37.42
+profile: robust
+rotation-correction: -12.30 degrees
+```
 
-The v3 frame preserves CRC32, truncated HMAC-SHA256, key-derived whitening and
-Hamming(7,4). The logical tile is still 35x32 DCT blocks, so geometric search
-remains compatible with the v0.1 crop/resize strategy.
+A new `make geometry-test` target exercises digital rotations on the private
+`original pics/` corpus. It is intentionally separate from `make all` so the
+historical JPEG/resize/crop baseline remains unchanged while geometric research
+is measured independently.
+
+Build 3 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
+engineering history.
 
 ## Build
 
-The core and CLI are implemented in pure Go with no external runtime dependencies. The format/codec packages avoid platform-specific APIs, keeping the codebase suitable for future Android and iOS wrappers; mobile integration is not part of build 2. ImageMagick and GNU `timeout` are required only by the shell robustness suites.
+The core and CLI are implemented in pure Go with no external runtime
+dependencies. The format/codec packages avoid platform-specific APIs, keeping
+the codebase suitable for future Android and iOS wrappers; mobile integration is
+not part of build 3. ImageMagick and GNU `timeout` are required only by the shell
+test suites.
 
 
 ```sh
@@ -264,17 +275,36 @@ bounded; v3 profile detection does not add a new geometric search dimension.
 A reconstructed normalization candidate is skipped if it would exceed
 **50,000,000 pixels**.
 
+### Rotation recovery
+
+Rotation is handled before inverse resize normalization. Exact quarter turns use
+lossless pixel reorientation. Arbitrary angles use a fixed orientation-probe
+budget followed by at most two full rectification candidates. The orientation
+probe is periodic modulo 90 degrees; authenticated decoding of up to four
+quarter-turn variants resolves the quadrant.
+
+The worst-case build-3 search is therefore still finite. In addition to the
+legacy crop/resize candidate space, arbitrary rotation performs at most 361
+coarse angle probes plus 22 local refinement probes, and no more than two
+rectified angles are sent to the v3 decoder. Rectification is skipped if its
+expanded canvas would exceed the same 50-million-pixel safety bound.
+
+This implementation targets **pure digital rotation**. Rotation combined with
+resize/crop is deliberately left for a later build so its cost and robustness
+can be measured separately.
+
 ## Format lineage and compatibility
 
-New `embed` operations create **PixSeal format v3** carriers, and build 2 extracts
+New `embed` operations create **PixSeal format v3** carriers, and build 3 extracts
 **v3 only**. The extractor identifies `robust`, `balanced` or `capacity`
 automatically from the authenticated v3 header.
 
 Formats v1 and v2 were experimental development formats for which PixSeal has
-no known external carrier population or interoperability commitment. Their runtime decoders were removed
-in v0.2.0 build 2 rather than carrying permanent compatibility code for formats
-that have no known compatibility population. They remain documented historically in the
-changelog, algorithm notes and v0.1 baseline results.
+no known external carrier population or interoperability commitment. Their
+runtime decoders were removed in v0.2.0 build 2 rather than carrying permanent
+compatibility code for formats that have no known compatibility population. They
+remain documented historically in the changelog, algorithm notes and v0.1
+baseline results.
 
 The version number **3** is intentionally retained: the earlier formats are part
 of the technical history of the project even though they are no longer supported
@@ -314,16 +344,17 @@ make              # build only
 make test         # Go unit tests + profile round trips on original pics
 make deep-test    # baseline JPEG/resize/crop transformations
 make extreme-test # progressive resize/crop limit exploration
+make geometry-test # experimental digital-rotation matrix
 make all          # build + make test + make deep-test
 ```
 
-`make test`, `make deep-test` and `make extreme-test` expect the private local
-`original pics/` directory. The images are excluded by `.gitignore` and must not
+`make test`, `make deep-test`, `make extreme-test` and `make geometry-test`
+expect the private local `original pics/` directory. The images are excluded by `.gitignore` and must not
 be included in source archives. Generated carriers and transformed images are
 created in temporary directories and removed automatically.
 
-The transformation suites test `robust`, `balanced` and `capacity` explicitly
-with profile-appropriate payload lengths. This allows robustness differences to
+The transformation and geometry suites test `robust`, `balanced` and `capacity`
+explicitly with profile-appropriate payload lengths. This allows robustness differences to
 be compared rather than hidden behind `auto` selection.
 
 The shell robustness suites require:
@@ -358,40 +389,45 @@ binary distribution is being prepared deliberately.
   same profile receive the same per-tile redundancy.
 - Fractional resize combined with an off-grid crop is not guaranteed; the
   normalized-scale fast path assumes a pure resize retained the grid origin.
-- Rotation, perspective correction and arbitrary resampling factors are not yet
-  synchronized.
+- Pure digital rotation is now recovered experimentally, including fractional
+  angles and quarter turns, but rotation combined with fractional resize/crop is
+  not yet a supported synchronization path.
+- Affine deformation, perspective correction and arbitrary resampling factors
+  are not yet synchronized.
 - Failed extraction remains more expensive than successful extraction because
   more bounded candidates must be exhausted.
 - The 50-million-pixel inverse-normalization bound can skip candidates for very
   large images.
 - The image-detail/strength recommendation is heuristic and has not yet been
   calibrated across a large corpus.
-- No neural model is used in v0.2 build 2.
+- No neural model is used in v0.2 build 3.
 - The format and implementation have not received an independent cryptographic
   or steganalytic audit.
 
 ## Development direction: geometric recovery
 
-The next major research target is arbitrary image rotation, followed by combined
-rotation/resize/crop, affine deformation and perspective correction. These
-transformations are intended to be developed as a bounded geometric
-synchronization layer around format v3 rather than by expanding brute-force
-search dimensions.
+Build 3 establishes pure digital rotation recovery. The next research target is
+**combined rotation + resize/crop**, followed by affine deformation and
+perspective correction. These transformations are intended to remain a staged,
+bounded geometric synchronization layer around format v3 rather than becoming
+an open-ended brute-force search.
 
 The longer-term experimental goal is a **print-camera channel**: embed a short
 message, print the carrier on paper, photograph it with a phone and recover the
 authenticated payload. Digital rotation and perspective tests provide a
 controlled way to validate the geometric pieces before introducing printer,
-paper, lens, illumination and sensor effects. None of this geometry is claimed
-as supported in build 2.
+paper, lens, illumination and sensor effects. Rotation is now an experimental
+supported path in build 3; affine, perspective and print-camera recovery remain
+research targets.
 
 ## Development status
 
-**v0.2.0 build 2 is a development build, not the final v0.2.0 release.**
+**v0.2.0 build 3 is a development build, not the final v0.2.0 release.**
 
 The adaptive v3 format is intentionally documented now so changes during the
-build cycle can be reviewed explicitly. Build 2 deliberately drops runtime v1/v2
-compatibility and treats v3 as the sole implementation baseline. The `build N`
+build cycle can be reviewed explicitly. Build 2 deliberately dropped runtime v1/v2
+compatibility; build 3 keeps v3 as the sole implementation baseline and adds
+rotation recovery around it without changing the on-image format. The `build N`
 suffix will be removed only when the v0.2.0 release is finalized.
 
 Measured behavior for the stable v0.1 baseline and validation status for this

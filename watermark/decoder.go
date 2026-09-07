@@ -9,9 +9,10 @@ import (
 
 // ExtractInfo identifies the authenticated v3 profile recovered by the decoder.
 type ExtractInfo struct {
-	Version    int
-	Profile    Profile
-	Confidence float64
+	Version                   int
+	Profile                   Profile
+	Confidence                float64
+	RotationCorrectionDegrees float64
 }
 
 type decoder struct {
@@ -42,8 +43,44 @@ func ExtractWithInfo(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	decoder := newDecoder(key)
 	sourcePlane := newPixelPlane(src)
-	if payload, info, _, ok := searchV3(sourcePlane, decoder, candidateBlockSizes[:]); ok {
+	payload, info, directScore, ok := searchV3(sourcePlane, decoder, candidateBlockSizes[:])
+	if ok {
 		return payload, info, nil
+	}
+
+	// Exact 90/180/270-degree rotations preserve the 8x8 lattice and can be
+	// corrected losslessly. A sync-score gate prevents three extra full probes on
+	// ordinary negative inputs while retaining a bounded fast path for quarter turns.
+	if directScore >= 760 && !exceedsPixelLimit(sourcePlane.bounds.Dx(), sourcePlane.bounds.Dy(), maxSearchPixels) {
+		for quarterTurns := 1; quarterTurns <= 3; quarterTurns++ {
+			corrected := rotatePixelPlaneQuarter(sourcePlane, quarterTurns)
+			if payload, info, _, ok := searchV3(corrected, decoder, []int{blockSize}); ok {
+				info.RotationCorrectionDegrees = normalizeDegrees(float64(quarterTurns * 90))
+				return payload, info, nil
+			}
+		}
+	}
+
+	// Arbitrary-angle recovery is a bounded two-stage search. First estimate
+	// lattice orientation with sparse DCT probes. Only high-contrast candidates
+	// are rectified and passed to the normal authenticated decoder. The angle
+	// probe is modulo 90 degrees; quarter-turn decoding resolves the quadrant.
+	for _, candidate := range detectRotationCandidates(sourcePlane) {
+		rotatedWidth, rotatedHeight := rotatedPixelDimensions(sourcePlane.bounds.Dx(), sourcePlane.bounds.Dy(), -candidate.angle)
+		if exceedsPixelLimit(rotatedWidth, rotatedHeight, maxSearchPixels) {
+			continue
+		}
+		rectified := rotatePixelPlane(sourcePlane, -candidate.angle)
+		for quarterTurns := 0; quarterTurns <= 3; quarterTurns++ {
+			corrected := rectified
+			if quarterTurns != 0 {
+				corrected = rotatePixelPlaneQuarter(rectified, quarterTurns)
+			}
+			if payload, info, _, ok := searchV3(corrected, decoder, []int{blockSize}); ok {
+				info.RotationCorrectionDegrees = normalizeDegrees(-candidate.angle + float64(quarterTurns*90))
+				return payload, info, nil
+			}
+		}
 	}
 
 	// Pure resize fast path: inverse-normalize candidate dimensions and inspect

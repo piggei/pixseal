@@ -392,3 +392,169 @@ func bilinearChannel(c00, c10, c01, c11 uint8, x, y float64) uint8 {
 	bottom := float64(c01)*(1-x) + float64(c11)*x
 	return uint8(math.Round(top*(1-y) + bottom*y))
 }
+
+func TestV3QuarterTurnRecovery(t *testing.T) {
+	key := []byte("quarter-turn recovery key")
+	tests := []struct {
+		profile Profile
+		turns   int
+	}{
+		{ProfileRobust, 1},
+		{ProfileBalanced, 2},
+		{ProfileCapacity, 3},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			options := DefaultOptions()
+			options.Profile = tc.profile
+			message := []byte("quarter turn")
+			marked, err := Embed(testImage(400, 360), message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rotated := rotateQuarterForTest(marked, tc.turns)
+			got, info, err := ExtractWithInfo(rotated, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, message) || info.Profile != tc.profile || info.RotationCorrectionDegrees == 0 {
+				t.Fatalf("quarter-turn recovery got payload=%q profile=%s correction=%.2f", got, info.Profile, info.RotationCorrectionDegrees)
+			}
+		})
+	}
+}
+
+func TestV3ArbitraryRotationRecovery(t *testing.T) {
+	key := []byte("arbitrary rotation recovery key")
+	tests := []struct {
+		profile Profile
+		angle   float64
+	}{
+		{ProfileRobust, 7.5},
+		{ProfileBalanced, 12.3},
+		{ProfileCapacity, 22.7},
+	}
+	for _, tc := range tests {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			options := DefaultOptions()
+			options.Profile = tc.profile
+			message := []byte("rotation payload")
+			marked, err := Embed(testImage(400, 360), message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rotated := rotateBilinearForTest(marked, tc.angle)
+			got, info, err := ExtractWithInfo(rotated, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, message) || info.Profile != tc.profile {
+				t.Fatalf("rotated recovery got payload=%q profile=%s", got, info.Profile)
+			}
+			wantCorrection := -tc.angle
+			if math.Abs(normalizeDegrees(info.RotationCorrectionDegrees-wantCorrection)) > 0.15 {
+				t.Fatalf("rotation correction %.2f, want approximately %.2f", info.RotationCorrectionDegrees, wantCorrection)
+			}
+		})
+	}
+}
+
+func TestRotationProbeRejectsUnmarkedSyntheticImage(t *testing.T) {
+	if candidates := detectRotationCandidates(newPixelPlane(testImage(400, 360))); len(candidates) != 0 {
+		t.Fatalf("unmarked image produced rotation candidates: %+v", candidates)
+	}
+}
+
+func TestWrongKeyOnRotatedCarrierIsBounded(t *testing.T) {
+	key := []byte("rotated correct key")
+	options := DefaultOptions()
+	options.Profile = ProfileRobust
+	marked, err := Embed(testImage(320, 288), []byte("rotated key"), key, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rotated := rotateBilinearForTest(marked, 12.3)
+	start := time.Now()
+	if _, _, err := Extract(rotated, []byte("rotated wrong key!")); err == nil {
+		t.Fatal("rotated carrier unexpectedly decoded with wrong key")
+	}
+	if elapsed := time.Since(start); elapsed > 20*time.Second {
+		t.Fatalf("rotated wrong-key extraction took %s; bounded geometry regression suspected", elapsed)
+	}
+}
+
+func rotateQuarterForTest(src image.Image, turns int) *image.NRGBA {
+	turns = positiveMod(turns, 4)
+	bounds := src.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	outWidth, outHeight := width, height
+	if turns%2 == 1 {
+		outWidth, outHeight = height, width
+	}
+	out := image.NewNRGBA(image.Rect(0, 0, outWidth, outHeight))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			destinationX, destinationY := x, y
+			switch turns {
+			case 1:
+				destinationX, destinationY = y, width-1-x
+			case 2:
+				destinationX, destinationY = width-1-x, height-1-y
+			case 3:
+				destinationX, destinationY = height-1-y, x
+			}
+			out.Set(destinationX, destinationY, src.At(bounds.Min.X+x, bounds.Min.Y+y))
+		}
+	}
+	return out
+}
+
+func rotateBilinearForTest(src image.Image, degrees float64) *image.NRGBA {
+	bounds := src.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	radians := degrees * math.Pi / 180
+	cosine, sine := math.Cos(radians), math.Sin(radians)
+	outWidth := int(math.Ceil(math.Abs(float64(width)*cosine) + math.Abs(float64(height)*sine)))
+	outHeight := int(math.Ceil(math.Abs(float64(width)*sine) + math.Abs(float64(height)*cosine)))
+	out := image.NewNRGBA(image.Rect(0, 0, outWidth, outHeight))
+	for i := 0; i < len(out.Pix); i += 4 {
+		out.Pix[i], out.Pix[i+1], out.Pix[i+2], out.Pix[i+3] = 255, 255, 255, 255
+	}
+
+	sourceCenterX := float64(width-1) / 2
+	sourceCenterY := float64(height-1) / 2
+	outCenterX := float64(outWidth-1) / 2
+	outCenterY := float64(outHeight-1) / 2
+	for y := 0; y < outHeight; y++ {
+		for x := 0; x < outWidth; x++ {
+			dx := float64(x) - outCenterX
+			dy := float64(y) - outCenterY
+			sourceX := cosine*dx + sine*dy + sourceCenterX
+			sourceY := -sine*dx + cosine*dy + sourceCenterY
+			if sourceX < 0 || sourceY < 0 || sourceX > float64(width-1) || sourceY > float64(height-1) {
+				continue
+			}
+			x0, y0 := int(math.Floor(sourceX)), int(math.Floor(sourceY))
+			x1, y1 := x0+1, y0+1
+			if x1 >= width {
+				x1 = width - 1
+			}
+			if y1 >= height {
+				y1 = height - 1
+			}
+			xFraction := sourceX - float64(x0)
+			yFraction := sourceY - float64(y0)
+			c00 := color.NRGBAModel.Convert(src.At(bounds.Min.X+x0, bounds.Min.Y+y0)).(color.NRGBA)
+			c10 := color.NRGBAModel.Convert(src.At(bounds.Min.X+x1, bounds.Min.Y+y0)).(color.NRGBA)
+			c01 := color.NRGBAModel.Convert(src.At(bounds.Min.X+x0, bounds.Min.Y+y1)).(color.NRGBA)
+			c11 := color.NRGBAModel.Convert(src.At(bounds.Min.X+x1, bounds.Min.Y+y1)).(color.NRGBA)
+			out.SetNRGBA(x, y, color.NRGBA{
+				R: bilinearChannel(c00.R, c10.R, c01.R, c11.R, xFraction, yFraction),
+				G: bilinearChannel(c00.G, c10.G, c01.G, c11.G, xFraction, yFraction),
+				B: bilinearChannel(c00.B, c10.B, c01.B, c11.B, xFraction, yFraction),
+				A: 255,
+			})
+		}
+	}
+	return out
+}

@@ -2,6 +2,55 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0 build 3 - 2026-09-07
+
+Development build. Not a final v0.2.0 release.
+
+### Bounded digital rotation recovery
+
+- Added automatic recovery for exact 90, 180 and 270 degree rotations using
+  lossless quarter-turn correction.
+- Added experimental arbitrary-angle recovery without changing format v3.
+- Added a two-stage DCT lattice-orientation estimator: a fixed coarse probe from
+  -45 to +45 degrees at 0.25-degree increments, followed by local 0.05-degree
+  refinement of at most two strong candidates.
+- Arbitrary-angle probes measure the phase contrast of the same DCT coefficient
+  separation imposed by PixSeal embedding; they do not perform a full payload
+  decode for every angle.
+- Rotation is estimated modulo 90 degrees and authenticated v3 decoding resolves
+  the final quadrant through bounded quarter-turn variants.
+- Added a 50-million-pixel safety check to expanded rotation rectification
+  canvases.
+- `ExtractInfo` now reports `RotationCorrectionDegrees`; the CLI prints the
+  applied correction when a rotated carrier is recovered.
+
+### Geometry tests
+
+- Added unit coverage for quarter turns, fractional arbitrary rotations across
+  robust/balanced/capacity profiles, unmarked-image probe rejection and bounded
+  wrong-key failure on a rotated carrier.
+- Added `make geometry-test`, an ImageMagick-backed private-corpus matrix for
+  digital rotations. It is intentionally excluded from `make all` so the
+  historical JPEG/resize/crop baseline remains unchanged.
+- Kept combined arbitrary rotation + resize/crop, affine, perspective and
+  print-camera recovery as later research targets.
+
+### Search bounds
+
+- Native crop/resize search remains bounded to the previous 153 candidates.
+- The rotation estimator performs at most 361 coarse + 22 refinement sparse
+  angle probes.
+- At most two arbitrary-angle rectifications are passed to full v3 decoding;
+  including optional quarter-turn and scale branches, the theoretical maximum is
+  857 full grid candidates plus the fixed sparse orientation probes.
+- Successful unrotated extraction still returns before any rotation work.
+
+### Documentation
+
+- Updated README, algorithm specification, results notes and help output for the
+  new rotation layer and next-step geometry roadmap.
+- Runtime format remains v3-only; no v1/v2 compatibility code was reintroduced.
+
 ## v0.2.0 build 2 - 2026-09-07
 
 Development build. Not a final v0.2.0 release.
