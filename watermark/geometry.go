@@ -10,100 +10,117 @@ const (
 	rotationProbeMinDegrees  = -45
 	rotationProbeMaxDegrees  = 45
 	rotationProbeStep        = 0.25
-	rotationProbeMinContrast = 12.0
-	rotationAlignedContrast  = 20.0
+	rotationProbeFineStep    = 0.05
+	rotationProbeMinContrast = 12.0 // reference threshold at an 8-pixel lattice
+	rotationAlignedContrast  = 20.0 // reference threshold at an 8-pixel lattice
 	rotationDecodeCandidates = 2
+	rotationCoarseCandidates = 3
 )
 
+// rotationProbeBlockSizes are the useful integer lattice sizes already
+// supported by the baseline decoder that remain useful after arbitrary-angle
+// resampling: native 100% and 75%. A 50% carrier usually loses too much signal
+// after the second interpolation, so arbitrary-angle probing does not spend time
+// on the 4-pixel lattice. Quarter-turn plus 50% remains handled losslessly.
+var rotationProbeBlockSizes = [...]int{8, 6}
+
 type rotationCandidate struct {
-	angle    float64
-	contrast float64
+	angle     float64
+	contrast  float64
+	blockSize int
 }
 
-// detectRotationCandidates estimates arbitrary rotation modulo 90 degrees.
-// It never performs payload decoding. Instead it samples a bounded set of
-// oriented 8x8 blocks and measures how strongly one pixel phase exhibits the
-// DCT coefficient separation imposed by PixSeal embedding compared with the
-// median phase. The coarse probe space is fixed: 361 quarter-degree angles,
-// 64 phases and at most 49 sampled blocks per phase. Only the strongest coarse
-// peaks are refined locally at 0.05-degree resolution before any full decode.
+func rotationContrastScale(size int) float64 {
+	return float64(size*size) / float64(blockSize*blockSize)
+}
+
+func rotationCandidateQuality(candidate rotationCandidate) float64 {
+	if candidate.blockSize <= 0 {
+		return 0
+	}
+	return candidate.contrast / rotationContrastScale(candidate.blockSize)
+}
+
+func rotationCandidatePasses(candidate rotationCandidate) bool {
+	return candidate.contrast >= rotationProbeMinContrast*rotationContrastScale(candidate.blockSize)
+}
+
+// detectRotationCandidates estimates arbitrary rotation modulo 90 degrees and
+// the nearest native DCT lattice size. It never performs payload decoding.
+//
+// Search is explicitly bounded and hierarchical:
+//   - 2 zero-degree alignment probes (8/6 px)
+//   - at most 720 non-zero coarse probes (2 sizes x 360 quarter-degree angles)
+//   - at most 33 fine probes (3 peaks x 11 probes at 0.05 degree)
+//   - at most 2 candidates reach the full authenticated decoder
+//
+// Contrast is normalized for block area before candidates from different
+// lattice sizes are ranked. Smaller lattices use fewer spatial samples, keeping
+// the multi-scale probe close to the cost of the build-3 single-scale search.
 func detectRotationCandidates(src *pixelPlane) []rotationCandidate {
-	// A strong phase contrast at zero degrees means the 8x8 embedding lattice is
-	// already aligned. This cheap pre-check avoids the full angle scan for the
-	// common unrotated case, including most wrong-key and unmarked negatives.
-	if aligned := probeRotationAngle(src, 0); aligned.contrast >= rotationAlignedContrast {
-		return nil
+	for _, size := range rotationProbeBlockSizes {
+		aligned := probeRotationAngle(src, 0, size)
+		if aligned.contrast >= rotationAlignedContrast*rotationContrastScale(size) {
+			return nil
+		}
 	}
 
-	candidates := make([]rotationCandidate, 0, 361)
-	for angle := float64(rotationProbeMinDegrees); angle <= float64(rotationProbeMaxDegrees); angle += rotationProbeStep {
-		if math.Abs(angle) < 1e-9 {
-			continue // zero degrees was already measured by the aligned fast rejection.
-		}
-		candidates = append(candidates, probeRotationAngle(src, angle))
-	}
-	sort.Slice(candidates, func(i, j int) bool {
-		if candidates[i].contrast == candidates[j].contrast {
-			return math.Abs(candidates[i].angle) < math.Abs(candidates[j].angle)
-		}
-		return candidates[i].contrast > candidates[j].contrast
-	})
-
-	// A native/quarter-turn image produces its strongest lattice at 0 degrees.
-	// Returning no arbitrary candidates prevents needless resampling in that case.
-	if len(candidates) == 0 || math.Abs(candidates[0].angle) < 0.5 {
-		return nil
-	}
-	if candidates[0].contrast < rotationProbeMinContrast {
-		return nil
-	}
-
-	// Refine only the strongest distinct coarse peaks. Fractional-angle recovery
-	// is sensitive to residual errors well below one degree after a second
-	// resampling pass, so a small local 0.05-degree refinement is cheaper and
-	// more reliable than decoding neighboring coarse angles.
-	coarse := make([]rotationCandidate, 0, rotationDecodeCandidates)
-	for _, candidate := range candidates {
-		if math.Abs(candidate.angle) < 0.5 || candidate.contrast < rotationProbeMinContrast {
-			continue
-		}
-		distinct := true
-		for _, existing := range coarse {
-			if math.Abs(existing.angle-candidate.angle) < 0.75 {
-				distinct = false
-				break
+	coarseAll := make([]rotationCandidate, 0, 720)
+	for _, size := range rotationProbeBlockSizes {
+		for angle := float64(rotationProbeMinDegrees); angle <= float64(rotationProbeMaxDegrees)+1e-9; angle += rotationProbeStep {
+			if math.Abs(angle) < 1e-9 {
+				continue
 			}
-		}
-		if distinct {
-			coarse = append(coarse, candidate)
-		}
-		if len(coarse) == rotationDecodeCandidates {
-			break
+			coarseAll = append(coarseAll, probeRotationAngle(src, angle, size))
 		}
 	}
+	sortRotationCandidates(coarseAll)
+	if len(coarseAll) == 0 || !rotationCandidatePasses(coarseAll[0]) {
+		return nil
+	}
+
+	coarse := selectDistinctRotationCandidates(coarseAll, rotationCoarseCandidates, 0.75)
 	if len(coarse) == 0 {
 		return nil
 	}
 
-	refined := make([]rotationCandidate, 0, len(coarse)*11)
+	fine := make([]rotationCandidate, 0, len(coarse)*11)
 	for _, candidate := range coarse {
-		for delta := -0.25; delta <= 0.250001; delta += 0.05 {
+		for delta := -0.25; delta <= 0.250001; delta += rotationProbeFineStep {
 			angle := candidate.angle + delta
 			if angle < rotationProbeMinDegrees || angle > rotationProbeMaxDegrees || math.Abs(angle) < 0.5 {
 				continue
 			}
-			refined = append(refined, probeRotationAngle(src, angle))
+			fine = append(fine, probeRotationAngle(src, angle, candidate.blockSize))
 		}
 	}
-	sort.Slice(refined, func(i, j int) bool { return refined[i].contrast > refined[j].contrast })
-	selected := make([]rotationCandidate, 0, rotationDecodeCandidates)
-	for _, candidate := range refined {
-		if candidate.contrast < rotationProbeMinContrast {
+	sortRotationCandidates(fine)
+	return selectDistinctRotationCandidates(fine, rotationDecodeCandidates, 0.2)
+}
+
+func sortRotationCandidates(candidates []rotationCandidate) {
+	sort.Slice(candidates, func(i, j int) bool {
+		qi := rotationCandidateQuality(candidates[i])
+		qj := rotationCandidateQuality(candidates[j])
+		if qi == qj {
+			if candidates[i].blockSize == candidates[j].blockSize {
+				return math.Abs(candidates[i].angle) < math.Abs(candidates[j].angle)
+			}
+			return candidates[i].blockSize > candidates[j].blockSize
+		}
+		return qi > qj
+	})
+}
+
+func selectDistinctRotationCandidates(candidates []rotationCandidate, count int, angleDistance float64) []rotationCandidate {
+	selected := make([]rotationCandidate, 0, count)
+	for _, candidate := range candidates {
+		if !rotationCandidatePasses(candidate) || math.Abs(candidate.angle) < 0.5 {
 			continue
 		}
 		distinct := true
 		for _, existing := range selected {
-			if math.Abs(existing.angle-candidate.angle) < 0.2 {
+			if existing.blockSize == candidate.blockSize && math.Abs(existing.angle-candidate.angle) < angleDistance {
 				distinct = false
 				break
 			}
@@ -111,33 +128,36 @@ func detectRotationCandidates(src *pixelPlane) []rotationCandidate {
 		if distinct {
 			selected = append(selected, candidate)
 		}
-		if len(selected) == rotationDecodeCandidates {
+		if len(selected) == count {
 			break
 		}
 	}
 	return selected
 }
 
-func probeRotationAngle(src *pixelPlane, angle float64) rotationCandidate {
-	phaseScores := make([]float64, 0, blockSize*blockSize)
+func probeRotationAngle(src *pixelPlane, angle float64, size int) rotationCandidate {
+	phaseScores := make([]float64, 0, size*size)
 	width, height := src.bounds.Dx(), src.bounds.Dy()
-	if width < blockSize*3 || height < blockSize*3 {
-		return rotationCandidate{angle: angle}
+	if width < size*3 || height < size*3 {
+		return rotationCandidate{angle: angle, blockSize: size}
 	}
 
-	for phaseY := 0; phaseY < blockSize; phaseY++ {
-		for phaseX := 0; phaseX < blockSize; phaseX++ {
+	sampleGrid := 7
+	if size < blockSize {
+		sampleGrid = 5
+	}
+	denominator := sampleGrid + 1
+	for phaseY := 0; phaseY < size; phaseY++ {
+		for phaseX := 0; phaseX < size; phaseX++ {
 			sum := 0.0
 			count := 0
-			// 7x7 spatially spread samples are enough to detect lattice orientation
-			// while keeping the bounded angle probe much cheaper than a full decode.
-			for sampleY := 1; sampleY <= 7; sampleY++ {
-				for sampleX := 1; sampleX <= 7; sampleX++ {
-					targetX := sampleX * (width - blockSize) / 8
-					targetY := sampleY * (height - blockSize) / 8
-					originX := nearestBlockOrigin(targetX, phaseX, width-blockSize)
-					originY := nearestBlockOrigin(targetY, phaseY, height-blockSize)
-					value, ok := readOrientedBlockMargin(src, originX, originY, angle)
+			for sampleY := 1; sampleY <= sampleGrid; sampleY++ {
+				for sampleX := 1; sampleX <= sampleGrid; sampleX++ {
+					targetX := sampleX * (width - size) / denominator
+					targetY := sampleY * (height - size) / denominator
+					originX := nearestBlockOrigin(targetX, phaseX, width-size, size)
+					originY := nearestBlockOrigin(targetY, phaseY, height-size, size)
+					value, ok := readOrientedBlockMargin(src, originX, originY, angle, size)
 					if !ok {
 						continue
 					}
@@ -151,38 +171,40 @@ func probeRotationAngle(src *pixelPlane, angle float64) rotationCandidate {
 		}
 	}
 	if len(phaseScores) == 0 {
-		return rotationCandidate{angle: angle}
+		return rotationCandidate{angle: angle, blockSize: size}
 	}
 	sort.Float64s(phaseScores)
 	maximum := phaseScores[len(phaseScores)-1]
 	median := phaseScores[len(phaseScores)/2]
 	return rotationCandidate{
-		angle:    angle,
-		contrast: maximum - median,
+		angle:     angle,
+		contrast:  maximum - median,
+		blockSize: size,
 	}
 }
 
-func nearestBlockOrigin(target, phase, maximum int) int {
-	origin := target - positiveMod(target-phase, blockSize)
+func nearestBlockOrigin(target, phase, maximum, size int) int {
+	origin := target - positiveMod(target-phase, size)
 	for origin < 0 {
-		origin += blockSize
+		origin += size
 	}
 	if origin > maximum {
-		origin -= blockSize
+		origin -= size
 	}
 	return origin
 }
 
-func readOrientedBlockMargin(src *pixelPlane, originX, originY int, angle float64) (float64, bool) {
+func readOrientedBlockMargin(src *pixelPlane, originX, originY int, angle float64, size int) (float64, bool) {
 	radians := angle * math.Pi / 180
 	cosine, sine := math.Cos(radians), math.Sin(radians)
 	centerX := float64(src.bounds.Dx()-1) / 2
 	centerY := float64(src.bounds.Dy()-1) / 2
 	coefficient23 := 0.0
 	coefficient32 := 0.0
+	table := readCosTables[size]
 
-	for y := 0; y < blockSize; y++ {
-		for x := 0; x < blockSize; x++ {
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
 			dx := float64(originX+x) - centerX
 			dy := float64(originY+y) - centerY
 			sourceX := cosine*dx - sine*dy + centerX
@@ -191,8 +213,8 @@ func readOrientedBlockMargin(src *pixelPlane, originX, originY int, angle float6
 			if !ok {
 				return 0, false
 			}
-			coefficient23 += luminance * cosTable[3][x] * cosTable[2][y]
-			coefficient32 += luminance * cosTable[2][x] * cosTable[3][y]
+			coefficient23 += luminance * table[3][x] * table[2][y]
+			coefficient32 += luminance * table[2][x] * table[3][y]
 		}
 	}
 	return math.Abs(math.Abs(coefficient23) - math.Abs(coefficient32)), true

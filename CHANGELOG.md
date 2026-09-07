@@ -2,6 +2,51 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0 build 4 - 2026-09-07
+
+Development build. Not a final v0.2.0 release.
+
+### Combined geometric recovery
+
+- Kept format v3 unchanged and extended only the decoder geometry layer.
+- Added multi-lattice arbitrary-angle detection for the native 8-pixel lattice
+  and the 6-pixel lattice produced by 75% resize.
+- Normalized orientation contrast by block area before comparing 8-pixel and
+  6-pixel candidates.
+- Added experimental recovery for rotation combined with 75% resize and crop,
+  including both transformation orders and a rotate -> resize75 -> crop chain.
+- Extended exact quarter-turn recovery to all existing direct 8/6/4-pixel block
+  sizes, retaining 100%, 75% and 50% direct-resize compatibility.
+- Deliberately did not claim arbitrary-angle + 50% resize: exact-angle
+  development checks still failed after the double interpolation at default
+  strength 24.
+
+### Bounded search and failed-extraction control
+
+- Arbitrary-angle estimation now uses at most two zero-degree checks, 720
+  non-zero quarter-degree coarse probes and 33 local 0.05-degree refinements.
+- At most two refined candidates reach authenticated v3 decoding.
+- Added strong-rotation early termination after failed authenticated decode so a
+  clearly rotated wrong-key carrier does not fall through into irrelevant
+  pure-resize normalization.
+- The theoretical full-grid maximum is now 1013 candidates when every gated
+  optional branch is counted; normal successful paths exit much earlier.
+
+### Geometry regression suite
+
+- Added Go regression coverage for rotate+resize75 and rotate+crop recovery.
+- Extended `make geometry-test` with configurable combined modes via
+  `GEOMETRY_COMBINED_ANGLES` and `GEOMETRY_COMBINED_MODES`.
+- Default combined modes cover rotate/resize order, rotate/crop order and a
+  rotate+resize75+crop chain while keeping generated images temporary.
+
+### Documentation
+
+- Updated README, algorithm specification, results notes, CLI help and version
+  metadata to `v0.2.0 build 4`.
+- Kept affine, perspective and print-camera recovery as subsequent research
+  targets; build 4 is the controlled orientation+scale+phase baseline.
+
 ## v0.2.0 build 3 - 2026-09-07
 
 Development build. Not a final v0.2.0 release.

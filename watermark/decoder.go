@@ -54,7 +54,7 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	if directScore >= 760 && !exceedsPixelLimit(sourcePlane.bounds.Dx(), sourcePlane.bounds.Dy(), maxSearchPixels) {
 		for quarterTurns := 1; quarterTurns <= 3; quarterTurns++ {
 			corrected := rotatePixelPlaneQuarter(sourcePlane, quarterTurns)
-			if payload, info, _, ok := searchV3(corrected, decoder, []int{blockSize}); ok {
+			if payload, info, _, ok := searchV3(corrected, decoder, candidateBlockSizes[:]); ok {
 				info.RotationCorrectionDegrees = normalizeDegrees(float64(quarterTurns * 90))
 				return payload, info, nil
 			}
@@ -65,7 +65,8 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	// lattice orientation with sparse DCT probes. Only high-contrast candidates
 	// are rectified and passed to the normal authenticated decoder. The angle
 	// probe is modulo 90 degrees; quarter-turn decoding resolves the quadrant.
-	for _, candidate := range detectRotationCandidates(sourcePlane) {
+	rotationCandidates := detectRotationCandidates(sourcePlane)
+	for _, candidate := range rotationCandidates {
 		rotatedWidth, rotatedHeight := rotatedPixelDimensions(sourcePlane.bounds.Dx(), sourcePlane.bounds.Dy(), -candidate.angle)
 		if exceedsPixelLimit(rotatedWidth, rotatedHeight, maxSearchPixels) {
 			continue
@@ -76,11 +77,20 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 			if quarterTurns != 0 {
 				corrected = rotatePixelPlaneQuarter(rectified, quarterTurns)
 			}
-			if payload, info, _, ok := searchV3(corrected, decoder, []int{blockSize}); ok {
+			if payload, info, _, ok := searchV3(corrected, decoder, []int{candidate.blockSize}); ok {
 				info.RotationCorrectionDegrees = normalizeDegrees(-candidate.angle + float64(quarterTurns*90))
 				return payload, info, nil
 			}
 		}
+	}
+
+	// A very strong non-zero lattice peak means the geometry was identified but
+	// authenticated decoding failed. Continuing into pure-resize normalization
+	// cannot repair a rotated carrier and makes wrong-key failures needlessly
+	// expensive. Keep weaker/ambiguous peaks eligible for the historical resize
+	// path so ordinary fractional-resize recovery is not cut off by image texture.
+	if len(rotationCandidates) > 0 && rotationCandidateQuality(rotationCandidates[0]) >= 25 {
+		return nil, ExtractInfo{}, errors.New("v3 hidden payload not found or key is incorrect")
 	}
 
 	// Pure resize fast path: inverse-normalize candidate dimensions and inspect

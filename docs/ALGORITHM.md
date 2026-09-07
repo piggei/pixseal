@@ -1,9 +1,9 @@
 # PixSeal algorithm specification
 
 This document describes the adaptive **format v3** used by PixSeal
-v0.2.0 build 3. Runtime extraction is intentionally v3-only; formats v1 and v2
-are retained only as historical development context. Build 3 adds bounded
-geometric rotation recovery around the unchanged v3 on-image format.
+v0.2.0 build 4. Runtime extraction is intentionally v3-only; formats v1 and v2
+are retained only as historical development context. Builds 3 and 4 add bounded
+geometric recovery around the unchanged v3 on-image format.
 
 PixSeal is an experimental robust image-steganography system for short
 authenticated payloads. The frequency-domain embedding mechanism is related to
@@ -286,8 +286,9 @@ Adaptive profile detection does **not** add another geometric search dimension.
 Each expensive grid aggregation is performed once and then scored against the
 three fixed v3 profile patterns.
 
-Build 3 adds a separate, explicitly bounded rotation stage around the same v3
-decoder. It does not change the on-image format.
+Build 4 extends the explicitly bounded rotation stage to recognize the native
+8-pixel lattice and the 6-pixel lattice produced by a 75% resize. It does not
+change the on-image format.
 
 ### 10.1 Direct block-size/offset search
 
@@ -316,83 +317,120 @@ For every aggregated grid, the decoder checks the three v3 profile patterns.
 ### 10.2 Exact quarter-turn recovery
 
 If direct decoding fails but the best v3 synchronization score is sufficiently
-high, build 3 tests lossless 90, 180 and 270 degree corrections. Quarter turns
-preserve pixel values and the 8x8 lattice, so no interpolation is needed.
+high, build 4 tests lossless 90, 180 and 270 degree corrections. Quarter turns
+preserve pixel values, so no interpolation is needed.
 
-Each corrected orientation uses only the 8-pixel direct grid (64 offsets). The
-quarter-turn branch therefore adds at most:
+Each corrected orientation now reuses all three direct apparent block sizes:
 
 ```text
-3 orientations x 64 grids = 192 grids
+8x8 offsets = 64 grids
+6x6 offsets = 36 grids
+4x4 offsets = 16 grids
+116 grids/orientation
 ```
 
-The synchronization gate avoids paying this cost for most ordinary negative
-inputs.
+The gated quarter-turn branch therefore adds at most:
 
-### 10.3 Arbitrary-angle orientation probe
+```text
+3 orientations x 116 grids = 348 grids
+```
 
-A naive full decode for every angle would multiply failed-extraction cost. Build
-3 therefore estimates rotation before geometric rectification.
+This preserves quarter-turn compatibility with the existing 100%, 75% and 50%
+direct resize paths without adding a new scale search.
 
-Embedding forces a separation between the magnitudes of DCT coefficients
-`C(2,3)` and `C(3,2)` in each aligned 8x8 block. The rotation probe uses the
-**magnitude of that separation only**; it does not decode payload bits and does
-not require a profile hypothesis.
+### 10.3 Arbitrary-angle multi-lattice orientation probe
 
-Before the full angle sweep, a single zero-degree phase-contrast probe checks
-whether the DCT lattice is already strongly aligned. If it is, arbitrary-angle
-search is skipped entirely. This preserves the common unrotated negative path.
+A naive full decode for every angle and every scale would multiply failed-
+extraction cost. Build 4 therefore performs sparse signal estimation first and
+limits arbitrary-angle probing to the two lattice sizes that remained useful in
+development tests after interpolation:
 
-For each candidate angle the probe:
+```text
+8 pixels -> native / 100% lattice
+6 pixels -> 75% lattice
+```
 
-1. evaluates all 64 possible 8x8 pixel phases;
-2. samples at most 7x7 spatially distributed blocks for each phase;
-3. computes the mean absolute coefficient-separation margin for each phase;
-4. uses `maximum phase score - median phase score` as the orientation contrast.
+The 4-pixel / 50% lattice is intentionally not part of arbitrary-angle probing.
+At default strength, a 50% resize plus arbitrary rotation introduces enough
+interpolation loss that exact-angle rectification still failed in development
+checks. Spending search time on that hypothesis would therefore increase cost
+without producing a working path.
 
-The coarse angle range is rotation modulo 90 degrees:
+For each candidate lattice size, embedding's separation between `C(2,3)` and
+`C(3,2)` provides an orientation signal. Candidate contrast is divided by the
+expected block-area scale before 8-pixel and 6-pixel hypotheses are ranked; this
+prevents the naturally larger DCT magnitudes of an 8-pixel block from dominating
+a genuine 6-pixel signal.
+
+Before the full sweep, one zero-degree probe per supported lattice checks whether
+the image is already strongly aligned. If either is strongly aligned, arbitrary-
+angle search is skipped.
+
+The coarse range is rotation modulo 90 degrees:
 
 ```text
 -45.00 .. +45.00 degrees
 step 0.25 degrees
-361 coarse angle probes
+360 non-zero probes per lattice
+2 lattices
+720 non-zero coarse probes maximum
 ```
 
-Only coarse peaks whose contrast exceeds the fixed synchronization threshold are
-retained. At most two distinct peaks are refined locally:
+The three strongest distinct coarse peaks are refined locally:
 
 ```text
 coarse angle +/- 0.25 degrees
 step 0.05 degrees
 11 refinements per peak
-22 refinement probes maximum
+33 refinement probes maximum
 ```
 
-Thus the orientation estimator performs at most **383 fixed sparse angle
-probes**. This is a finite signal-estimation stage, not 383 full payload decodes.
+At most two refined candidates are passed to authenticated decoding. Including
+the two zero-degree alignment checks, the orientation stage performs at most
+**755 sparse probes**. These are DCT-margin samples, not full payload decodes.
 
-### 10.4 Rectification and quadrant resolution
+### 10.4 Rectification, scale choice and crop phase
 
-At most two refined arbitrary-angle candidates are geometrically rectified using
-bilinear interpolation. The probe angle is modulo 90 degrees, so each rectified
-candidate may be tested in up to four lossless quarter-turn orientations to
-resolve its quadrant. Each orientation uses only the 8-pixel / 64-offset direct
-search:
+Each refined candidate carries both its correction angle and its detected
+apparent block size. The image is rectified once with bilinear interpolation and
+the decoder searches all pixel offsets only for that selected lattice size.
+
+The probe angle is modulo 90 degrees, so each rectified candidate may be tested
+in up to four lossless quarter-turn orientations to resolve its quadrant. The
+worst full-grid contribution remains the native 8-pixel case:
 
 ```text
 2 refined angles x 4 quadrants x 64 grids = 512 grids maximum
 ```
 
+For a 75% candidate the corresponding cost is smaller because the selected
+6-pixel lattice has only 36 offsets. Crop phase is naturally recovered by the
+same offset and 35x32 logical-phase machinery after rectification, which is why
+rotation can now be combined with crop without adding a separate crop search
+dimension.
+
 The reported `RotationCorrectionDegrees` value is the correction applied to the
-carrier, normalized to `[-180, 180)` degrees.
+carrier, normalized to `[-180, 180)` degrees. A rectification candidate is
+skipped if its expanded canvas would exceed **50,000,000 pixels**.
 
-A rectification candidate is skipped if its expanded canvas would exceed
-**50,000,000 pixels**.
+Build 4 has experimentally recovered, using ImageMagick-generated transforms:
 
-### 10.5 Inverse scale normalization
+```text
+rotate -> resize 75%
+resize 75% -> rotate
+rotate -> crop 80%
+crop 80% -> rotate
+rotate -> resize 75% -> crop 80%
+```
 
-If direct and rotation recovery fail, the image is bicubically reconstructed
-toward the nominal original dimensions for these scale hypotheses:
+These are measured development baselines, not universal guarantees for every
+image or interpolation filter.
+
+### 10.5 Pure-resize inverse normalization
+
+If direct and rotation recovery fail, the original pure-resize path bicubically
+reconstructs the image toward the nominal original dimensions for these scale
+hypotheses:
 
 ```text
 95, 90, 85, 80, 70, 65, 60, 55, 45, 40, 35, 30, 25 percent
@@ -412,26 +450,26 @@ The original crop/resize path remains bounded to:
 = 153 crop/resize candidates maximum
 ```
 
-Including every optional build-3 rotation branch, the theoretical maximum
-number of full grid aggregations is:
+Including every optional build-4 branch, the theoretical maximum number of full
+grid aggregations is:
 
 ```text
 116 native direct grids
-+ 192 gated quarter-turn grids
++ 348 gated quarter-turn grids
 + 512 arbitrary-rotation rectified grids
 +  13 aligned normalized candidates
 +  24 neighboring normalized candidates
-= 857 full grid candidates maximum
+= 1013 full grid candidates maximum
 ```
 
-The 383 sparse angle probes are additional fixed work and are not included in
-that grid count. In normal positive cases extraction returns from the early
-native or corrected candidate and does not exhaust the theoretical maximum.
+The at-most 755 sparse orientation probes are additional fixed work and are not
+included in that full-grid count. Normal positive cases return from an early
+candidate and do not exhaust this theoretical maximum.
 
-Build 3 targets **pure digital rotation**. A carrier that was both arbitrarily
-rotated and fractionally resized is not yet passed from rotation rectification
-into the inverse-scale search; combined rotation/resize/crop is intentionally a
-later research step.
+Arbitrary-angle recovery is currently scale-aware only for the native and 75%
+lattices. The inverse-normalization branch is not recursively chained across
+arbitrary-angle hypotheses; arbitrary fractional scales and arbitrary-angle +
+50% resize remain research work.
 
 ## 11. Grid aggregation and crop phase
 
@@ -499,7 +537,7 @@ at a bounded set of sample anchors (approximately no more than 256x256 anchors).
 Large images are sampled sparsely, but each gradient remains a one-pixel local
 difference.
 
-Build 3 retains the mean absolute luminance-gradient score introduced in build 1:
+Build 4 retains the mean absolute luminance-gradient score introduced in build 1:
 
 ```text
 score < 4      -> low detail    -> recommended strength 20
@@ -535,22 +573,21 @@ Sensitive messages should be encrypted separately before embedding.
 
 ## 15. Current unsupported geometry and direction
 
-Build 3 adds experimental recovery for **pure digital rotation**, including
-fractional angles and exact quarter turns. It does not yet synchronize:
+Build 4 adds experimental recovery for digital rotation plus a first combined
+75%-resize/crop baseline. It does not yet synchronize:
 
-- arbitrary rotation combined with fractional resize or off-grid crop;
+- arbitrary-angle + 50% resize at default strength;
+- arbitrary fractional scales beyond the detected 75% lattice;
 - perspective transforms;
 - arbitrary affine warps;
-- all possible resampling factors;
 - print-camera distortion.
 
-The next research step is combined rotation/resize/crop, then affine deformation
-and perspective correction. The intended approach remains staged, bounded
-synchronization and geometric rectification rather than multiplying open-ended
-brute-force dimensions.
+The next research step is affine deformation and then perspective correction.
+The intended approach remains staged, bounded synchronization and geometric
+rectification rather than multiplying open-ended brute-force dimensions.
 
 A later experimental target is recovery through a print-camera channel: print
 the carrier, photograph it with a phone, geometrically rectify the photograph,
-then recover the authenticated v3 payload. Digital rotation is the first
-controlled validation of that geometry layer; it is not evidence that the
-print-camera channel already works.
+then recover the authenticated v3 payload. Digital rotation and combined
+resize/crop are controlled validation stages for orientation, scale and phase;
+they are not evidence that the print-camera channel already works.

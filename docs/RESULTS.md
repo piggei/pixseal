@@ -5,6 +5,106 @@ results** and **corpus-specific experimental measurements**. None of the results
 below proves statistical steganographic undetectability or guarantees recovery
 for unseen images.
 
+## v0.2.0 build 4 validation status
+
+Development build: **v0.2.0 build 4**, 7 September 2026.
+
+Build 4 keeps the adaptive v3 on-image format unchanged and extends the bounded
+geometry layer from pure rotation to a first combined rotation/resize/crop
+baseline.
+
+### Deterministic search bounds
+
+```text
+Direct crop/resize grids:              116
+Gated quarter-turn grids:     3 x 116 = 348 maximum
+Arbitrary-angle sparse probes:
+  zero-degree lattice checks:            2
+  non-zero coarse probes:              720
+  local fine probes:                    33 maximum
+Authenticated arbitrary-angle decode:
+  2 rectified candidates x 4 quadrants x 64 native grids = 512 maximum
+Pure-resize normalization:              13 + 24 candidates
+```
+
+The theoretical maximum is therefore **1013 full grid candidates** plus at most
+**755 sparse orientation probes** when every optional branch is exercised. The
+75% arbitrary-angle path uses 36-offset 6-pixel grids and is cheaper than the
+native 64-offset worst case.
+
+### Combined-geometry development checks
+
+Using a temporary 900x700 generated carrier and ImageMagick transformations,
+the build-4 geometry harness recovered all of the following at 12.3 degrees for
+the tested profiles:
+
+```text
+rotate
+rotate -> resize 75%
+resize 75% -> rotate
+rotate -> crop 80%
+crop 80% -> rotate
+rotate -> resize 75% -> crop 80%
+```
+
+Robust and balanced were exercised through the full six-case matrix in this
+environment. Capacity was exercised in split runs covering the same five
+combined modes plus a 90-degree quarter-turn control. These generated checks do
+**not** count as private-corpus robustness results.
+
+The Go regression suite additionally covers rotate+resize75 and rotate+crop
+recovery around format v3.
+
+A 50% arbitrary-angle + resize experiment was intentionally treated as a
+negative boundary. Even when the exact 12.3-degree correction was supplied to
+the decoder, the transformed carrier did not authenticate at default strength
+24. This indicates signal loss from double interpolation rather than merely a
+failure to estimate the angle.
+
+### Failed-extraction control
+
+Build 4 adds an early stop when a strong non-zero lattice orientation is found
+but authenticated decoding fails. This prevents a clearly rotated wrong-key
+carrier from falling through into the unrelated pure-resize normalization path.
+The dedicated Go wrong-key rotation regression completed in approximately
+**3.6 s** in this development environment after that change.
+
+### Validation status in this environment
+
+Successfully executed:
+
+```text
+gofmt
+go vet ./...
+go test ./cmd/pixseal
+go test ./watermark
+bash -n scripts/test-robustness.sh
+bash -n scripts/test-limits.sh
+bash -n scripts/test-geometry.sh
+make clean
+make
+make build-all
+```
+
+`go test ./watermark` completed with all tests passing in about 34 seconds. The
+aggregate `go test ./...` invocation was also attempted, but in this execution
+environment it did not complete before the command timeout even though the same
+packages pass when run separately. It is therefore **not** reported as passed
+here and should be rerun on PJ's Linux system.
+
+The private `original pics/` corpus is not available in this environment. The
+complete default `make geometry-test` matrix still requires validation on PJ's
+machine. `make all` was attempted, but its internal aggregate `go test ./...` hit
+the same environment timeout described above before the corpus check; it is not
+reported as passed.
+
+### Current geometry boundary
+
+Build 4 claims an **experimental native/75%-scale rotation + crop baseline**. It
+does not claim arbitrary-angle + 50% resize, arbitrary fractional-scale
+synchronization, affine deformation, perspective correction or print-camera
+recovery.
+
 ## v0.2.0 build 3 validation status
 
 Development build: **v0.2.0 build 3**, 7 September 2026.

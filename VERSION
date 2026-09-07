@@ -1,3 +1,3 @@
-PixSeal v0.2.0 build 3
+PixSeal v0.2.0 build 4
 
-Development build adding bounded digital rotation recovery around the v3-only adaptive steganographic format.
+Development build adding bounded combined rotation + 75% resize/crop recovery around the unchanged v3-only adaptive steganographic format.

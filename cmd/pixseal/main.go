@@ -22,7 +22,7 @@ Usage:
 
 Commands:
   embed      Hide an authenticated message in an image
-  extract    Recover and authenticate a hidden message, including bounded digital rotation recovery
+  extract    Recover and authenticate a hidden message with bounded geometric recovery
   capacity   Show the usable payload capacity of an image
   analyze    Recommend a v3 profile and embedding settings
 
@@ -273,7 +273,7 @@ func embed(args []string) error {
 }
 
 func extract(args []string) error {
-	fs := newFlagSet("extract", "Recover and authenticate a hidden PixSeal message; digital rotation correction is automatic and bounded.")
+	fs := newFlagSet("extract", "Recover and authenticate a hidden PixSeal message; bounded rotation and supported combined geometry correction are automatic.")
 	in := fs.String("in", "", "carrier JPEG or PNG file (required)")
 	key := fs.String("key", "", "secret key (required, minimum 8 bytes)")
 

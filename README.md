@@ -5,7 +5,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits into luminance DCT coefficients while keeping the resulting changes
 visually unobtrusive under normal viewing conditions.
 
-Current development line: **v0.2.0 build 3**. The last stable release is
+Current development line: **v0.2.0 build 4**. The last stable release is
 **v0.1.0**.
 
 PixSeal is designed as a hidden-data channel rather than an ownership-marking
@@ -23,42 +23,47 @@ or claim compatibility with Google's SynthID algorithm.
 PixSeal does not claim statistical steganographic undetectability. It has not
 undergone a cryptographic or steganalytic security audit.
 
-## What's new in v0.2.0 build 3
+## What's new in v0.2.0 build 4
 
-Build 3 adds the first **geometric rotation recovery layer** without changing
-format v3 or its adaptive profile math.
+Build 4 extends the geometric recovery layer from pure rotation to a first set of
+**combined transformations**, without changing a single bit of format v3.
 
-The extractor now handles two rotation classes:
+The arbitrary-angle synchronizer now estimates orientation on the two DCT lattice
+sizes that remain useful after interpolation:
 
-- exact 90/180/270-degree turns through lossless quarter-turn correction;
-- arbitrary digital rotations through a bounded two-stage orientation search.
+- 8-pixel blocks: native / 100% scale;
+- 6-pixel blocks: 75% scale.
 
-For arbitrary angles PixSeal does **not** brute-force full decoding at every
-possible rotation. A cheap zero-degree lattice check first rejects the common
-already-aligned case before the angle sweep. Otherwise, PixSeal samples a fixed
-set of oriented 8x8 blocks and uses the DCT coefficient separation already
-imposed by embedding as a lightweight lattice-orientation signal. The coarse probe covers -45 to +45 degrees at
-0.25-degree increments (rotation modulo 90 degrees), then refines only the
-strongest peaks at 0.05-degree resolution. At most two refined angles are passed
-to authenticated v3 decoding; quarter-turn variants resolve the final quadrant.
+Candidates from the two lattices are normalized by block area before ranking, so
+a strong 6-pixel signal is not hidden by the naturally larger DCT magnitudes of
+an 8-pixel probe. The angular search remains bounded: at most 720 non-zero coarse
+probes plus 33 local refinements, and at most two candidates reach authenticated
+v3 decoding.
 
-This keeps rotation search explicitly bounded and preserves a fast path for
-unrotated carriers. Successful extraction reports the geometric correction when
-one was required, for example:
+This enables experimentally verified recovery for transformations such as:
 
 ```text
-hidden message
-confidence-margin: 37.42
-profile: robust
-rotation-correction: -12.30 degrees
+rotate -> resize 75%
+resize 75% -> rotate
+rotate -> crop
+crop -> rotate
+rotate -> resize 75% -> crop
 ```
 
-A new `make geometry-test` target exercises digital rotations on the private
-`original pics/` corpus. It is intentionally separate from `make all` so the
-historical JPEG/resize/crop baseline remains unchanged while geometric research
-is measured independently.
+The existing 90/180/270-degree fast path now also tests the native 8/6/4-pixel
+grid sizes, so quarter-turn recovery remains compatible with the existing 75%
+and 50% direct resize paths.
 
-Build 3 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
+The 50% **arbitrary-angle + resize** case is deliberately not claimed: in build-4
+development tests, two interpolation stages at default strength 24 destroyed too
+much DCT evidence even when the exact correction angle was supplied. That is an
+observed signal limit, not merely a search failure.
+
+`make geometry-test` now keeps the pure-rotation matrix and adds a bounded
+combined-geometry smoke matrix driven by `GEOMETRY_COMBINED_ANGLES` and
+`GEOMETRY_COMBINED_MODES`. It remains separate from `make all`.
+
+Build 4 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
 engineering history.
 
 ## Build
@@ -66,7 +71,7 @@ engineering history.
 The core and CLI are implemented in pure Go with no external runtime
 dependencies. The format/codec packages avoid platform-specific APIs, keeping
 the codebase suitable for future Android and iOS wrappers; mobile integration is
-not part of build 3. ImageMagick and GNU `timeout` are required only by the shell
+not part of build 4. ImageMagick and GNU `timeout` are required only by the shell
 test suites.
 
 
@@ -275,27 +280,37 @@ bounded; v3 profile detection does not add a new geometric search dimension.
 A reconstructed normalization candidate is skipped if it would exceed
 **50,000,000 pixels**.
 
-### Rotation recovery
+### Rotation and combined geometry recovery
 
-Rotation is handled before inverse resize normalization. Exact quarter turns use
-lossless pixel reorientation. Arbitrary angles use a fixed orientation-probe
-budget followed by at most two full rectification candidates. The orientation
-probe is periodic modulo 90 degrees; authenticated decoding of up to four
-quarter-turn variants resolves the quadrant.
+Exact quarter turns use lossless pixel reorientation. Arbitrary angles use a
+fixed sparse DCT orientation probe followed by at most two full rectification
+candidates. The probe is periodic modulo 90 degrees and authenticated decoding
+of up to four quarter-turn variants resolves the quadrant.
 
-The worst-case build-3 search is therefore still finite. In addition to the
-legacy crop/resize candidate space, arbitrary rotation performs at most 361
-coarse angle probes plus 22 local refinement probes, and no more than two
-rectified angles are sent to the v3 decoder. Rectification is skipped if its
-expanded canvas would exceed the same 50-million-pixel safety bound.
+Build 4 probes two apparent DCT lattice sizes during arbitrary-angle estimation:
+8 pixels (native scale) and 6 pixels (75% scale). The search is hierarchical and
+finite: two zero-degree alignment probes, at most 720 non-zero quarter-degree
+angle probes, at most 33 local 0.05-degree refinements, and at most two refined
+candidates passed to full decoding. Candidate contrast is normalized for block
+area before 8-pixel and 6-pixel hypotheses are compared.
 
-This implementation targets **pure digital rotation**. Rotation combined with
-resize/crop is deliberately left for a later build so its cost and robustness
-can be measured separately.
+After rectification, the decoder uses the detected lattice size and still searches
+all pixel offsets for that size. This is what allows crop phase to combine with
+rotation and what makes 75% resize + rotation practical without introducing an
+open-ended angle x scale Cartesian search.
+
+The supported experimental combined baseline is therefore centered on native
+scale and 75% scale. Arbitrary-angle + 50% resize is **not** claimed in build 4:
+development tests showed that the double interpolation can erase the signal at
+default strength even with the true angle known. Arbitrary fractional scales
+other than the existing 75% direct lattice are still research work.
+
+A rectification candidate is skipped if its expanded canvas would exceed
+**50,000,000 pixels**.
 
 ## Format lineage and compatibility
 
-New `embed` operations create **PixSeal format v3** carriers, and build 3 extracts
+New `embed` operations create **PixSeal format v3** carriers, and build 4 extracts
 **v3 only**. The extractor identifies `robust`, `balanced` or `capacity`
 automatically from the authenticated v3 header.
 
@@ -344,7 +359,7 @@ make              # build only
 make test         # Go unit tests + profile round trips on original pics
 make deep-test    # baseline JPEG/resize/crop transformations
 make extreme-test # progressive resize/crop limit exploration
-make geometry-test # experimental digital-rotation matrix
+make geometry-test # rotation + bounded combined-geometry matrix
 make all          # build + make test + make deep-test
 ```
 
@@ -389,45 +404,45 @@ binary distribution is being prepared deliberately.
   same profile receive the same per-tile redundancy.
 - Fractional resize combined with an off-grid crop is not guaranteed; the
   normalized-scale fast path assumes a pure resize retained the grid origin.
-- Pure digital rotation is now recovered experimentally, including fractional
-  angles and quarter turns, but rotation combined with fractional resize/crop is
-  not yet a supported synchronization path.
-- Affine deformation, perspective correction and arbitrary resampling factors
-  are not yet synchronized.
+- Digital rotation is recovered experimentally, including fractional angles and
+  quarter turns. Build 4 also supports a measured combined baseline around 75%
+  resize and crop, including both transformation orders.
+- Arbitrary-angle + 50% resize is not currently recoverable at default strength
+  in development tests; arbitrary fractional scales beyond the 75% lattice,
+  affine deformation and perspective correction are not yet synchronized.
 - Failed extraction remains more expensive than successful extraction because
   more bounded candidates must be exhausted.
 - The 50-million-pixel inverse-normalization bound can skip candidates for very
   large images.
 - The image-detail/strength recommendation is heuristic and has not yet been
   calibrated across a large corpus.
-- No neural model is used in v0.2 build 3.
+- No neural model is used in v0.2 build 4.
 - The format and implementation have not received an independent cryptographic
   or steganalytic audit.
 
 ## Development direction: geometric recovery
 
-Build 3 establishes pure digital rotation recovery. The next research target is
-**combined rotation + resize/crop**, followed by affine deformation and
-perspective correction. These transformations are intended to remain a staged,
-bounded geometric synchronization layer around format v3 rather than becoming
-an open-ended brute-force search.
+Build 4 establishes the first **combined rotation + resize/crop** baseline while
+keeping format v3 unchanged. The next research step is affine deformation, then
+perspective correction. Before adding those degrees of freedom, the combined
+matrix should be run against the private `original pics/` corpus to quantify
+profile-specific limits and negative-case timing.
 
-The longer-term experimental goal is a **print-camera channel**: embed a short
-message, print the carrier on paper, photograph it with a phone and recover the
-authenticated payload. Digital rotation and perspective tests provide a
-controlled way to validate the geometric pieces before introducing printer,
-paper, lens, illumination and sensor effects. Rotation is now an experimental
-supported path in build 3; affine, perspective and print-camera recovery remain
-research targets.
+The longer-term experimental goal remains a **print-camera channel**: embed a
+short message, print the carrier on paper, photograph it with a phone and recover
+the authenticated payload. Digital rotation and combined resize/crop tests let us
+validate orientation, scale and phase recovery in controlled stages before adding
+printer, paper, lens, illumination and sensor effects.
 
 ## Development status
 
-**v0.2.0 build 3 is a development build, not the final v0.2.0 release.**
+**v0.2.0 build 4 is a development build, not the final v0.2.0 release.**
 
 The adaptive v3 format is intentionally documented now so changes during the
 build cycle can be reviewed explicitly. Build 2 deliberately dropped runtime v1/v2
-compatibility; build 3 keeps v3 as the sole implementation baseline and adds
-rotation recovery around it without changing the on-image format. The `build N`
+compatibility; builds 3 and 4 keep v3 as the sole implementation baseline and
+extend only the bounded geometric recovery layer without changing the on-image
+format. The `build N`
 suffix will be removed only when the v0.2.0 release is finalized.
 
 Measured behavior for the stable v0.1 baseline and validation status for this

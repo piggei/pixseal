@@ -459,6 +459,68 @@ func TestV3ArbitraryRotationRecovery(t *testing.T) {
 	}
 }
 
+func TestV3CombinedGeometryRecovery(t *testing.T) {
+	key := []byte("combined geometry recovery key")
+	tests := []struct {
+		name      string
+		profile   Profile
+		message   []byte
+		transform func(image.Image) image.Image
+	}{
+		{
+			name:    "robust-rotate-resize75",
+			profile: ProfileRobust,
+			message: []byte("robust payload"),
+			transform: func(src image.Image) image.Image {
+				rotated := rotateBilinearForTest(src, 12.3)
+				return resizeBilinear(rotated, rotated.Bounds().Dx()*3/4, rotated.Bounds().Dy()*3/4)
+			},
+		},
+		{
+			name:    "balanced-rotate-resize75",
+			profile: ProfileBalanced,
+			message: []byte("balanced geometry payload"),
+			transform: func(src image.Image) image.Image {
+				rotated := rotateBilinearForTest(src, 12.3)
+				return resizeBilinear(rotated, rotated.Bounds().Dx()*3/4, rotated.Bounds().Dy()*3/4)
+			},
+		},
+		{
+			name:    "capacity-rotate-crop80",
+			profile: ProfileCapacity,
+			message: []byte("capacity geometry payload"),
+			transform: func(src image.Image) image.Image {
+				rotated := rotateBilinearForTest(src, 12.3)
+				b := rotated.Bounds()
+				w, h := b.Dx()*4/5, b.Dy()*4/5
+				x0, y0 := (b.Dx()-w)/2, (b.Dy()-h)/2
+				return cropCopy(rotated, image.Rect(x0, y0, x0+w, y0+h))
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			options := DefaultOptions()
+			options.Profile = tc.profile
+			marked, err := Embed(testImage(900, 700), tc.message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			transformed := tc.transform(marked)
+			got, info, err := ExtractWithInfo(transformed, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, tc.message) || info.Profile != tc.profile {
+				t.Fatalf("combined recovery got payload=%q profile=%s", got, info.Profile)
+			}
+			if math.Abs(info.RotationCorrectionDegrees) < 1 {
+				t.Fatalf("combined recovery did not report rotation correction: %.2f", info.RotationCorrectionDegrees)
+			}
+		})
+	}
+}
+
 func TestRotationProbeRejectsUnmarkedSyntheticImage(t *testing.T) {
 	if candidates := detectRotationCandidates(newPixelPlane(testImage(400, 360))); len(candidates) != 0 {
 		t.Fatalf("unmarked image produced rotation candidates: %+v", candidates)
