@@ -1,0 +1,23 @@
+# Compiled binaries
+/dist/
+/main
+*.exe
+*.test
+
+# Generated images (keep the directory itself in Git)
+/coded pics/*
+!/coded pics/.gitkeep
+
+# Local source images used by tests
+/original pics/
+
+# Test and coverage artifacts
+coverage.out
+*.prof
+/robustness-results/
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+*.swp
+*~
