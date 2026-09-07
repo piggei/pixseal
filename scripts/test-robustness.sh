@@ -142,7 +142,7 @@ for image in "${images[@]}"; do
 	fi
 	if ! "$PIXSEAL" embed -in "$image" -out "$marked" \
 		-key "$TEST_KEY" -message "$TEST_MESSAGE" >/dev/null; then
-		echo "error: could not create baseline watermark for $image" >&2
+		echo "error: could not create baseline hidden payload for $image" >&2
 		exit 2
 	fi
 

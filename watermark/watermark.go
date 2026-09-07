@@ -14,12 +14,12 @@ import (
 )
 
 const (
-	blockSize  = 8
-	maxPayload = 64
-	headerSize = 8 // magic(2), version(1), length(1), crc32(4)
-	tagSize    = 8
-	frameSize  = headerSize + maxPayload + tagSize
-	frameBits  = frameSize * 8
+	blockSize       = 8
+	maxPayload      = 64
+	headerSize      = 8 // magic(2), version(1), length(1), crc32(4)
+	tagSize         = 8
+	frameSize       = headerSize + maxPayload + tagSize
+	frameBits       = frameSize * 8
 	maxSearchPixels = 50_000_000
 
 	// Hamming(7,4) expands the fixed 640-bit frame to 1120 protected bits.
@@ -38,7 +38,7 @@ var (
 
 type Options struct {
 	Strength   float64
-	Repetition int // Used when decoding legacy v1 watermarks.
+	Repetition int // Used only when decoding the legacy v1 format.
 }
 
 func DefaultOptions() Options {
@@ -66,18 +66,22 @@ func init() {
 	}
 }
 
-func normalize(options Options) (Options, error) {
+func normalizeEmbedOptions(options Options) (Options, error) {
 	if options.Strength == 0 {
 		options.Strength = 24
-	}
-	if options.Repetition == 0 {
-		options.Repetition = 5
 	}
 	if options.Strength < 4 || options.Strength > 120 {
 		return options, errors.New("strength must be between 4 and 120")
 	}
+	return options, nil
+}
+
+func normalizeLegacyOptions(options Options) (Options, error) {
+	if options.Repetition == 0 {
+		options.Repetition = 5
+	}
 	if options.Repetition < 1 || options.Repetition > 31 || options.Repetition%2 == 0 {
-		return options, errors.New("repetition must be an odd number between 1 and 31")
+		return options, errors.New("repetition must be an odd number between 1 and 31 for legacy v1 extraction")
 	}
 	return options, nil
 }
@@ -92,10 +96,10 @@ func Capacity(img image.Image, _ int) int {
 	return maxPayload
 }
 
-// Embed writes a geometrically synchronized v2 watermark. The complete,
-// error-corrected frame is repeated as a two-dimensional periodic tile.
+// Embed hides a geometrically synchronized v2 payload. The complete,
+// error-corrected frame is repeated as a two-dimensional periodic DCT tile.
 func Embed(src image.Image, payload, key []byte, options Options) (*image.NRGBA, error) {
-	options, err := normalize(options)
+	options, err := normalizeEmbedOptions(options)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +110,7 @@ func Embed(src image.Image, payload, key []byte, options Options) (*image.NRGBA,
 		return nil, fmt.Errorf("payload exceeds %d bytes", maxPayload)
 	}
 	if Capacity(src, options.Repetition) == 0 {
-		return nil, fmt.Errorf("image must be at least %dx%d pixels for a v2 watermark", tileWidth*blockSize, tileHeight*blockSize)
+		return nil, fmt.Errorf("image must be at least %dx%d pixels for a v2 hidden payload", tileWidth*blockSize, tileHeight*blockSize)
 	}
 
 	frame := makeFrame(payload, key, 2)
@@ -125,13 +129,10 @@ func Embed(src image.Image, payload, key []byte, options Options) (*image.NRGBA,
 	return out, nil
 }
 
-// Extract first looks for the periodic v2 format across supported scales and
-// block-grid offsets, then falls back to the original v1 decoder.
+// Extract first looks for the periodic v2 steganographic format across
+// supported scales and block-grid offsets, then falls back to the original v1
+// decoder. Legacy-only options are validated only if that fallback is needed.
 func Extract(src image.Image, key []byte, options Options) ([]byte, float64, error) {
-	options, err := normalize(options)
-	if err != nil {
-		return nil, 0, err
-	}
 	if len(key) < 8 {
 		return nil, 0, errors.New("key must contain at least 8 bytes")
 	}
@@ -139,7 +140,11 @@ func Extract(src image.Image, key []byte, options Options) ([]byte, float64, err
 	if payload, confidence, err := extractV2(src, key); err == nil {
 		return payload, confidence, nil
 	}
-	return extractLegacy(src, key, options)
+	legacyOptions, err := normalizeLegacyOptions(options)
+	if err != nil {
+		return nil, 0, err
+	}
+	return extractLegacy(src, key, legacyOptions)
 }
 
 type phaseCandidate struct {
@@ -156,7 +161,8 @@ type scaleCandidate struct {
 func extractV2(src image.Image, key []byte) ([]byte, float64, error) {
 	known := []byte{magic[0], magic[1], 2}
 	syncBits := hammingEncode(whiten(bytesToBits(known), key, "pixseal-whiten-v2"))
-	if payload, confidence, ok := searchV2(src, key, syncBits, candidateBlockSizes[:]); ok {
+	sourcePlane := newPixelPlane(src)
+	if payload, confidence, ok := searchV2(sourcePlane, key, syncBits, candidateBlockSizes[:]); ok {
 		return payload, confidence, nil
 	}
 
@@ -176,7 +182,7 @@ func extractV2(src image.Image, key []byte) ([]byte, float64, error) {
 		if width < tileWidth*blockSize || height < tileHeight*blockSize || width*height > maxSearchPixels {
 			continue
 		}
-		normalized := resizeBicubic(src, width, height)
+		normalized := resizePixelPlaneBicubic(sourcePlane, width, height)
 		payload, confidence, score, ok := searchV2Aligned(normalized, key, syncBits)
 		if ok {
 			return payload, confidence, nil
@@ -200,16 +206,16 @@ func extractV2(src image.Image, key []byte) ([]byte, float64, error) {
 			if width < tileWidth*blockSize || height < tileHeight*blockSize || width*height > maxSearchPixels {
 				continue
 			}
-			normalized := resizeBicubic(src, width, height)
+			normalized := resizePixelPlaneBicubic(sourcePlane, width, height)
 			if payload, confidence, _, ok := searchV2Aligned(normalized, key, syncBits); ok {
 				return payload, confidence, nil
 			}
 		}
 	}
-	return nil, 0, errors.New("v2 watermark not found")
+	return nil, 0, errors.New("v2 hidden payload not found")
 }
 
-func searchV2Aligned(src image.Image, key, syncBits []byte) ([]byte, float64, int, bool) {
+func searchV2Aligned(src *pixelPlane, key, syncBits []byte) ([]byte, float64, int, bool) {
 	grid, ok := aggregateGrid(src, blockSize, 0, 0)
 	if !ok {
 		return nil, 0, 0, false
@@ -223,9 +229,9 @@ func searchV2Aligned(src image.Image, key, syncBits []byte) ([]byte, float64, in
 	return payload, confidence, score, found
 }
 
-func searchV2(src image.Image, key, syncBits []byte, sizes []int) ([]byte, float64, bool) {
+func searchV2(src *pixelPlane, key, syncBits []byte, sizes []int) ([]byte, float64, bool) {
 	for _, size := range sizes {
-		bounds := src.Bounds()
+		bounds := src.bounds
 		if bounds.Dx() < tileWidth*size || bounds.Dy() < tileHeight*size {
 			continue
 		}
@@ -264,8 +270,8 @@ func decodePhases(grid []float64, key, syncBits []byte, phases []phaseCandidate)
 	return nil, 0, false
 }
 
-func aggregateGrid(src image.Image, size, offsetX, offsetY int) ([]float64, bool) {
-	bounds := src.Bounds()
+func aggregateGrid(src *pixelPlane, size, offsetX, offsetY int) ([]float64, bool) {
+	bounds := src.bounds
 	blocksWide := (bounds.Dx() - offsetX) / size
 	blocksHigh := (bounds.Dy() - offsetY) / size
 	if blocksWide < tileWidth || blocksHigh < tileHeight {
@@ -351,20 +357,20 @@ func makeFrame(payload, key []byte, version byte) []byte {
 
 func parseFrame(frame, key []byte, version byte) ([]byte, error) {
 	if len(frame) < frameSize || frame[0] != magic[0] || frame[1] != magic[1] || frame[2] != version {
-		return nil, errors.New("watermark header mismatch")
+		return nil, errors.New("hidden payload header mismatch")
 	}
 	payloadLength := int(frame[3])
 	if payloadLength > maxPayload {
-		return nil, errors.New("invalid watermark length")
+		return nil, errors.New("invalid hidden payload length")
 	}
 	payload := frame[headerSize : headerSize+payloadLength]
 	if crc32.ChecksumIEEE(payload) != binary.BigEndian.Uint32(frame[4:8]) {
-		return nil, errors.New("watermark damaged: CRC mismatch")
+		return nil, errors.New("hidden payload damaged: CRC mismatch")
 	}
 	mac := hmac.New(sha256.New, key)
 	mac.Write(frame[:headerSize+payloadLength])
 	if !hmac.Equal(frame[headerSize+payloadLength:headerSize+payloadLength+tagSize], mac.Sum(nil)[:tagSize]) {
-		return nil, errors.New("watermark authentication failed")
+		return nil, errors.New("hidden payload authentication failed")
 	}
 	return append([]byte(nil), payload...), nil
 }
@@ -486,16 +492,45 @@ func embedBlock(img *image.NRGBA, position point, bit byte, strength float64) {
 	}
 }
 
+type pixelPlane struct {
+	bounds image.Rectangle
+	rgb    []uint8
+}
+
+// newPixelPlane converts each source pixel once into compact 8-bit RGB storage.
+// Offset searches can then avoid repeatedly traversing image.Image and invoking
+// color-model conversion for every candidate grid.
+func newPixelPlane(img image.Image) *pixelPlane {
+	bounds := img.Bounds()
+	pixelCount := bounds.Dx() * bounds.Dy()
+	plane := &pixelPlane{
+		bounds: bounds,
+		rgb:    make([]uint8, pixelCount*3),
+	}
+	for y := 0; y < bounds.Dy(); y++ {
+		for x := 0; x < bounds.Dx(); x++ {
+			r, g, b, _ := img.At(bounds.Min.X+x, bounds.Min.Y+y).RGBA()
+			index := (y*bounds.Dx() + x) * 3
+			plane.rgb[index], plane.rgb[index+1], plane.rgb[index+2] = uint8(r>>8), uint8(g>>8), uint8(b>>8)
+		}
+	}
+	return plane
+}
+
 // readBlockSized evaluates only the two DCT coefficients used by PixSeal. It
 // supports the 8, 6 and 4 pixel grids produced by 100%, 75% and 50% scaling.
-func readBlockSized(img image.Image, position point, size int) float64 {
+func readBlockSized(plane *pixelPlane, position point, size int) float64 {
 	table := readCosTables[size]
 	coefficient23 := 0.0
 	coefficient32 := 0.0
+	stride := plane.bounds.Dx()
+	startX := position.x - plane.bounds.Min.X
+	startY := position.y - plane.bounds.Min.Y
 	for y := 0; y < size; y++ {
+		row := (startY + y) * stride
 		for x := 0; x < size; x++ {
-			r, g, b, _ := img.At(position.x+x, position.y+y).RGBA()
-			luminance := .299*float64(r>>8) + .587*float64(g>>8) + .114*float64(b>>8) - 128
+			index := (row + startX + x) * 3
+			luminance := .299*float64(plane.rgb[index]) + .587*float64(plane.rgb[index+1]) + .114*float64(plane.rgb[index+2]) - 128
 			coefficient23 += luminance * table[3][x] * table[2][y]
 			coefficient32 += luminance * table[2][x] * table[3][y]
 		}
@@ -569,11 +604,15 @@ func toNRGBA(src image.Image) *image.NRGBA {
 	return output
 }
 
-func resizeBicubic(src image.Image, width, height int) *image.NRGBA {
-	bounds := src.Bounds()
-	output := image.NewNRGBA(image.Rect(0, 0, width, height))
-	scaleX := float64(bounds.Dx()) / float64(width)
-	scaleY := float64(bounds.Dy()) / float64(height)
+func resizePixelPlaneBicubic(src *pixelPlane, width, height int) *pixelPlane {
+	sourceWidth := src.bounds.Dx()
+	sourceHeight := src.bounds.Dy()
+	output := &pixelPlane{
+		bounds: image.Rect(0, 0, width, height),
+		rgb:    make([]uint8, width*height*3),
+	}
+	scaleX := float64(sourceWidth) / float64(width)
+	scaleY := float64(sourceHeight) / float64(height)
 
 	for y := 0; y < height; y++ {
 		sourceY := (float64(y)+.5)*scaleY - .5
@@ -585,23 +624,22 @@ func resizeBicubic(src image.Image, width, height int) *image.NRGBA {
 
 			for sampleY := baseY - 1; sampleY <= baseY+2; sampleY++ {
 				weightY := cubicWeight(sourceY - float64(sampleY))
-				pixelY := clampCoordinate(sampleY, bounds.Dy()) + bounds.Min.Y
+				pixelY := clampCoordinate(sampleY, sourceHeight)
+				row := pixelY * sourceWidth
 				for sampleX := baseX - 1; sampleX <= baseX+2; sampleX++ {
 					weight := weightY * cubicWeight(sourceX-float64(sampleX))
-					pixelX := clampCoordinate(sampleX, bounds.Dx()) + bounds.Min.X
-					r, g, b, _ := src.At(pixelX, pixelY).RGBA()
-					red += float64(r>>8) * weight
-					green += float64(g>>8) * weight
-					blue += float64(b>>8) * weight
+					pixelX := clampCoordinate(sampleX, sourceWidth)
+					index := (row + pixelX) * 3
+					red += float64(src.rgb[index]) * weight
+					green += float64(src.rgb[index+1]) * weight
+					blue += float64(src.rgb[index+2]) * weight
 					weightSum += weight
 				}
 			}
-			output.SetNRGBA(x, y, color.NRGBA{
-				R: clamp(red / weightSum),
-				G: clamp(green / weightSum),
-				B: clamp(blue / weightSum),
-				A: 255,
-			})
+			index := (y*width + x) * 3
+			output.rgb[index] = clamp(red / weightSum)
+			output.rgb[index+1] = clamp(green / weightSum)
+			output.rgb[index+2] = clamp(blue / weightSum)
 		}
 	}
 	return output

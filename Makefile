@@ -22,7 +22,7 @@ GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
 .PHONY: build test test-unit test-images deep-test extreme-test all build-all clean
 
-# Default target: build the native Linux executable only.
+# Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
 
 $(PIXSEAL): $(GO_SOURCES) go.mod
@@ -31,9 +31,9 @@ $(PIXSEAL): $(GO_SOURCES) go.mod
 	@go build -trimpath -ldflags="-s -w" -o $(PIXSEAL) ./cmd/pixseal
 	@echo "Created $(PIXSEAL)"
 
-# Build first, then run only the simple tests in sequence.
-test: build test-unit test-images
-	@echo "Simple test suite completed."
+# Self-contained public test suite: no private image corpus is required.
+test: build test-unit
+	@echo "Self-contained test suite completed."
 
 test-unit:
 	@echo "Running Go unit tests..."
@@ -100,9 +100,9 @@ extreme-test: build
 	RANDOM_SEED="$(RANDOM_SEED)" \
 	bash ./scripts/test-limits.sh
 
-# Build, run the simple tests, then run the advanced transformation tests.
-all: test deep-test
-	@echo "Complete test suite finished."
+# Run all tests, including the optional local image corpus.
+all: test test-images deep-test
+	@echo "Complete local test suite finished."
 
 build-all:
 	@echo "Building PixSeal for Linux, Windows and macOS..."

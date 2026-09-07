@@ -2,6 +2,7 @@ package watermark
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -41,7 +42,7 @@ func TestHammingCorrectsSingleBit(t *testing.T) {
 
 func TestV2TransformRoundTrips(t *testing.T) {
 	key := []byte("correct horse battery staple")
-	message := []byte("geometric watermark test")
+	message := []byte("geometric steganography test")
 	marked, err := Embed(testImage(560, 512), message, key, DefaultOptions())
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +79,114 @@ func TestV2TransformRoundTrips(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestV2IgnoresLegacyRepetition(t *testing.T) {
+	key := []byte("correct horse battery staple")
+	message := []byte("v2 ignores legacy repetition")
+	options := DefaultOptions()
+	options.Repetition = 2 // Invalid for v1, intentionally irrelevant to v2.
+
+	marked, err := Embed(testImage(560, 512), message, key, options)
+	if err != nil {
+		t.Fatalf("v2 embed rejected legacy-only repetition: %v", err)
+	}
+	got, _, err := Extract(marked, key, options)
+	if err != nil {
+		t.Fatalf("v2 extraction rejected legacy-only repetition: %v", err)
+	}
+	if !bytes.Equal(got, message) {
+		t.Fatalf("got %q, want %q", got, message)
+	}
+}
+
+func TestLegacyV1ExtractionCompatibility(t *testing.T) {
+	key := []byte("legacy compatibility key")
+	message := []byte("legacy v1 payload")
+	marked, err := embedLegacyForTest(testImage(560, 512), message, key, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, _, err := Extract(marked, key, DefaultOptions())
+	if err != nil {
+		t.Fatalf("legacy v1 extraction failed: %v", err)
+	}
+	if !bytes.Equal(got, message) {
+		t.Fatalf("got %q, want %q", got, message)
+	}
+}
+
+func embedLegacyForTest(src image.Image, payload, key []byte, options Options) (*image.NRGBA, error) {
+	embedOptions, err := normalizeEmbedOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	legacyOptions, err := normalizeLegacyOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	frame := makeFrame(payload, key, 1)
+	bits := whiten(bytesToBits(frame), key, "pixseal-whiten-v1")
+	out := toNRGBA(src)
+	order := legacyBlockOrder(out.Bounds(), key)
+	required := len(bits) * legacyOptions.Repetition
+	if len(order) < required {
+		return nil, fmt.Errorf("test image has %d blocks, need %d", len(order), required)
+	}
+	for index, bit := range bits {
+		for repetition := 0; repetition < legacyOptions.Repetition; repetition++ {
+			embedBlock(out, order[index*legacyOptions.Repetition+repetition], bit, embedOptions.Strength)
+		}
+	}
+	return out, nil
+}
+
+func TestPixelPlaneBicubicMatchesReference(t *testing.T) {
+	src := testImage(73, 61)
+	optimized := resizePixelPlaneBicubic(newPixelPlane(src), 91, 77)
+	reference := newPixelPlane(resizeBicubicReference(src, 91, 77))
+	if !bytes.Equal(optimized.rgb, reference.rgb) {
+		t.Fatal("optimized pixel-plane normalization differs from reference bicubic reconstruction")
+	}
+}
+
+func resizeBicubicReference(src image.Image, width, height int) *image.NRGBA {
+	bounds := src.Bounds()
+	output := image.NewNRGBA(image.Rect(0, 0, width, height))
+	scaleX := float64(bounds.Dx()) / float64(width)
+	scaleY := float64(bounds.Dy()) / float64(height)
+
+	for y := 0; y < height; y++ {
+		sourceY := (float64(y)+.5)*scaleY - .5
+		baseY := int(math.Floor(sourceY))
+		for x := 0; x < width; x++ {
+			sourceX := (float64(x)+.5)*scaleX - .5
+			baseX := int(math.Floor(sourceX))
+			red, green, blue, weightSum := 0.0, 0.0, 0.0, 0.0
+
+			for sampleY := baseY - 1; sampleY <= baseY+2; sampleY++ {
+				weightY := cubicWeight(sourceY - float64(sampleY))
+				pixelY := clampCoordinate(sampleY, bounds.Dy()) + bounds.Min.Y
+				for sampleX := baseX - 1; sampleX <= baseX+2; sampleX++ {
+					weight := weightY * cubicWeight(sourceX-float64(sampleX))
+					pixelX := clampCoordinate(sampleX, bounds.Dx()) + bounds.Min.X
+					r, g, b, _ := src.At(pixelX, pixelY).RGBA()
+					red += float64(r>>8) * weight
+					green += float64(g>>8) * weight
+					blue += float64(b>>8) * weight
+					weightSum += weight
+				}
+			}
+			output.SetNRGBA(x, y, color.NRGBA{
+				R: clamp(red / weightSum),
+				G: clamp(green / weightSum),
+				B: clamp(blue / weightSum),
+				A: 255,
+			})
+		}
+	}
+	return output
 }
 
 func cropCopy(src image.Image, rectangle image.Rectangle) *image.NRGBA {

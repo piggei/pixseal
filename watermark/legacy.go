@@ -11,9 +11,10 @@ import (
 	"math/rand"
 )
 
-// extractLegacy preserves read compatibility with PixSeal watermark format v1.
+// extractLegacy preserves read compatibility with the original PixSeal v1 format.
 func extractLegacy(src image.Image, key []byte, options Options) ([]byte, float64, error) {
 	order := legacyBlockOrder(src.Bounds(), key)
+	plane := newPixelPlane(src)
 	minimumBits := (headerSize + tagSize) * 8
 	if len(order) < minimumBits*options.Repetition {
 		return nil, 0, errors.New("image is too small")
@@ -30,7 +31,7 @@ func extractLegacy(src image.Image, key []byte, options Options) ([]byte, float6
 		votes := 0
 		margin := 0.0
 		for repetition := 0; repetition < options.Repetition; repetition++ {
-			value := readBlockSized(src, order[i*options.Repetition+repetition], blockSize)
+			value := readBlockSized(plane, order[i*options.Repetition+repetition], blockSize)
 			if value >= 0 {
 				votes++
 			} else {
@@ -46,21 +47,21 @@ func extractLegacy(src image.Image, key []byte, options Options) ([]byte, float6
 
 	raw := bitsToBytes(whiten(bits, key, "pixseal-whiten-v1"))
 	if len(raw) < headerSize+tagSize || raw[0] != magic[0] || raw[1] != magic[1] || raw[2] != 1 {
-		return nil, confidenceSum / float64(bitCount), errors.New("watermark not found or key/repetition is incorrect")
+		return nil, confidenceSum / float64(bitCount), errors.New("hidden payload not found or legacy key/repetition is incorrect")
 	}
 	payloadLength := int(raw[3])
 	packetLength := headerSize + payloadLength + tagSize
 	if payloadLength > maxPayload || packetLength > len(raw) {
-		return nil, 0, errors.New("invalid watermark length")
+		return nil, 0, errors.New("invalid hidden payload length")
 	}
 	payload := raw[headerSize : headerSize+payloadLength]
 	if crc32.ChecksumIEEE(payload) != binary.BigEndian.Uint32(raw[4:8]) {
-		return nil, 0, errors.New("watermark damaged: CRC mismatch")
+		return nil, 0, errors.New("hidden payload damaged: CRC mismatch")
 	}
 	mac := hmac.New(sha256.New, key)
 	mac.Write(raw[:headerSize+payloadLength])
 	if !hmac.Equal(raw[headerSize+payloadLength:packetLength], mac.Sum(nil)[:tagSize]) {
-		return nil, 0, errors.New("watermark authentication failed")
+		return nil, 0, errors.New("hidden payload authentication failed")
 	}
 	return append([]byte(nil), payload...), confidenceSum / float64(bitCount), nil
 }

@@ -78,17 +78,23 @@ transform_or_exit() {
 	fi
 }
 
-report_boundary() {
+report_scales() {
 	local label="$1"
-	local last_pass="$2"
-	local first_fail="$3"
-	local outcome="${4:-fail}"
-	if [[ "$outcome" == "timeout" ]]; then
-		printf '  LIMIT %-17s inconclusive: timeout at %s%% after pass at %s%%\n' "$label" "$first_fail" "$last_pass"
-	elif [[ -n "$first_fail" ]]; then
-		printf '  LIMIT %-17s last pass %s%%, first fail %s%%\n' "$label" "$last_pass" "$first_fail"
+	local passes="$2"
+	local failures="$3"
+	local timeouts="$4"
+	printf '  SCALES %-16s passed: %s%%\n' "$label" "${passes// /%, }"
+	if [[ -n "$failures" ]]; then
+		failures="${failures# }"
+		printf '  SCALES %-16s failed: %s%%\n' "$label" "${failures// /%, }"
 	else
-		printf '  LIMIT %-17s no failure down to %s%%\n' "$label" "$LIMIT_MIN"
+		printf '  SCALES %-16s failed: none\n' "$label"
+	fi
+	if [[ -n "$timeouts" ]]; then
+		timeouts="${timeouts# }"
+		printf '  SCALES %-16s timeout: %s%%\n' "$label" "${timeouts// /%, }"
+	else
+		printf '  SCALES %-16s timeout: none\n' "$label"
 	fi
 }
 
@@ -122,7 +128,7 @@ for image in "${images[@]}"; do
 	marked="$tmp_dir/marked-$image_index.png"
 	if ! "$PIXSEAL" embed -in "$image" -out "$marked" \
 		-key "$TEST_KEY" -message "$TEST_MESSAGE" >/dev/null; then
-		echo "  ERROR baseline           could not embed watermark" >&2
+		echo "  ERROR baseline           could not hide payload" >&2
 		exit 2
 	fi
 
@@ -160,9 +166,9 @@ for image in "${images[@]}"; do
 		echo "  SCALES resize            timeout: none"
 	fi
 
-	last_pass=100
-	first_fail=""
-	boundary_outcome="fail"
+	center_passes="100"
+	center_failures=""
+	center_timeouts=""
 	for ((percent = LIMIT_START; percent >= LIMIT_MIN; percent -= LIMIT_STEP)); do
 		crop_width=$((width * percent / 100))
 		crop_height=$((height * percent / 100))
@@ -173,24 +179,23 @@ for image in "${images[@]}"; do
 			-crop "${crop_width}x${crop_height}+${x}+${y}" +repage "$output"
 		if extract_ok "$output"; then
 			printf '  PASS  center-crop-%-6s message recovered\n' "${percent}%"
-			last_pass="$percent"
+			center_passes="$center_passes $percent"
 		else
 			status=$?
 			if (( status == 124 )); then
 				printf '  TIMEOUT center-crop-%-3s exceeded %ss\n' "${percent}%" "$EXTRACT_TIMEOUT"
-				boundary_outcome="timeout"
+				center_timeouts="$center_timeouts $percent"
 			else
 				printf '  FAIL  center-crop-%-6s message not recovered\n' "${percent}%"
+				center_failures="$center_failures $percent"
 			fi
-			first_fail="$percent"
-			break
 		fi
 	done
-	report_boundary "center crop" "$last_pass" "$first_fail" "$boundary_outcome"
+	report_scales "center crop" "$center_passes" "$center_failures" "$center_timeouts"
 
-	last_pass=100
-	first_fail=""
-	boundary_outcome="fail"
+	random_passes="100"
+	random_failures=""
+	random_timeouts=""
 	for ((percent = LIMIT_START; percent >= LIMIT_MIN; percent -= LIMIT_STEP)); do
 		crop_width=$((width * percent / 100))
 		crop_height=$((height * percent / 100))
@@ -203,18 +208,17 @@ for image in "${images[@]}"; do
 			-crop "${crop_width}x${crop_height}+${x}+${y}" +repage "$output"
 		if extract_ok "$output"; then
 			printf '  PASS  random-crop-%-6s message recovered at +%d+%d\n' "${percent}%" "$x" "$y"
-			last_pass="$percent"
+			random_passes="$random_passes $percent"
 		else
 			status=$?
 			if (( status == 124 )); then
 				printf '  TIMEOUT random-crop-%-3s exceeded %ss at +%d+%d\n' "${percent}%" "$EXTRACT_TIMEOUT" "$x" "$y"
-				boundary_outcome="timeout"
+				random_timeouts="$random_timeouts $percent"
 			else
 				printf '  FAIL  random-crop-%-6s message not recovered at +%d+%d\n' "${percent}%" "$x" "$y"
+				random_failures="$random_failures $percent"
 			fi
-			first_fail="$percent"
-			break
 		fi
 	done
-	report_boundary "random crop" "$last_pass" "$first_fail" "$boundary_outcome"
+	report_scales "random crop" "$random_passes" "$random_failures" "$random_timeouts"
 done

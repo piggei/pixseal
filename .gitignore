@@ -4,12 +4,9 @@
 *.exe
 *.test
 
-# Generated images (keep the directory itself in Git)
-/coded pics/*
-!/coded pics/.gitkeep
-
 # Local source images used by tests
 /original pics/
+*Zone.Identifier
 
 # Test and coverage artifacts
 coverage.out
