@@ -1,9 +1,9 @@
 # PixSeal algorithm specification
 
 This document describes the adaptive **format v3** used by PixSeal
-v0.2.0 build 4. Runtime extraction is intentionally v3-only; formats v1 and v2
-are retained only as historical development context. Builds 3 and 4 add bounded
-geometric recovery around the unchanged v3 on-image format.
+v0.2.0 build 5. Runtime extraction is intentionally v3-only; formats v1 and v2
+are retained only as historical development context. Builds 3 through 5 add
+bounded geometric recovery around the unchanged v3 on-image format.
 
 PixSeal is an experimental robust image-steganography system for short
 authenticated payloads. The frequency-domain embedding mechanism is related to
@@ -286,9 +286,10 @@ Adaptive profile detection does **not** add another geometric search dimension.
 Each expensive grid aggregation is performed once and then scored against the
 three fixed v3 profile patterns.
 
-Build 4 extends the explicitly bounded rotation stage to recognize the native
-8-pixel lattice and the 6-pixel lattice produced by a 75% resize. It does not
-change the on-image format.
+Build 5 retains the explicitly bounded rotation stage for the native 8-pixel
+lattice and the 6-pixel lattice produced by a 75% resize, and adds a separate
+bounded axis-aligned affine stage. None of these decoder additions changes the
+on-image format.
 
 ### 10.1 Direct block-size/offset search
 
@@ -317,7 +318,7 @@ For every aggregated grid, the decoder checks the three v3 profile patterns.
 ### 10.2 Exact quarter-turn recovery
 
 If direct decoding fails but the best v3 synchronization score is sufficiently
-high, build 4 tests lossless 90, 180 and 270 degree corrections. Quarter turns
+high, the decoder tests lossless 90, 180 and 270 degree corrections. Quarter turns
 preserve pixel values, so no interpolation is needed.
 
 Each corrected orientation now reuses all three direct apparent block sizes:
@@ -341,7 +342,7 @@ direct resize paths without adding a new scale search.
 ### 10.3 Arbitrary-angle multi-lattice orientation probe
 
 A naive full decode for every angle and every scale would multiply failed-
-extraction cost. Build 4 therefore performs sparse signal estimation first and
+extraction cost. The rotation stage therefore performs sparse signal estimation first and
 limits arbitrary-angle probing to the two lattice sizes that remained useful in
 development tests after interpolation:
 
@@ -413,7 +414,7 @@ The reported `RotationCorrectionDegrees` value is the correction applied to the
 carrier, normalized to `[-180, 180)` degrees. A rectification candidate is
 skipped if its expanded canvas would exceed **50,000,000 pixels**.
 
-Build 4 has experimentally recovered, using ImageMagick-generated transforms:
+Builds 4 and 5 have experimentally recovered, using ImageMagick-generated transforms:
 
 ```text
 rotate -> resize 75%
@@ -426,7 +427,77 @@ rotate -> resize 75% -> crop 80%
 These are measured development baselines, not universal guarantees for every
 image or interpolation filter.
 
-### 10.5 Pure-resize inverse normalization
+### 10.5 Bounded axis-aligned affine recovery
+
+Build 5 adds a separate affine stage after direct/rotation probing and before the
+historical pure-resize inverse-normalization path. The stage is intentionally
+**axis-aligned**: it does not compose arbitrary rotation with affine distortion.
+This avoids an angle x affine Cartesian search while the affine model is still
+experimental.
+
+The hypothesis set is finite and fixed:
+
+```text
+anisotropic scale values per axis: 0.90, 0.95, 1.00, 1.05, 1.10
+all X/Y combinations except X == Y: 20 matrices
+
+shear X or shear Y: +/-3, +/-5, +/-8, +/-10 degrees
+2 axes x 8 signed values: 16 matrices
+
+total: 36 affine matrices
+```
+
+Uniform X/Y scale pairs are omitted because uniform scaling is already handled
+by the established resize paths. Each affine matrix maps coordinates in a
+rectified virtual carrier into the observed image. PixSeal samples luminance
+through that inverse mapping with bilinear interpolation and computes the normal
+DCT coefficient pair directly; it does **not** allocate a corrected full-size
+image for every hypothesis.
+
+Before the affine set is explored, the decoder computes native v3 repetition
+coherence. A strongly coherent native lattice (`>= 0.82`) means the geometry is
+already aligned; if authenticated direct decoding failed, the affine stage is
+skipped so wrong-key/native inputs do not pay unnecessary affine work.
+
+For each of the 36 hypotheses, a sparse phase/contrast probe is followed by a
+**periodic tile-coherence** check. Format v3 repeats the same 35x32 logical tile
+across the carrier, so corresponding logical DCT signs in adjacent tiles should
+agree when the candidate geometry is close to correct. Coherence is
+key-independent and is used only as a gate/ranking signal; it cannot authenticate
+a payload. Candidates below `0.72` coherence are discarded.
+
+The expensive authenticated work is explicitly capped:
+
+```text
+36 affine matrices evaluated geometrically
+ 6 matrices retained after coherence ranking maximum
+ 3 pixel phases retained per matrix maximum
+18 authenticated single-tile probes maximum
+ 4 strongest failed sync candidates receive full-carrier aggregation maximum
+```
+
+For shear hypotheses, axis-preserving pixel phases are added to the phase
+candidate set before coherence ranking (X phases for shear X, Y phases for shear
+Y). Only the best three phases survive, so this improves phase coverage without
+raising the authenticated-probe cap.
+
+Single-tile decoding is attempted first. If HMAC does not validate, at most four
+strong candidates aggregate repeated observations across every complete virtual
+tile before one final v3 decode. This second level is particularly useful for
+the `capacity` profile, where a single transformed tile may be too damaged while
+spatial repetition across a larger carrier still contains enough evidence.
+
+When affine extraction succeeds, `ExtractInfo` reports the inverse correction:
+`ScaleXCorrection` / `ScaleYCorrection` for anisotropic scale or the relevant
+shear correction component. HMAC-SHA256 authentication of the v3 frame remains
+the sole acceptance criterion.
+
+The development ImageMagick matrix currently exercises 110%x90%, 90%x110%,
+shear X 8 degrees and shear Y 8 degrees across all three profiles. These are
+measured regression cases, not continuous guarantees over the complete +/-10%
+or +/-10-degree hypothesis range.
+
+### 10.6 Pure-resize inverse normalization
 
 If direct and rotation recovery fail, the original pure-resize path bicubically
 reconstructs the image toward the nominal original dimensions for these scale
@@ -450,8 +521,8 @@ The original crop/resize path remains bounded to:
 = 153 crop/resize candidates maximum
 ```
 
-Including every optional build-4 branch, the theoretical maximum number of full
-grid aggregations is:
+Ignoring the separate affine virtual-sampler budget described above, the legacy/rotation branch has the following theoretical maximum number of full
+grid aggregations:
 
 ```text
 116 native direct grids
@@ -537,7 +608,7 @@ at a bounded set of sample anchors (approximately no more than 256x256 anchors).
 Large images are sampled sparsely, but each gradient remains a one-pixel local
 difference.
 
-Build 4 retains the mean absolute luminance-gradient score introduced in build 1:
+Build 5 retains the mean absolute luminance-gradient score introduced in build 1:
 
 ```text
 score < 4      -> low detail    -> recommended strength 20
@@ -573,16 +644,17 @@ Sensitive messages should be encrypted separately before embedding.
 
 ## 15. Current unsupported geometry and direction
 
-Build 4 adds experimental recovery for digital rotation plus a first combined
+Build 5 retains experimental recovery for digital rotation plus the first combined
 75%-resize/crop baseline. It does not yet synchronize:
 
 - arbitrary-angle + 50% resize at default strength;
 - arbitrary fractional scales beyond the detected 75% lattice;
+- arbitrary rotation composed with anisotropic scale/shear;
+- affine transforms outside the discrete build-5 scale/shear hypotheses;
 - perspective transforms;
-- arbitrary affine warps;
 - print-camera distortion.
 
-The next research step is affine deformation and then perspective correction.
+The next research step is composition of the bounded rotation and affine models, followed by perspective correction.
 The intended approach remains staged, bounded synchronization and geometric
 rectification rather than multiplying open-ended brute-force dimensions.
 

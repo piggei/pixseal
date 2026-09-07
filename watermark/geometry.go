@@ -355,3 +355,477 @@ func normalizeDegrees(degrees float64) float64 {
 	}
 	return degrees
 }
+
+// linearTransform maps coordinates in a rectified carrier into coordinates in
+// the observed image, relative to the image centre. Build 5 uses this small
+// matrix model for axis-aligned affine distortion (anisotropic scale or shear).
+type linearTransform struct {
+	a, b float64
+	c, d float64
+}
+
+func (m linearTransform) determinant() float64 { return m.a*m.d - m.b*m.c }
+
+func (m linearTransform) inverse() (linearTransform, bool) {
+	det := m.determinant()
+	if math.Abs(det) < 1e-9 {
+		return linearTransform{}, false
+	}
+	return linearTransform{a: m.d / det, b: -m.b / det, c: -m.c / det, d: m.a / det}, true
+}
+
+type affineKind string
+
+const (
+	affineScaleXY affineKind = "scale-xy"
+	affineShearX  affineKind = "shear-x"
+	affineShearY  affineKind = "shear-y"
+)
+
+type affineCandidate struct {
+	kind       affineKind
+	parameter  float64
+	parameter2 float64
+	matrix     linearTransform
+	contrast   float64
+	blockSize  int
+}
+
+func shearXMatrix(amount float64) linearTransform {
+	return linearTransform{a: 1, b: amount, d: 1}
+}
+
+func shearYMatrix(amount float64) linearTransform {
+	return linearTransform{a: 1, c: amount, d: 1}
+}
+
+type affineVirtualBounds struct {
+	minX, minY float64
+	width      int
+	height     int
+}
+
+func affineOutputBounds(src *pixelPlane, matrix linearTransform) (affineVirtualBounds, bool) {
+	inverse, ok := matrix.inverse()
+	if !ok {
+		return affineVirtualBounds{}, false
+	}
+	halfW := float64(src.bounds.Dx()-1) / 2
+	halfH := float64(src.bounds.Dy()-1) / 2
+	corners := [][2]float64{{-halfW, -halfH}, {halfW, -halfH}, {-halfW, halfH}, {halfW, halfH}}
+	minX, minY := math.Inf(1), math.Inf(1)
+	maxX, maxY := math.Inf(-1), math.Inf(-1)
+	for _, corner := range corners {
+		x := inverse.a*corner[0] + inverse.b*corner[1]
+		y := inverse.c*corner[0] + inverse.d*corner[1]
+		minX = math.Min(minX, x)
+		maxX = math.Max(maxX, x)
+		minY = math.Min(minY, y)
+		maxY = math.Max(maxY, y)
+	}
+	width := int(math.Floor(maxX-minX)) + 1
+	height := int(math.Floor(maxY-minY)) + 1
+	if width < 1 || height < 1 {
+		return affineVirtualBounds{}, false
+	}
+	return affineVirtualBounds{minX: minX, minY: minY, width: width, height: height}, true
+}
+
+type affineProbe struct {
+	contrast float64
+	phases   []point
+}
+
+func readAffineBlockValue(src *pixelPlane, bounds affineVirtualBounds, matrix linearTransform, originX, originY, size int) (float64, bool) {
+	table := readCosTables[size]
+	coefficient23, coefficient32 := 0.0, 0.0
+	sourceCenterX := float64(src.bounds.Dx()-1) / 2
+	sourceCenterY := float64(src.bounds.Dy()-1) / 2
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			rectifiedX := bounds.minX + float64(originX+x)
+			rectifiedY := bounds.minY + float64(originY+y)
+			sourceX := matrix.a*rectifiedX + matrix.b*rectifiedY + sourceCenterX
+			sourceY := matrix.c*rectifiedX + matrix.d*rectifiedY + sourceCenterY
+			luminance, ok := samplePlaneLuminance(src, sourceX, sourceY)
+			if !ok {
+				return 0, false
+			}
+			coefficient23 += luminance * table[3][x] * table[2][y]
+			coefficient32 += luminance * table[2][x] * table[3][y]
+		}
+	}
+	return math.Abs(coefficient23) - math.Abs(coefficient32), true
+}
+
+func probeAffineMatrixDetailed(src *pixelPlane, matrix linearTransform, size int) affineProbe {
+	bounds, ok := affineOutputBounds(src, matrix)
+	if !ok || bounds.width < size*3 || bounds.height < size*3 {
+		return affineProbe{}
+	}
+	sampleGrid := 5
+	denominator := sampleGrid + 1
+	phaseScores := make([]float64, 0, size*size)
+	type scoredPhase struct {
+		score float64
+		x, y  int
+	}
+	all := make([]scoredPhase, 0, size*size)
+	for phaseY := 0; phaseY < size; phaseY++ {
+		for phaseX := 0; phaseX < size; phaseX++ {
+			sum, count := 0.0, 0
+			for sampleY := 1; sampleY <= sampleGrid; sampleY++ {
+				for sampleX := 1; sampleX <= sampleGrid; sampleX++ {
+					targetX := sampleX * (bounds.width - size) / denominator
+					targetY := sampleY * (bounds.height - size) / denominator
+					originX := nearestBlockOrigin(targetX, phaseX, bounds.width-size, size)
+					originY := nearestBlockOrigin(targetY, phaseY, bounds.height-size, size)
+					value, valid := readAffineBlockValue(src, bounds, matrix, originX, originY, size)
+					if !valid {
+						continue
+					}
+					sum += math.Abs(value)
+					count++
+				}
+			}
+			if count > 0 {
+				all = append(all, scoredPhase{score: sum / float64(count), x: phaseX, y: phaseY})
+				phaseScores = append(phaseScores, sum/float64(count))
+			}
+		}
+	}
+	if len(all) == 0 {
+		return affineProbe{}
+	}
+	sort.Slice(all, func(i, j int) bool { return all[i].score > all[j].score })
+	sort.Float64s(phaseScores)
+	phaseCount := 12
+	if len(all) < phaseCount {
+		phaseCount = len(all)
+	}
+	phases := make([]point, 0, phaseCount+1)
+	phases = append(phases, point{x: 0, y: 0})
+	for _, candidate := range all[:phaseCount] {
+		phase := point{x: candidate.x, y: candidate.y}
+		duplicate := false
+		for _, existing := range phases {
+			if existing == phase {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			phases = append(phases, phase)
+		}
+	}
+	return affineProbe{
+		contrast: all[0].score - phaseScores[len(phaseScores)/2],
+		phases:   phases,
+	}
+}
+
+func aggregateAffineGrid(src *pixelPlane, matrix linearTransform, size, offsetX, offsetY int) ([]float64, bool) {
+	bounds, ok := affineOutputBounds(src, matrix)
+	if !ok {
+		return nil, false
+	}
+	blocksWide := (bounds.width - offsetX) / size
+	blocksHigh := (bounds.height - offsetY) / size
+	if blocksWide < tileWidth || blocksHigh < tileHeight {
+		return nil, false
+	}
+	grid := make([]float64, eccBits)
+	for blockY := 0; blockY < blocksHigh; blockY++ {
+		for blockX := 0; blockX < blocksWide; blockX++ {
+			originX := offsetX + blockX*size
+			originY := offsetY + blockY*size
+			value, valid := readAffineBlockValue(src, bounds, matrix, originX, originY, size)
+			if !valid {
+				continue
+			}
+			position := (blockY%tileHeight)*tileWidth + blockX%tileWidth
+			grid[position] += value
+		}
+	}
+	return grid, true
+}
+
+func axisAlignedAffineHypotheses() []affineCandidate {
+	// Build 5 deliberately limits native-lattice anisotropic scale to +/-10% per
+	// axis and shear to 3/5/8/10 degrees. Uniform scale is already handled by the
+	// established resize path; equal X/Y pairs are therefore omitted here.
+	scales := [...]float64{0.90, 0.95, 1.00, 1.05, 1.10}
+	result := make([]affineCandidate, 0, 40)
+	for _, scaleX := range scales {
+		for _, scaleY := range scales {
+			if math.Abs(scaleX-scaleY) < 1e-9 {
+				continue
+			}
+			result = append(result, affineCandidate{
+				kind:       affineScaleXY,
+				parameter:  scaleX,
+				parameter2: scaleY,
+				matrix:     linearTransform{a: scaleX, d: scaleY},
+				blockSize:  blockSize,
+			})
+		}
+	}
+	for _, degrees := range [...]float64{3, 5, 8, 10} {
+		amount := math.Tan(degrees * math.Pi / 180)
+		for _, signed := range []float64{-amount, amount} {
+			result = append(result,
+				affineCandidate{kind: affineShearX, parameter: signed, matrix: shearXMatrix(signed), blockSize: blockSize},
+				affineCandidate{kind: affineShearY, parameter: signed, matrix: shearYMatrix(signed), blockSize: blockSize},
+			)
+		}
+	}
+	return result
+}
+
+func aggregateAffineTile(src *pixelPlane, matrix linearTransform, size int, phase point) ([]float64, bool) {
+	bounds, ok := affineOutputBounds(src, matrix)
+	if !ok {
+		return nil, false
+	}
+	blocksWide := (bounds.width - phase.x) / size
+	blocksHigh := (bounds.height - phase.y) / size
+	if blocksWide < tileWidth || blocksHigh < tileHeight {
+		return nil, false
+	}
+
+	// Use a single complete tile nearest the centre. This is enough for an
+	// authenticated v3 decision and keeps each affine hypothesis inexpensive.
+	startBlockX := (blocksWide - tileWidth) / 2
+	startBlockY := (blocksHigh - tileHeight) / 2
+	grid := make([]float64, eccBits)
+	for tileY := 0; tileY < tileHeight; tileY++ {
+		for tileX := 0; tileX < tileWidth; tileX++ {
+			originX := phase.x + (startBlockX+tileX)*size
+			originY := phase.y + (startBlockY+tileY)*size
+			value, valid := readAffineBlockValue(src, bounds, matrix, originX, originY, size)
+			if !valid {
+				return nil, false
+			}
+			grid[tileY*tileWidth+tileX] = value
+		}
+	}
+	return grid, true
+}
+
+func affineRepetitionCoherence(src *pixelPlane, matrix linearTransform, size int, phase point) (float64, bool) {
+	bounds, ok := affineOutputBounds(src, matrix)
+	if !ok {
+		return 0, false
+	}
+	blocksWide := (bounds.width - phase.x) / size
+	blocksHigh := (bounds.height - phase.y) / size
+	if blocksWide < tileWidth || blocksHigh < tileHeight {
+		return 0, false
+	}
+
+	same, total := 0, 0
+	compare := func(originAX, originAY, originBX, originBY int) {
+		for logical := 0; logical < eccBits; logical += 11 {
+			x := logical % tileWidth
+			y := logical / tileWidth
+			valueA, validA := readAffineBlockValue(src, bounds, matrix,
+				phase.x+(originAX+x)*size, phase.y+(originAY+y)*size, size)
+			valueB, validB := readAffineBlockValue(src, bounds, matrix,
+				phase.x+(originBX+x)*size, phase.y+(originBY+y)*size, size)
+			if !validA || !validB {
+				continue
+			}
+			total++
+			if (valueA >= 0) == (valueB >= 0) {
+				same++
+			}
+		}
+	}
+
+	if blocksWide >= 2*tileWidth {
+		startX := (blocksWide - 2*tileWidth) / 2
+		startY := (blocksHigh - tileHeight) / 2
+		compare(startX, startY, startX+tileWidth, startY)
+	}
+	if blocksHigh >= 2*tileHeight {
+		startX := (blocksWide - tileWidth) / 2
+		startY := (blocksHigh - 2*tileHeight) / 2
+		compare(startX, startY, startX, startY+tileHeight)
+	}
+	if total == 0 {
+		return 0, false
+	}
+	return float64(same) / float64(total), true
+}
+
+func affineCandidatePhases(candidate affineCandidate, probe affineProbe) []point {
+	phases := append([]point(nil), probe.phases...)
+	appendUnique := func(phase point) {
+		for _, existing := range phases {
+			if existing == phase {
+				return
+			}
+		}
+		phases = append(phases, phase)
+	}
+	appendUnique(point{x: 0, y: 0})
+	switch candidate.kind {
+	case affineShearX:
+		for x := 0; x < blockSize; x++ {
+			appendUnique(point{x: x, y: 0})
+		}
+	case affineShearY:
+		for y := 0; y < blockSize; y++ {
+			appendUnique(point{x: 0, y: y})
+		}
+	}
+	return phases
+}
+
+func bestAffineCoherence(src *pixelPlane, candidate affineCandidate, probe affineProbe) (float64, []point) {
+	type scored struct {
+		phase point
+		score float64
+	}
+	values := make([]scored, 0, 3)
+	for _, phase := range affineCandidatePhases(candidate, probe) {
+		score, ok := affineRepetitionCoherence(src, candidate.matrix, blockSize, phase)
+		if !ok {
+			continue
+		}
+		insertAt := len(values)
+		for i, existing := range values {
+			if score > existing.score {
+				insertAt = i
+				break
+			}
+		}
+		if insertAt < 3 {
+			values = append(values, scored{})
+			copy(values[insertAt+1:], values[insertAt:])
+			values[insertAt] = scored{phase: phase, score: score}
+			if len(values) > 3 {
+				values = values[:3]
+			}
+		}
+	}
+	if len(values) == 0 {
+		return 0, nil
+	}
+	phases := make([]point, len(values))
+	for i, value := range values {
+		phases[i] = value.phase
+	}
+	return values[0].score, phases
+}
+
+func nativeRepetitionCoherence(src *pixelPlane) float64 {
+	identity := affineCandidate{kind: affineScaleXY, parameter: 1, parameter2: 1, matrix: linearTransform{a: 1, d: 1}, blockSize: blockSize}
+	phases := make([]point, 0, blockSize*blockSize)
+	for y := 0; y < blockSize; y++ {
+		for x := 0; x < blockSize; x++ {
+			phases = append(phases, point{x: x, y: y})
+		}
+	}
+	best := 0.0
+	for _, phase := range phases {
+		score, ok := affineRepetitionCoherence(src, identity.matrix, blockSize, phase)
+		if ok && score > best {
+			best = score
+		}
+	}
+	return best
+}
+
+// searchV3AxisAlignedAffine performs authenticated decoding directly through a
+// virtual affine sampler. No corrected full-resolution image is materialized.
+// Repetition coherence gates the expensive path and ranks matrices without using
+// the key. Authentication remains the sole acceptance criterion.
+func searchV3AxisAlignedAffine(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, affineCandidate, bool) {
+	const minCoherence = 0.72
+	type probed struct {
+		candidate affineCandidate
+		probe     affineProbe
+		coherence float64
+		phases    []point
+	}
+	type fullCandidate struct {
+		candidate affineCandidate
+		phase     point
+		score     int
+	}
+
+	// A highly coherent native lattice means geometry is already correct. If the
+	// authenticated direct decoder failed, the most likely cause is a wrong key or
+	// damaged payload; do not spend the affine budget on it.
+	if nativeRepetitionCoherence(src) >= 0.82 {
+		return nil, ExtractInfo{}, affineCandidate{}, false
+	}
+
+	hypotheses := axisAlignedAffineHypotheses()
+	probedCandidates := make([]probed, 0, len(hypotheses))
+	for _, candidate := range hypotheses {
+		probe := probeAffineMatrixDetailed(src, candidate.matrix, blockSize)
+		candidate.contrast = probe.contrast
+		coherence, phases := bestAffineCoherence(src, candidate, probe)
+		if coherence < minCoherence || len(phases) == 0 {
+			continue
+		}
+		probedCandidates = append(probedCandidates, probed{candidate: candidate, probe: probe, coherence: coherence, phases: phases})
+	}
+	sort.Slice(probedCandidates, func(i, j int) bool {
+		if probedCandidates[i].coherence == probedCandidates[j].coherence {
+			return probedCandidates[i].probe.contrast > probedCandidates[j].probe.contrast
+		}
+		return probedCandidates[i].coherence > probedCandidates[j].coherence
+	})
+	if len(probedCandidates) > 6 {
+		probedCandidates = probedCandidates[:6]
+	}
+
+	bestFull := make([]fullCandidate, 0, 4)
+	considerFull := func(candidate fullCandidate) {
+		insertAt := len(bestFull)
+		for i, existing := range bestFull {
+			if candidate.score > existing.score {
+				insertAt = i
+				break
+			}
+		}
+		if insertAt >= 4 {
+			return
+		}
+		bestFull = append(bestFull, fullCandidate{})
+		copy(bestFull[insertAt+1:], bestFull[insertAt:])
+		bestFull[insertAt] = candidate
+		if len(bestFull) > 4 {
+			bestFull = bestFull[:4]
+		}
+	}
+
+	for _, entry := range probedCandidates {
+		for _, phase := range entry.phases {
+			grid, ok := aggregateAffineTile(src, entry.candidate.matrix, blockSize, phase)
+			if !ok {
+				continue
+			}
+			payload, info, score, found := decoder.decodeGrid(grid)
+			if found {
+				return payload, info, entry.candidate, true
+			}
+			considerFull(fullCandidate{candidate: entry.candidate, phase: phase, score: score})
+		}
+	}
+
+	for _, entry := range bestFull {
+		grid, ok := aggregateAffineGrid(src, entry.candidate.matrix, blockSize, entry.phase.x, entry.phase.y)
+		if !ok {
+			continue
+		}
+		payload, info, _, found := decoder.decodeGrid(grid)
+		if found {
+			return payload, info, entry.candidate, true
+		}
+	}
+	return nil, ExtractInfo{}, affineCandidate{}, false
+}

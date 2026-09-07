@@ -5,6 +5,122 @@ results** and **corpus-specific experimental measurements**. None of the results
 below proves statistical steganographic undetectability or guarantees recovery
 for unseen images.
 
+## v0.2.0 build 5 validation status
+
+Development build: **v0.2.0 build 5**, 7 September 2026.
+
+Build 5 keeps format v3 bit-for-bit unchanged and adds a separate bounded
+axis-aligned affine recovery stage. Rotation, combined rotation/75%-resize/crop
+and the historical pure-resize paths remain present; arbitrary rotation composed
+with anisotropic scale/shear is intentionally not part of this build.
+
+### Deterministic affine-search bounds
+
+The affine hypothesis set is fixed in source:
+
+```text
+20 anisotropic X/Y scale matrices
+   X,Y in {0.90, 0.95, 1.00, 1.05, 1.10}, excluding X == Y
+16 shear matrices
+   X or Y shear at +/-3, +/-5, +/-8, +/-10 degrees
+36 matrices total
+```
+
+All 36 are evaluated through the virtual inverse-affine DCT sampler. Periodic
+tile coherence is key-independent and gates/ranks the candidates. At most six
+matrices survive this ranking; at most three phases per retained matrix receive
+an authenticated single-tile v3 probe (18 probes maximum), and at most four
+strong failed-sync candidates receive full-carrier repetition aggregation.
+HMAC-authenticated v3 decoding is the only success condition.
+
+This affine budget is separate from the bounded rotation and resize budgets; the
+build deliberately does not multiply angle hypotheses by affine matrices.
+
+### ImageMagick affine regression matrix
+
+A temporary generated 900x700 carrier was transformed with ImageMagick and
+extracted through the compiled build-5 CLI. The complete default `affine-test`
+matrix passed in this environment:
+
+| Profile | 110%x90% | 90%x110% | shear X 8 deg | shear Y 8 deg |
+|---|---|---|---|---|
+| robust | PASS | PASS | PASS | PASS |
+| balanced | PASS | PASS | PASS | PASS |
+| capacity | PASS | PASS | PASS | PASS |
+
+Summary: **12 passed, 0 failed, 0 timeouts, 0 skipped, 0 errors**.
+
+The reported corrections matched the tested discrete hypotheses. Example outputs
+included `scale-correction: x=0.9091 y=1.1111` for a 110%x90% carrier and an
+8-degree shear correction for the corresponding shear cases. These generated
+results validate the implementation and shell harness; they are not a guarantee
+for arbitrary photographic content or every transform inside the hypothesis
+range.
+
+### Affine timing spot checks
+
+A freshly embedded robust 900x700 generated carrier transformed to 110%x90% was
+recovered in approximately **2.21 s** in this environment. The same transformed
+carrier with an incorrect key exhausted the bounded search in approximately
+**10.46 s**. These are machine-specific engineering spot checks, not performance
+guarantees.
+
+The important structural property is that the affine stage is finite and uses
+coherence gating plus capped authenticated probes rather than a full
+angle x scale x shear brute force.
+
+### Validation status in this environment
+
+The following checks were executed successfully during final build-5 closure:
+
+```text
+gofmt check
+go vet ./...
+go test -count=1 ./cmd/pixseal
+bash -n scripts/test-robustness.sh
+bash -n scripts/test-limits.sh
+bash -n scripts/test-geometry.sh
+bash -n scripts/test-affine.sh
+make clean
+make
+make build-all
+STRICT=1 make affine-test        (temporary generated 900x700 corpus; 12/12 PASS)
+```
+
+A full **uncached** `go test -count=1 ./watermark` was also attempted, but the
+package exceeded the command window of this environment after the geometry/affine
+suite grew. The aggregate `go test ./...` likewise cannot be claimed as an
+uncached final pass here. Cached package results were successful, but they are not
+used as the final validation claim. Both commands must therefore be rerun on
+PJ's Linux system.
+
+The private `original pics/` corpus is absent here, so `make test`, `make all`,
+`make extreme-test`, `make geometry-test` and `make affine-test` are **not**
+reported as private-corpus passes. The generated affine corpus above exists only
+for development validation and is not included in the source archive.
+
+Recommended build-5 validation on PJ's system:
+
+```sh
+make clean
+gofmt -w cmd internal watermark
+go vet ./...
+go test ./...
+make test
+make deep-test
+make extreme-test
+STRICT=1 make geometry-test
+STRICT=1 make affine-test
+make all
+```
+
+### Current geometry boundary
+
+Build 5 claims an **experimental bounded axis-aligned affine baseline** in
+addition to the build-4 rotation/75%-resize/crop baseline. It does not claim
+arbitrary rotation composed with anisotropic scale/shear, projective/perspective
+recovery or print-camera recovery. Those remain staged research targets.
+
 ## v0.2.0 build 4 validation status
 
 Development build: **v0.2.0 build 4**, 7 September 2026.

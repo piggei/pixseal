@@ -2,6 +2,39 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0 build 5 - 2026-09-07
+
+Development build. Not a final v0.2.0 release.
+
+### Bounded axis-aligned affine recovery
+
+- Kept the on-image format v3 unchanged and extended only the decoder geometry layer.
+- Added a finite 36-matrix affine hypothesis set: 20 non-uniform X/Y scale pairs drawn from 90/95/100/105/110%, excluding uniform pairs already covered by the resize path, plus X/Y shear at +/-3, +/-5, +/-8 and +/-10 degrees.
+- Added a virtual inverse-affine sampler so hypotheses can be evaluated directly in DCT space without rendering dozens of full-resolution corrected images.
+- Added key-independent periodic tile-coherence scoring to reject weak geometry and rank affine hypotheses before authenticated probing.
+- Limited authenticated single-tile probing to at most six affine matrices and three retained phases per matrix. Only the four strongest failed sync candidates may receive full-carrier repetition aggregation.
+- Kept HMAC-authenticated v3 decoding as the sole success criterion.
+- Added correction metadata for anisotropic X/Y scale and X/Y shear to `ExtractInfo` and CLI extraction output.
+- Deliberately kept arbitrary-angle rotation and the new affine stage separate; rotation composed with anisotropic scale/shear remains the next research step rather than introducing an angle x affine Cartesian search.
+
+### Affine regression suite
+
+- Added `make affine-test`, intentionally outside `make all`, using only the private `original pics/` corpus and temporary generated transforms.
+- Added `STRICT=1 make affine-test` for fail-fast CI-style validation.
+- The default ImageMagick matrix covers 110%x90%, 90%x110%, shear X 8 degrees and shear Y 8 degrees for `robust`, `balanced` and `capacity`.
+- A generated 900x700 development corpus completed the full default matrix with 12/12 authenticated recoveries. This is a development regression result, not a guarantee for arbitrary photographs.
+
+### Performance and validation
+
+- Added a native-lattice repetition-coherence gate so aligned wrong-key or unmarked inputs do not automatically pay the full affine search cost.
+- Same-machine spot checks showed the affine stage remained bounded; a freshly embedded 900x700 robust carrier transformed to 110%x90% recovered in about 2.21 s, while the same transformed carrier with a wrong key completed in about 10.46 s. These timings are engineering observations, not guarantees.
+- `gofmt`, `go vet ./...`, native build, cross-builds and shell syntax checks pass in the development environment. The full uncached `watermark` package test and aggregate `go test ./...` exceed the command window of this environment and are therefore left for explicit validation on PJ's Linux system.
+
+### Documentation
+
+- Updated README, algorithm specification, results notes, CLI output descriptions and version metadata to `v0.2.0 build 5`.
+- Documented the affine search bounds and the staged path toward rotation+affine composition, perspective recovery and the longer-term print-camera channel.
+
 ## v0.2.0 build 4 - 2026-09-07
 
 Development build. Not a final v0.2.0 release.

@@ -7,6 +7,7 @@ import (
 	"image"
 	_ "image/jpeg"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -300,6 +301,15 @@ func extract(args []string) error {
 	fmt.Printf("%s\nconfidence-margin: %.2f\nprofile: %s\n", payload, info.Confidence, info.Profile)
 	if info.RotationCorrectionDegrees != 0 {
 		fmt.Printf("rotation-correction: %.2f degrees\n", info.RotationCorrectionDegrees)
+	}
+	if info.ScaleXCorrection != 0 || info.ScaleYCorrection != 0 {
+		fmt.Printf("scale-correction: x=%.4f y=%.4f\n", info.ScaleXCorrection, info.ScaleYCorrection)
+	}
+	if info.ShearXCorrection != 0 {
+		fmt.Printf("shear-x-correction: %.2f degrees\n", math.Atan(info.ShearXCorrection)*180/math.Pi)
+	}
+	if info.ShearYCorrection != 0 {
+		fmt.Printf("shear-y-correction: %.2f degrees\n", math.Atan(info.ShearYCorrection)*180/math.Pi)
 	}
 	return nil
 }

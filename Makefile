@@ -25,9 +25,11 @@ GEOMETRY_ANGLES ?= -45 -30 -15 -10 -5 -1 1 5 10 15 30 45 90 180 270
 GEOMETRY_COMBINED_ANGLES ?= 12.3
 GEOMETRY_COMBINED_MODES ?= rotate-resize75 resize75-rotate rotate-crop80 crop80-rotate rotate-resize75-crop80
 GEOMETRY_MAX_MPIX ?= 50
+AFFINE_MODES ?= scale110x90 scale90x110 shearx8 sheary8
+AFFINE_MAX_MPIX ?= 50
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test extreme-test geometry-test all build-all clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test all build-all clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -143,6 +145,22 @@ geometry-test: build
 	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
 	STRICT="$(STRICT)" \
 	bash ./scripts/test-geometry.sh
+
+# Experimental axis-aligned affine suite; intentionally excluded from make all.
+affine-test: build
+	@echo "Running axis-aligned affine tests..."
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
+	TEST_KEY="$(TEST_KEY)" \
+	TEST_PROFILES="$(TEST_PROFILES)" \
+	TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	TEST_MESSAGE_BALANCED="$(TEST_MESSAGE_BALANCED)" \
+	TEST_MESSAGE_CAPACITY="$(TEST_MESSAGE_CAPACITY)" \
+	AFFINE_MODES="$(AFFINE_MODES)" \
+	AFFINE_MAX_MPIX="$(AFFINE_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
+	STRICT="$(STRICT)" \
+	bash ./scripts/test-affine.sh
 
 # Run build + local round-trip tests + baseline transformation tests.
 all: test deep-test

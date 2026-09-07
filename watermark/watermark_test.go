@@ -620,3 +620,48 @@ func rotateBilinearForTest(src image.Image, degrees float64) *image.NRGBA {
 	}
 	return out
 }
+
+func TestV3AxisAlignedAffineScaleRecovery(t *testing.T) {
+	key := []byte("axis aligned affine scale key")
+	tests := []struct {
+		name    string
+		profile Profile
+		message []byte
+		scaleX  float64
+		scaleY  float64
+	}{
+		{name: "robust-110x90", profile: ProfileRobust, message: []byte("affine robust"), scaleX: 1.10, scaleY: 0.90},
+		{name: "balanced-90x110", profile: ProfileBalanced, message: []byte("affine balanced payload"), scaleX: 0.90, scaleY: 1.10},
+		{name: "capacity-110x90", profile: ProfileCapacity, message: []byte("affine capacity payload for regression"), scaleX: 1.10, scaleY: 0.90},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			options := DefaultOptions()
+			options.Profile = tc.profile
+			marked, err := Embed(testImage(700, 600), tc.message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			transformed := resizeBilinear(marked,
+				int(math.Round(float64(marked.Bounds().Dx())*tc.scaleX)),
+				int(math.Round(float64(marked.Bounds().Dy())*tc.scaleY)))
+			got, info, err := ExtractWithInfo(transformed, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, tc.message) || info.Profile != tc.profile {
+				t.Fatalf("affine scale recovery got payload=%q profile=%s", got, info.Profile)
+			}
+			if info.ScaleXCorrection == 0 || info.ScaleYCorrection == 0 {
+				t.Fatalf("affine scale recovery did not report correction: x=%.4f y=%.4f", info.ScaleXCorrection, info.ScaleYCorrection)
+			}
+		})
+	}
+}
+
+func TestAxisAlignedAffineSearchIsFixed(t *testing.T) {
+	hypotheses := axisAlignedAffineHypotheses()
+	if len(hypotheses) != 36 {
+		t.Fatalf("affine hypothesis count=%d, want 36", len(hypotheses))
+	}
+}

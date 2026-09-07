@@ -5,7 +5,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits into luminance DCT coefficients while keeping the resulting changes
 visually unobtrusive under normal viewing conditions.
 
-Current development line: **v0.2.0 build 4**. The last stable release is
+Current development line: **v0.2.0 build 5**. The last stable release is
 **v0.1.0**.
 
 PixSeal is designed as a hidden-data channel rather than an ownership-marking
@@ -23,47 +23,56 @@ or claim compatibility with Google's SynthID algorithm.
 PixSeal does not claim statistical steganographic undetectability. It has not
 undergone a cryptographic or steganalytic security audit.
 
-## What's new in v0.2.0 build 4
+## What's new in v0.2.0 build 5
 
-Build 4 extends the geometric recovery layer from pure rotation to a first set of
-**combined transformations**, without changing a single bit of format v3.
+Build 5 adds the first **bounded affine recovery stage** without changing a
+single bit of format v3. The new stage is deliberately axis-aligned: it handles
+moderate non-uniform X/Y scaling and X/Y shear independently from the arbitrary-
+angle rotation stage introduced in builds 3 and 4.
 
-The arbitrary-angle synchronizer now estimates orientation on the two DCT lattice
-sizes that remain useful after interpolation:
-
-- 8-pixel blocks: native / 100% scale;
-- 6-pixel blocks: 75% scale.
-
-Candidates from the two lattices are normalized by block area before ranking, so
-a strong 6-pixel signal is not hidden by the naturally larger DCT magnitudes of
-an 8-pixel probe. The angular search remains bounded: at most 720 non-zero coarse
-probes plus 33 local refinements, and at most two candidates reach authenticated
-v3 decoding.
-
-This enables experimentally verified recovery for transformations such as:
+The current affine hypothesis set is finite and explicit:
 
 ```text
-rotate -> resize 75%
-resize 75% -> rotate
-rotate -> crop
-crop -> rotate
-rotate -> resize 75% -> crop
+X/Y scale values: 90%, 95%, 100%, 105%, 110%
+                 equal X/Y pairs are omitted
+                 20 anisotropic scale matrices
+
+shear:           X or Y axis
+                 +/-3, +/-5, +/-8, +/-10 degrees
+                 16 shear matrices
+
+                 36 affine matrices total
 ```
 
-The existing 90/180/270-degree fast path now also tests the native 8/6/4-pixel
-grid sizes, so quarter-turn recovery remains compatible with the existing 75%
-and 50% direct resize paths.
+Rather than rendering dozens of fully rectified images, PixSeal evaluates the
+DCT lattice through a **virtual inverse-affine sampler**. A key-independent
+periodic-coherence check compares repeated v3 tiles and rejects weak hypotheses.
+At most six matrices reach authenticated single-tile probing, with at most three
+pixel phases each; only the four strongest failed sync candidates may receive a
+full-image repetition aggregate. HMAC-authenticated v3 decoding is still the
+only success criterion.
 
-The 50% **arbitrary-angle + resize** case is deliberately not claimed: in build-4
-development tests, two interpolation stages at default strength 24 destroyed too
-much DCT evidence even when the exact correction angle was supplied. That is an
-observed signal limit, not merely a search failure.
+This two-level strategy is important for the `capacity` profile: after some
+affine transforms one tile can be too damaged to authenticate, while aggregating
+repeated observations across the carrier can still recover the frame.
 
-`make geometry-test` now keeps the pure-rotation matrix and adds a bounded
-combined-geometry smoke matrix driven by `GEOMETRY_COMBINED_ANGLES` and
-`GEOMETRY_COMBINED_MODES`. It remains separate from `make all`.
+A new experimental target exercises the feature on the private corpus:
 
-Build 4 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
+```sh
+make affine-test
+STRICT=1 make affine-test
+```
+
+The default matrix uses ImageMagick to test `110%x90%`, `90%x110%`, `shear X
+8deg` and `shear Y 8deg` for `robust`, `balanced` and `capacity`.
+
+Build 5 intentionally does **not** compose the new affine matrices with arbitrary
+rotation yet. Rotation + 75% resize/crop remains supported by the build-4 path;
+rotation + anisotropic scale/shear is the next controlled research step. This
+separation prevents an angle x affine Cartesian brute force from entering the
+failed-extraction path.
+
+Build 5 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
 engineering history.
 
 ## Build
@@ -71,7 +80,7 @@ engineering history.
 The core and CLI are implemented in pure Go with no external runtime
 dependencies. The format/codec packages avoid platform-specific APIs, keeping
 the codebase suitable for future Android and iOS wrappers; mobile integration is
-not part of build 4. ImageMagick and GNU `timeout` are required only by the shell
+not part of build 5. ImageMagick and GNU `timeout` are required only by the shell
 test suites.
 
 
@@ -164,8 +173,7 @@ the heuristic nor historical measurements are a guarantee that an arbitrary
 transformed image will be recoverable.
 
 The current image-detail heuristic samples local luminance gradients at a
-bounded number of points. It does not scan every pixel of large images. Build 2
-uses these advisory strength recommendations:
+bounded number of points. It does not scan every pixel of large images. The current analyzer uses these advisory strength recommendations:
 
 | Detail heuristic | Recommended strength |
 |---|---:|
@@ -287,7 +295,7 @@ fixed sparse DCT orientation probe followed by at most two full rectification
 candidates. The probe is periodic modulo 90 degrees and authenticated decoding
 of up to four quarter-turn variants resolves the quadrant.
 
-Build 4 probes two apparent DCT lattice sizes during arbitrary-angle estimation:
+Build 4 introduced, and build 5 retains, two apparent DCT lattice sizes during arbitrary-angle estimation:
 8 pixels (native scale) and 6 pixels (75% scale). The search is hierarchical and
 finite: two zero-degree alignment probes, at most 720 non-zero quarter-degree
 angle probes, at most 33 local 0.05-degree refinements, and at most two refined
@@ -300,7 +308,7 @@ rotation and what makes 75% resize + rotation practical without introducing an
 open-ended angle x scale Cartesian search.
 
 The supported experimental combined baseline is therefore centered on native
-scale and 75% scale. Arbitrary-angle + 50% resize is **not** claimed in build 4:
+scale and 75% scale. Arbitrary-angle + 50% resize is **not** claimed in build 5:
 development tests showed that the double interpolation can erase the signal at
 default strength even with the true angle known. Arbitrary fractional scales
 other than the existing 75% direct lattice are still research work.
@@ -310,7 +318,7 @@ A rectification candidate is skipped if its expanded canvas would exceed
 
 ## Format lineage and compatibility
 
-New `embed` operations create **PixSeal format v3** carriers, and build 4 extracts
+New `embed` operations create **PixSeal format v3** carriers, and build 5 extracts
 **v3 only**. The extractor identifies `robust`, `balanced` or `capacity`
 automatically from the authenticated v3 header.
 
@@ -360,15 +368,16 @@ make test         # Go unit tests + profile round trips on original pics
 make deep-test    # baseline JPEG/resize/crop transformations
 make extreme-test # progressive resize/crop limit exploration
 make geometry-test # rotation + bounded combined-geometry matrix
+make affine-test   # bounded anisotropic-scale/shear matrix
 make all          # build + make test + make deep-test
 ```
 
-`make test`, `make deep-test`, `make extreme-test` and `make geometry-test`
-expect the private local `original pics/` directory. The images are excluded by `.gitignore` and must not
+`make test`, `make deep-test`, `make extreme-test`, `make geometry-test` and
+`make affine-test` expect the private local `original pics/` directory. The images are excluded by `.gitignore` and must not
 be included in source archives. Generated carriers and transformed images are
 created in temporary directories and removed automatically.
 
-The transformation and geometry suites test `robust`, `balanced` and `capacity`
+The transformation, geometry and affine suites test `robust`, `balanced` and `capacity`
 explicitly with profile-appropriate payload lengths. This allows robustness differences to
 be compared rather than hidden behind `auto` selection.
 
@@ -405,42 +414,45 @@ binary distribution is being prepared deliberately.
 - Fractional resize combined with an off-grid crop is not guaranteed; the
   normalized-scale fast path assumes a pure resize retained the grid origin.
 - Digital rotation is recovered experimentally, including fractional angles and
-  quarter turns. Build 4 also supports a measured combined baseline around 75%
-  resize and crop, including both transformation orders.
+  quarter turns. The measured combined baseline around 75% resize and crop is
+  retained, including both transformation orders.
+- Build 5 adds bounded **axis-aligned affine** recovery for discrete 90-110% X/Y
+  scale hypotheses and X/Y shear at 3/5/8/10 degrees. Rotation composed with
+  affine distortion is not yet synchronized.
 - Arbitrary-angle + 50% resize is not currently recoverable at default strength
-  in development tests; arbitrary fractional scales beyond the 75% lattice,
-  affine deformation and perspective correction are not yet synchronized.
+  in development tests; arbitrary perspective correction is not yet supported.
 - Failed extraction remains more expensive than successful extraction because
   more bounded candidates must be exhausted.
 - The 50-million-pixel inverse-normalization bound can skip candidates for very
   large images.
 - The image-detail/strength recommendation is heuristic and has not yet been
   calibrated across a large corpus.
-- No neural model is used in v0.2 build 4.
+- No neural model is used in v0.2 build 5.
 - The format and implementation have not received an independent cryptographic
   or steganalytic audit.
 
 ## Development direction: geometric recovery
 
-Build 4 establishes the first **combined rotation + resize/crop** baseline while
-keeping format v3 unchanged. The next research step is affine deformation, then
-perspective correction. Before adding those degrees of freedom, the combined
-matrix should be run against the private `original pics/` corpus to quantify
-profile-specific limits and negative-case timing.
+Build 5 establishes the first **axis-aligned affine** baseline while keeping
+format v3 unchanged. The next controlled step is to compose the already bounded
+rotation estimator with the affine matrix model, then move to projective /
+perspective correction. The affine matrix should first be run against the private
+`original pics/` corpus to quantify profile-specific limits and failed-extraction
+timing.
 
 The longer-term experimental goal remains a **print-camera channel**: embed a
 short message, print the carrier on paper, photograph it with a phone and recover
-the authenticated payload. Digital rotation and combined resize/crop tests let us
-validate orientation, scale and phase recovery in controlled stages before adding
-printer, paper, lens, illumination and sensor effects.
+the authenticated payload. Rotation, combined resize/crop and now affine tests
+let us validate orientation, scale, shear and phase in controlled digital stages
+before adding printer, paper, lens, illumination and sensor effects.
 
 ## Development status
 
-**v0.2.0 build 4 is a development build, not the final v0.2.0 release.**
+**v0.2.0 build 5 is a development build, not the final v0.2.0 release.**
 
 The adaptive v3 format is intentionally documented now so changes during the
 build cycle can be reviewed explicitly. Build 2 deliberately dropped runtime v1/v2
-compatibility; builds 3 and 4 keep v3 as the sole implementation baseline and
+compatibility; builds 3, 4 and 5 keep v3 as the sole implementation baseline and
 extend only the bounded geometric recovery layer without changing the on-image
 format. The `build N`
 suffix will be removed only when the v0.2.0 release is finalized.

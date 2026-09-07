@@ -13,6 +13,10 @@ type ExtractInfo struct {
 	Profile                   Profile
 	Confidence                float64
 	RotationCorrectionDegrees float64
+	ScaleXCorrection          float64
+	ScaleYCorrection          float64
+	ShearXCorrection          float64
+	ShearYCorrection          float64
 }
 
 type decoder struct {
@@ -81,6 +85,24 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 				info.RotationCorrectionDegrees = normalizeDegrees(-candidate.angle + float64(quarterTurns*90))
 				return payload, info, nil
 			}
+		}
+	}
+
+	// Build 5 adds a separate, bounded axis-aligned affine stage. It is kept
+	// independent from arbitrary rotation on purpose: first validate anisotropic
+	// scale/shear reconstruction without multiplying the angle search space.
+	if len(rotationCandidates) == 0 || rotationCandidateQuality(rotationCandidates[0]) < 25 {
+		if payload, info, candidate, ok := searchV3AxisAlignedAffine(sourcePlane, decoder); ok {
+			switch candidate.kind {
+			case affineScaleXY:
+				info.ScaleXCorrection = 1 / candidate.parameter
+				info.ScaleYCorrection = 1 / candidate.parameter2
+			case affineShearX:
+				info.ShearXCorrection = -candidate.parameter
+			case affineShearY:
+				info.ShearYCorrection = -candidate.parameter
+			}
+			return payload, info, nil
 		}
 	}
 
