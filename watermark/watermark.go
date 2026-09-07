@@ -1,16 +1,12 @@
 package watermark
 
 import (
-	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
-	"fmt"
-	"hash/crc32"
 	"image"
 	"image/color"
 	"math"
-	"sort"
 )
 
 const (
@@ -18,15 +14,19 @@ const (
 	maxPayload      = 64
 	headerSize      = 8 // magic(2), version(1), length(1), crc32(4)
 	tagSize         = 8
-	frameSize       = headerSize + maxPayload + tagSize
-	frameBits       = frameSize * 8
+	maxFrameSize    = headerSize + maxPayload + tagSize
+	maxFrameBits    = maxFrameSize * 8
 	maxSearchPixels = 50_000_000
 
-	// Hamming(7,4) expands the fixed 640-bit frame to 1120 protected bits.
-	eccBits    = frameBits / 4 * 7
+	// Hamming(7,4) expands the 80-byte capacity-profile frame to 1120 protected bits.
+	eccBits    = maxFrameBits / 4 * 7
 	tileWidth  = 35
 	tileHeight = 32
 )
+
+func exceedsPixelLimit(width, height, limit int) bool {
+	return int64(width)*int64(height) > int64(limit)
+}
 
 var (
 	magic               = [2]byte{'P', 'S'}
@@ -37,12 +37,12 @@ var (
 )
 
 type Options struct {
-	Strength   float64
-	Repetition int // Used only when decoding the legacy v1 format.
+	Strength float64
+	Profile  Profile // v3 embed profile; empty is treated as auto.
 }
 
 func DefaultOptions() Options {
-	return Options{Strength: 24, Repetition: 5}
+	return Options{Strength: 24, Profile: ProfileAuto}
 }
 
 func init() {
@@ -76,19 +76,9 @@ func normalizeEmbedOptions(options Options) (Options, error) {
 	return options, nil
 }
 
-func normalizeLegacyOptions(options Options) (Options, error) {
-	if options.Repetition == 0 {
-		options.Repetition = 5
-	}
-	if options.Repetition < 1 || options.Repetition > 31 || options.Repetition%2 == 0 {
-		return options, errors.New("repetition must be an odd number between 1 and 31 for legacy v1 extraction")
-	}
-	return options, nil
-}
-
-// Capacity reports the v2 payload capacity. A complete periodic tile is needed
-// in both dimensions so every protected frame bit is represented at least once.
-func Capacity(img image.Image, _ int) int {
+// Capacity reports the maximum v3 payload capacity. A complete periodic tile is
+// needed in both dimensions so every protected capacity-profile bit is present.
+func Capacity(img image.Image) int {
 	bounds := img.Bounds()
 	if bounds.Dx()/blockSize < tileWidth || bounds.Dy()/blockSize < tileHeight {
 		return 0
@@ -96,178 +86,26 @@ func Capacity(img image.Image, _ int) int {
 	return maxPayload
 }
 
-// Embed hides a geometrically synchronized v2 payload. The complete,
-// error-corrected frame is repeated as a two-dimensional periodic DCT tile.
+// Embed hides an authenticated v3 payload. Auto selects the most robust profile
+// that can hold the payload. Use EmbedWithInfo when the resolved profile is needed.
 func Embed(src image.Image, payload, key []byte, options Options) (*image.NRGBA, error) {
-	options, err := normalizeEmbedOptions(options)
-	if err != nil {
-		return nil, err
-	}
-	if len(key) < 8 {
-		return nil, errors.New("key must contain at least 8 bytes")
-	}
-	if len(payload) > maxPayload {
-		return nil, fmt.Errorf("payload exceeds %d bytes", maxPayload)
-	}
-	if Capacity(src, options.Repetition) == 0 {
-		return nil, fmt.Errorf("image must be at least %dx%d pixels for a v2 hidden payload", tileWidth*blockSize, tileHeight*blockSize)
-	}
-
-	frame := makeFrame(payload, key, 2)
-	protected := hammingEncode(whiten(bytesToBits(frame), key, "pixseal-whiten-v2"))
-	out := toNRGBA(src)
-	bounds := out.Bounds()
-	blocksWide := bounds.Dx() / blockSize
-	blocksHigh := bounds.Dy() / blockSize
-
-	for blockY := 0; blockY < blocksHigh; blockY++ {
-		for blockX := 0; blockX < blocksWide; blockX++ {
-			position := (blockY%tileHeight)*tileWidth + blockX%tileWidth
-			embedBlock(out, point{blockX * blockSize, blockY * blockSize}, protected[position], options.Strength)
-		}
-	}
-	return out, nil
+	out, _, err := EmbedWithInfo(src, payload, key, options)
+	return out, err
 }
 
-// Extract first looks for the periodic v2 steganographic format across
-// supported scales and block-grid offsets, then falls back to the original v1
-// decoder. Legacy-only options are validated only if that fallback is needed.
-func Extract(src image.Image, key []byte, options Options) ([]byte, float64, error) {
-	if len(key) < 8 {
-		return nil, 0, errors.New("key must contain at least 8 bytes")
-	}
-
-	if payload, confidence, err := extractV2(src, key); err == nil {
-		return payload, confidence, nil
-	}
-	legacyOptions, err := normalizeLegacyOptions(options)
+// Extract recovers an authenticated v3 payload and returns its confidence margin.
+// Use ExtractWithInfo to inspect the recovered adaptive profile.
+func Extract(src image.Image, key []byte) ([]byte, float64, error) {
+	payload, info, err := ExtractWithInfo(src, key)
 	if err != nil {
 		return nil, 0, err
 	}
-	return extractLegacy(src, key, legacyOptions)
-}
-
-type phaseCandidate struct {
-	score int
-	x     int
-	y     int
+	return payload, info.Confidence, nil
 }
 
 type scaleCandidate struct {
 	percent int
 	score   int
-}
-
-func extractV2(src image.Image, key []byte) ([]byte, float64, error) {
-	known := []byte{magic[0], magic[1], 2}
-	syncBits := hammingEncode(whiten(bytesToBits(known), key, "pixseal-whiten-v2"))
-	sourcePlane := newPixelPlane(src)
-	if payload, confidence, ok := searchV2(sourcePlane, key, syncBits, candidateBlockSizes[:]); ok {
-		return payload, confidence, nil
-	}
-
-	// First use an aligned fast path. A pure resize preserves the top-left grid
-	// origin, so testing one offset avoids 63 unnecessary full-image scans for
-	// every scale candidate.
-	bounds := src.Bounds()
-	neighborDeltas := [...]point{
-		{-1, -1}, {0, -1}, {1, -1},
-		{-1, 0}, {1, 0},
-		{-1, 1}, {0, 1}, {1, 1},
-	}
-	scales := make([]scaleCandidate, 0, len(normalizedScales))
-	for _, percent := range normalizedScales {
-		width := int(math.Round(float64(bounds.Dx()) * 100 / float64(percent)))
-		height := int(math.Round(float64(bounds.Dy()) * 100 / float64(percent)))
-		if width < tileWidth*blockSize || height < tileHeight*blockSize || width*height > maxSearchPixels {
-			continue
-		}
-		normalized := resizePixelPlaneBicubic(sourcePlane, width, height)
-		payload, confidence, score, ok := searchV2Aligned(normalized, key, syncBits)
-		if ok {
-			return payload, confidence, nil
-		}
-		scales = append(scales, scaleCandidate{percent: percent, score: score})
-	}
-
-	// Rounding can move either inverse dimension by one pixel. Try adjacent
-	// dimensions only around the three nominal scales with the strongest sync
-	// prefix, rather than expanding every scale into nine full candidates.
-	sort.SliceStable(scales, func(i, j int) bool { return scales[i].score > scales[j].score })
-	if len(scales) > 3 {
-		scales = scales[:3]
-	}
-	for _, candidate := range scales {
-		baseWidth := int(math.Round(float64(bounds.Dx()) * 100 / float64(candidate.percent)))
-		baseHeight := int(math.Round(float64(bounds.Dy()) * 100 / float64(candidate.percent)))
-		for _, delta := range neighborDeltas {
-			width := baseWidth + delta.x
-			height := baseHeight + delta.y
-			if width < tileWidth*blockSize || height < tileHeight*blockSize || width*height > maxSearchPixels {
-				continue
-			}
-			normalized := resizePixelPlaneBicubic(sourcePlane, width, height)
-			if payload, confidence, _, ok := searchV2Aligned(normalized, key, syncBits); ok {
-				return payload, confidence, nil
-			}
-		}
-	}
-	return nil, 0, errors.New("v2 hidden payload not found")
-}
-
-func searchV2Aligned(src *pixelPlane, key, syncBits []byte) ([]byte, float64, int, bool) {
-	grid, ok := aggregateGrid(src, blockSize, 0, 0)
-	if !ok {
-		return nil, 0, 0, false
-	}
-	phases := strongestPhases(grid, syncBits, 4)
-	score := 0
-	if len(phases) > 0 {
-		score = phases[0].score
-	}
-	payload, confidence, found := decodePhases(grid, key, syncBits, phases)
-	return payload, confidence, score, found
-}
-
-func searchV2(src *pixelPlane, key, syncBits []byte, sizes []int) ([]byte, float64, bool) {
-	for _, size := range sizes {
-		bounds := src.bounds
-		if bounds.Dx() < tileWidth*size || bounds.Dy() < tileHeight*size {
-			continue
-		}
-		for offsetY := 0; offsetY < size; offsetY++ {
-			for offsetX := 0; offsetX < size; offsetX++ {
-				grid, ok := aggregateGrid(src, size, offsetX, offsetY)
-				if !ok {
-					continue
-				}
-				if payload, confidence, ok := decodeGrid(grid, key, syncBits); ok {
-					return payload, confidence, true
-				}
-			}
-		}
-	}
-	return nil, 0, false
-}
-
-func decodeGrid(grid []float64, key, syncBits []byte) ([]byte, float64, bool) {
-	return decodePhases(grid, key, syncBits, strongestPhases(grid, syncBits, 4))
-}
-
-func decodePhases(grid []float64, key, syncBits []byte, phases []phaseCandidate) ([]byte, float64, bool) {
-	for _, phase := range phases {
-		// Require at least 75% agreement with magic and version.
-		if phase.score*4 < len(syncBits)*3 {
-			continue
-		}
-		coded, margin := readPeriodicFrame(grid, phase.x, phase.y)
-		decoded := hammingDecode(coded)
-		raw := bitsToBytes(whiten(decoded, key, "pixseal-whiten-v2"))
-		if payload, err := parseFrame(raw, key, 2); err == nil {
-			return payload, margin, true
-		}
-	}
-	return nil, 0, false
 }
 
 func aggregateGrid(src *pixelPlane, size, offsetX, offsetY int) ([]float64, bool) {
@@ -291,88 +129,12 @@ func aggregateGrid(src *pixelPlane, size, offsetX, offsetY int) ([]float64, bool
 	return grid, true
 }
 
-func strongestPhases(grid []float64, syncBits []byte, count int) []phaseCandidate {
-	candidates := make([]phaseCandidate, 0, eccBits)
-	for phaseY := 0; phaseY < tileHeight; phaseY++ {
-		for phaseX := 0; phaseX < tileWidth; phaseX++ {
-			score := 0
-			for logicalPosition, expected := range syncBits {
-				logicalX := logicalPosition % tileWidth
-				logicalY := logicalPosition / tileWidth
-				observedX := positiveMod(logicalX-phaseX, tileWidth)
-				observedY := positiveMod(logicalY-phaseY, tileHeight)
-				observed := byte(0)
-				if grid[observedY*tileWidth+observedX] >= 0 {
-					observed = 1
-				}
-				if observed == expected {
-					score++
-				}
-			}
-			candidates = append(candidates, phaseCandidate{score: score, x: phaseX, y: phaseY})
-		}
-	}
-	sort.Slice(candidates, func(i, j int) bool { return candidates[i].score > candidates[j].score })
-	if len(candidates) > count {
-		candidates = candidates[:count]
-	}
-	return candidates
-}
-
-func readPeriodicFrame(grid []float64, phaseX, phaseY int) ([]byte, float64) {
-	coded := make([]byte, eccBits)
-	margin := 0.0
-	for logicalPosition := 0; logicalPosition < eccBits; logicalPosition++ {
-		logicalX := logicalPosition % tileWidth
-		logicalY := logicalPosition / tileWidth
-		observedX := positiveMod(logicalX-phaseX, tileWidth)
-		observedY := positiveMod(logicalY-phaseY, tileHeight)
-		value := grid[observedY*tileWidth+observedX]
-		if value >= 0 {
-			coded[logicalPosition] = 1
-		}
-		margin += math.Abs(value)
-	}
-	return coded, margin / float64(eccBits)
-}
-
 func positiveMod(value, modulus int) int {
 	value %= modulus
 	if value < 0 {
 		value += modulus
 	}
 	return value
-}
-
-func makeFrame(payload, key []byte, version byte) []byte {
-	frame := make([]byte, frameSize)
-	frame[0], frame[1], frame[2], frame[3] = magic[0], magic[1], version, byte(len(payload))
-	binary.BigEndian.PutUint32(frame[4:8], crc32.ChecksumIEEE(payload))
-	copy(frame[headerSize:], payload)
-	mac := hmac.New(sha256.New, key)
-	mac.Write(frame[:headerSize+len(payload)])
-	copy(frame[headerSize+len(payload):], mac.Sum(nil)[:tagSize])
-	return frame
-}
-
-func parseFrame(frame, key []byte, version byte) ([]byte, error) {
-	if len(frame) < frameSize || frame[0] != magic[0] || frame[1] != magic[1] || frame[2] != version {
-		return nil, errors.New("hidden payload header mismatch")
-	}
-	payloadLength := int(frame[3])
-	if payloadLength > maxPayload {
-		return nil, errors.New("invalid hidden payload length")
-	}
-	payload := frame[headerSize : headerSize+payloadLength]
-	if crc32.ChecksumIEEE(payload) != binary.BigEndian.Uint32(frame[4:8]) {
-		return nil, errors.New("hidden payload damaged: CRC mismatch")
-	}
-	mac := hmac.New(sha256.New, key)
-	mac.Write(frame[:headerSize+payloadLength])
-	if !hmac.Equal(frame[headerSize+payloadLength:headerSize+payloadLength+tagSize], mac.Sum(nil)[:tagSize]) {
-		return nil, errors.New("hidden payload authentication failed")
-	}
-	return append([]byte(nil), payload...), nil
 }
 
 func bytesToBits(input []byte) []byte {

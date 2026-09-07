@@ -5,7 +5,10 @@ SHELL := /bin/bash
 PIXSEAL := dist/pixseal
 ORIGINAL_PICS_DIR := original pics
 TEST_KEY ?= pixseal-test-key
-TEST_MESSAGE ?= PixSeal image test
+TEST_PROFILES ?= robust balanced capacity
+TEST_MESSAGE_ROBUST ?= PixSeal robust
+TEST_MESSAGE_BALANCED ?= PixSeal balanced profile test
+TEST_MESSAGE_CAPACITY ?= PixSeal capacity profile test message for regression coverage
 ROBUST_RESIZES ?= 95 85 75 65 55 50
 ROBUST_CROPS ?= 90 75 50
 RANDOM_CROPS ?= 75 50
@@ -31,9 +34,9 @@ $(PIXSEAL): $(GO_SOURCES) go.mod
 	@go build -trimpath -ldflags="-s -w" -o $(PIXSEAL) ./cmd/pixseal
 	@echo "Created $(PIXSEAL)"
 
-# Self-contained public test suite: no private image corpus is required.
-test: build test-unit
-	@echo "Self-contained test suite completed."
+# Local release test suite: unit tests plus round trips on original pics.
+test: build test-unit test-images
+	@echo "Local test suite completed."
 
 test-unit:
 	@echo "Running Go unit tests..."
@@ -53,27 +56,43 @@ test-images: build
 	fi; \
 	tmp_dir="$$(mktemp -d)"; \
 	trap 'rm -rf -- "$$tmp_dir"' EXIT; \
+	read -r -a profiles <<< "$(TEST_PROFILES)"; \
+	if (( $${#profiles[@]} == 0 )); then \
+		echo "error: TEST_PROFILES is empty" >&2; \
+		exit 1; \
+	fi; \
 	for image in "$${images[@]}"; do \
 		name="$$(basename "$$image")"; \
-		marked="$$tmp_dir/$$name.png"; \
 		echo "Testing $$image"; \
-		"$(PIXSEAL)" embed -in "$$image" -out "$$marked" \
-			-key "$(TEST_KEY)" -message "$(TEST_MESSAGE)" >/dev/null; \
-		extracted="$$($(PIXSEAL) extract -in "$$marked" -key "$(TEST_KEY)" | head -n 1)"; \
-		if [[ "$$extracted" != "$(TEST_MESSAGE)" ]]; then \
-			echo "error: extracted message differs for $$image" >&2; \
-			exit 1; \
-		fi; \
-		echo "  OK"; \
+		for profile in "$${profiles[@]}"; do \
+			case "$$profile" in \
+				robust) message='$(TEST_MESSAGE_ROBUST)' ;; \
+				balanced) message='$(TEST_MESSAGE_BALANCED)' ;; \
+				capacity) message='$(TEST_MESSAGE_CAPACITY)' ;; \
+				*) echo "error: unsupported TEST_PROFILES entry: $$profile" >&2; exit 1 ;; \
+			esac; \
+			marked="$$tmp_dir/$$name-$$profile.png"; \
+			"$(PIXSEAL)" embed -in "$$image" -out "$$marked" \
+				-key "$(TEST_KEY)" -message "$$message" -profile "$$profile" >/dev/null; \
+			extracted="$$($(PIXSEAL) extract -in "$$marked" -key "$(TEST_KEY)" | head -n 1)"; \
+			if [[ "$$extracted" != "$$message" ]]; then \
+				echo "error: extracted message differs for $$image ($$profile)" >&2; \
+				exit 1; \
+			fi; \
+			echo "  OK $$profile"; \
+		done; \
 	done; \
-	echo "Image round-trip tests passed: $${#images[@]}"
+	echo "Image round-trip tests passed: $${#images[@]} images x $${#profiles[@]} profiles"
 
 deep-test: build
 	@echo "Running image transformation tests..."
 	@PIXSEAL="$(abspath $(PIXSEAL))" \
 	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
 	TEST_KEY="$(TEST_KEY)" \
-	TEST_MESSAGE="$(TEST_MESSAGE)" \
+	TEST_PROFILES="$(TEST_PROFILES)" \
+	TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	TEST_MESSAGE_BALANCED="$(TEST_MESSAGE_BALANCED)" \
+	TEST_MESSAGE_CAPACITY="$(TEST_MESSAGE_CAPACITY)" \
 	ROBUST_RESIZES="$(ROBUST_RESIZES)" \
 	ROBUST_CROPS="$(ROBUST_CROPS)" \
 	RANDOM_CROPS="$(RANDOM_CROPS)" \
@@ -91,7 +110,10 @@ extreme-test: build
 	@PIXSEAL="$(abspath $(PIXSEAL))" \
 	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
 	TEST_KEY="$(TEST_KEY)" \
-	TEST_MESSAGE="$(TEST_MESSAGE)" \
+	TEST_PROFILES="$(TEST_PROFILES)" \
+	TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	TEST_MESSAGE_BALANCED="$(TEST_MESSAGE_BALANCED)" \
+	TEST_MESSAGE_CAPACITY="$(TEST_MESSAGE_CAPACITY)" \
 	ROBUST_MAX_MPIX="$(ROBUST_MAX_MPIX)" \
 	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
 	LIMIT_START="$(LIMIT_START)" \
@@ -100,8 +122,8 @@ extreme-test: build
 	RANDOM_SEED="$(RANDOM_SEED)" \
 	bash ./scripts/test-limits.sh
 
-# Run all tests, including the optional local image corpus.
-all: test test-images deep-test
+# Run build + local round-trip tests + baseline transformation tests.
+all: test deep-test
 	@echo "Complete local test suite finished."
 
 build-all:

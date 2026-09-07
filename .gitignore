@@ -6,7 +6,6 @@
 
 # Local source images used by tests
 /original pics/
-*Zone.Identifier
 
 # Test and coverage artifacts
 coverage.out
@@ -16,5 +15,7 @@ coverage.out
 # Editor and operating-system files
 .DS_Store
 Thumbs.db
+*Zone.Identifier
+*:Zone.Identifier
 *.swp
 *~

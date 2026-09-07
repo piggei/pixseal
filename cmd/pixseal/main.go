@@ -24,6 +24,7 @@ Commands:
   embed      Hide an authenticated message in an image
   extract    Recover and authenticate a hidden message from an image
   capacity   Show the usable payload capacity of an image
+  analyze    Recommend a v3 profile and embedding settings
 
 Supported image formats:
   Input       PNG (.png), JPEG (.jpg, .jpeg)
@@ -34,26 +35,30 @@ Embed options:
   -out FILE          Output PNG (required)
   -key TEXT          Secret key, minimum 8 bytes (required)
   -message TEXT      Message to hide (required)
-  -repetition N      Legacy option, ignored for v2 embeds (default 5)
+  -profile NAME      auto, robust, balanced or capacity (default auto)
   -strength N        DCT embedding strength, 4 to 120 (default 24)
   -force             Allow replacing an existing output file
 
 Extract options:
   -in FILE           Carrier JPEG or PNG (required)
   -key TEXT          Secret key, minimum 8 bytes (required)
-  -repetition N      Legacy v1 fallback setting (default 5)
-  -strength N        Accepted for compatibility (default 24)
 
 Capacity options:
   -in FILE           Input JPEG or PNG (required)
-  -repetition N      Legacy option, ignored for v2 capacity
+  -details           Show per-profile capacities and image dimensions
+
+Analyze options:
+  -in FILE           Input JPEG or PNG (required)
+  -message TEXT      Message whose UTF-8 byte length should be analyzed
+  -bytes N           Payload byte count to analyze instead of -message
 
 Run "pixseal <command> -help" to show the options for a command.
 
 Examples:
   pixseal embed -in photo.png -out sealed.png -key "a long secret" -message "hello"
   pixseal extract -in sealed.png -key "a long secret"
-  pixseal capacity -in photo.png -repetition 5
+  pixseal capacity -in photo.png -details
+  pixseal analyze -in photo.png -message "hidden message"
 `, buildinfo.String())
 
 func main() {
@@ -70,6 +75,8 @@ func main() {
 		err = extract(os.Args[2:])
 	case "capacity":
 		err = capacity(os.Args[2:])
+	case "analyze":
+		err = analyze(os.Args[2:])
 	case "help", "-help", "--help", "-h":
 		rootUsage()
 		return
@@ -103,13 +110,18 @@ func newFlagSet(command, summary string) *flag.FlagSet {
 	return fs
 }
 
-func openImage(path string) (image.Image, error) {
+func openImageWithFormat(path string) (image.Image, string, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer f.Close()
-	img, _, err := image.Decode(f)
+	img, format, err := image.Decode(f)
+	return img, format, err
+}
+
+func openImage(path string) (image.Image, error) {
+	img, _, err := openImageWithFormat(path)
 	return img, err
 }
 
@@ -122,13 +134,6 @@ func pngOutputPath(path string) string {
 		return path + ".png"
 	}
 	return strings.TrimSuffix(path, ext) + ".png"
-}
-
-func common(fs *flag.FlagSet) (*string, *int, *float64) {
-	key := fs.String("key", "", "secret key (required, minimum 8 bytes)")
-	repetition := fs.Int("repetition", 5, "legacy v1 repetition count; ignored by v2 unless fallback is needed")
-	strength := fs.Float64("strength", 24, "DCT embedding strength from 4 to 120")
-	return key, repetition, strength
 }
 
 func writePNGAtomic(path string, img image.Image, force bool) error {
@@ -222,9 +227,11 @@ func embed(args []string) error {
 	fs := newFlagSet("embed", "Hide an authenticated message; the output image is always PNG.")
 	in := fs.String("in", "", "input JPEG or PNG file (required)")
 	out := fs.String("out", "", "output PNG file (required)")
-	message := fs.String("message", "", "message to hide, up to the image capacity (required)")
+	message := fs.String("message", "", "message to hide, up to 64 bytes (required)")
+	profileName := fs.String("profile", "auto", "v3 profile: auto, robust, balanced or capacity")
 	force := fs.Bool("force", false, "replace an existing output file")
-	key, repetition, strength := common(fs)
+	key := fs.String("key", "", "secret key (required, minimum 8 bytes)")
+	strength := fs.Float64("strength", 24, "DCT embedding strength from 4 to 120")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -238,13 +245,17 @@ func embed(args []string) error {
 		return fmt.Errorf("-in, -out, -key and -message are required")
 	}
 
+	profile, err := watermark.ParseProfile(*profileName)
+	if err != nil {
+		return err
+	}
 	img, err := openImage(*in)
 	if err != nil {
 		return err
 	}
-	marked, err := watermark.Embed(img, []byte(*message), []byte(*key), watermark.Options{
-		Strength:   *strength,
-		Repetition: *repetition,
+	marked, embedInfo, err := watermark.EmbedWithInfo(img, []byte(*message), []byte(*key), watermark.Options{
+		Strength: *strength,
+		Profile:  profile,
 	})
 	if err != nil {
 		return err
@@ -257,14 +268,14 @@ func embed(args []string) error {
 	if outputPath != *out {
 		fmt.Printf("output renamed to %s (PixSeal output is PNG)\n", outputPath)
 	}
-	fmt.Printf("hidden payload: %d bytes in %s\n", len([]byte(*message)), outputPath)
+	fmt.Printf("embedded %d bytes using profile %s in %s\n", len([]byte(*message)), embedInfo.Profile, outputPath)
 	return nil
 }
 
 func extract(args []string) error {
 	fs := newFlagSet("extract", "Recover and authenticate a hidden PixSeal message.")
 	in := fs.String("in", "", "carrier JPEG or PNG file (required)")
-	key, repetition, strength := common(fs)
+	key := fs.String("key", "", "secret key (required, minimum 8 bytes)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -282,10 +293,7 @@ func extract(args []string) error {
 	if err != nil {
 		return err
 	}
-	payload, confidence, err := watermark.Extract(img, []byte(*key), watermark.Options{
-		Strength:   *strength,
-		Repetition: *repetition,
-	})
+	payload, confidence, err := watermark.Extract(img, []byte(*key))
 	if err != nil {
 		return err
 	}
@@ -294,9 +302,9 @@ func extract(args []string) error {
 }
 
 func capacity(args []string) error {
-	fs := newFlagSet("capacity", "Show usable payload capacity in bytes.")
+	fs := newFlagSet("capacity", "Show usable v3 payload capacity in bytes.")
 	in := fs.String("in", "", "input JPEG or PNG file (required)")
-	repetition := fs.Int("repetition", 5, "legacy v1 repetition count (ignored for v2 capacity)")
+	details := fs.Bool("details", false, "show per-profile capacities and image dimensions")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -310,10 +318,85 @@ func capacity(args []string) error {
 		return fmt.Errorf("-in is required")
 	}
 
-	img, err := openImage(*in)
+	img, format, err := openImageWithFormat(*in)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%d bytes\n", watermark.Capacity(img, *repetition))
+	maximum := watermark.Capacity(img)
+	if !*details {
+		fmt.Printf("%d bytes\n", maximum)
+		return nil
+	}
+
+	fmt.Printf("Image:       %s\n", *in)
+	fmt.Printf("Format:      %s\n", strings.ToUpper(format))
+	fmt.Printf("Dimensions:  %d x %d\n", img.Bounds().Dx(), img.Bounds().Dy())
+	for _, profile := range watermark.Profiles() {
+		value := profile.MaximumPayload
+		if maximum == 0 {
+			value = 0
+		}
+		fmt.Printf("%-12s %d bytes\n", string(profile.Name)+":", value)
+	}
+	fmt.Printf("maximum:     %d bytes\n", maximum)
+	return nil
+}
+
+func analyze(args []string) error {
+	fs := newFlagSet("analyze", "Analyze carrier geometry and recommend a v3 adaptive profile. Recommendations are advisory.")
+	in := fs.String("in", "", "input JPEG or PNG file (required)")
+	message := fs.String("message", "", "message whose UTF-8 byte length should be analyzed")
+	payloadBytes := fs.Int("bytes", -1, "payload byte count to analyze instead of -message")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		fs.Usage()
+		return fmt.Errorf("unexpected positional argument %q", fs.Arg(0))
+	}
+	if *in == "" {
+		fs.Usage()
+		return fmt.Errorf("-in is required")
+	}
+	hasMessage := *message != ""
+	hasBytes := *payloadBytes >= 0
+	if hasMessage == hasBytes {
+		fs.Usage()
+		return fmt.Errorf("exactly one of -message or -bytes is required")
+	}
+	requested := *payloadBytes
+	if hasMessage {
+		requested = len([]byte(*message))
+	}
+	if requested <= 0 {
+		return fmt.Errorf("requested payload must be at least 1 byte")
+	}
+
+	img, format, err := openImageWithFormat(*in)
+	if err != nil {
+		return err
+	}
+	result := watermark.AnalyzeImage(img, requested)
+
+	profile := "none"
+	if result.RecommendedProfile != "" {
+		profile = string(result.RecommendedProfile)
+	}
+	fmt.Printf("Image:                     %s\n", *in)
+	fmt.Printf("Format:                    %s\n", strings.ToUpper(format))
+	fmt.Printf("Dimensions:                %d x %d\n", result.Width, result.Height)
+	fmt.Printf("Requested payload:         %d bytes\n", result.RequestedBytes)
+	fmt.Printf("Recommended profile:       %s  [deterministic]\n", profile)
+	fmt.Printf("Profile capacity:          %d bytes  [deterministic]\n", result.ProfileCapacity)
+	fmt.Printf("Tile redundancy:           %.2fx  [deterministic]\n", result.ProfileTileRedundancy)
+	fmt.Printf("Average observations/bit:  %.2fx  [deterministic, untransformed carrier]\n", result.AverageObservations)
+	fmt.Printf("Image detail:              %s (score %.2f)  [heuristic]\n", result.Detail, result.DetailScore)
+	fmt.Printf("Recommended strength:      %.0f  [heuristic]\n", result.RecommendedStrength)
+	fmt.Printf("Status:                    %s\n", result.Status)
+	for _, warning := range result.Warnings {
+		fmt.Printf("Warning:                   %s\n", warning)
+	}
+	fmt.Println("Note:                      robustness results are experimental; this analysis is not a recovery guarantee")
 	return nil
 }

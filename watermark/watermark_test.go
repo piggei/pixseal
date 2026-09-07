@@ -2,12 +2,12 @@ package watermark
 
 import (
 	"bytes"
-	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
 	"math"
 	"testing"
+	"time"
 )
 
 func testImage(width, height int) *image.NRGBA {
@@ -27,7 +27,7 @@ func testImage(width, height int) *image.NRGBA {
 }
 
 func TestHammingCorrectsSingleBit(t *testing.T) {
-	input := make([]byte, frameBits)
+	input := make([]byte, maxFrameBits)
 	for i := range input {
 		input[i] = byte(i & 1)
 	}
@@ -40,106 +40,249 @@ func TestHammingCorrectsSingleBit(t *testing.T) {
 	}
 }
 
-func TestV2TransformRoundTrips(t *testing.T) {
+func TestProfileSelectionThresholds(t *testing.T) {
+	tests := []struct {
+		bytes int
+		want  Profile
+	}{
+		{16, ProfileRobust},
+		{17, ProfileBalanced},
+		{32, ProfileBalanced},
+		{33, ProfileCapacity},
+		{64, ProfileCapacity},
+	}
+	for _, tc := range tests {
+		info, err := SelectProfile(tc.bytes, ProfileAuto)
+		if err != nil {
+			t.Fatalf("SelectProfile(%d): %v", tc.bytes, err)
+		}
+		if info.Name != tc.want {
+			t.Errorf("SelectProfile(%d) = %s, want %s", tc.bytes, info.Name, tc.want)
+		}
+	}
+	if _, err := SelectProfile(65, ProfileAuto); err == nil {
+		t.Fatal("65-byte payload was accepted")
+	}
+}
+
+func TestExplicitProfileCapacityErrors(t *testing.T) {
+	if _, err := SelectProfile(17, ProfileRobust); err == nil {
+		t.Fatal("robust accepted 17 bytes")
+	}
+	if _, err := SelectProfile(33, ProfileBalanced); err == nil {
+		t.Fatal("balanced accepted 33 bytes")
+	}
+	if _, err := SelectProfile(64, ProfileCapacity); err != nil {
+		t.Fatalf("capacity rejected 64 bytes: %v", err)
+	}
+}
+
+func TestV3ProfileRoundTrips(t *testing.T) {
 	key := []byte("correct horse battery staple")
-	message := []byte("geometric steganography test")
-	marked, err := Embed(testImage(560, 512), message, key, DefaultOptions())
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		profile Profile
+		size    int
+	}{
+		{ProfileRobust, 16},
+		{ProfileBalanced, 32},
+		{ProfileCapacity, 64},
 	}
-
-	var jpegBuffer bytes.Buffer
-	if err := jpeg.Encode(&jpegBuffer, marked, &jpeg.Options{Quality: 82}); err != nil {
-		t.Fatal(err)
-	}
-	jpegImage, err := jpeg.Decode(&jpegBuffer)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	tests := map[string]image.Image{
-		"original":  marked,
-		"jpeg":      jpegImage,
-		"resize-95": resizeBilinear(marked, 532, 486),
-		"resize-75": resizeBilinear(marked, 420, 384),
-		"resize-55": resizeBilinear(marked, 308, 282),
-		"resize-50": resizeBilinear(marked, 280, 256),
-		"crop-90":   cropCopy(marked, image.Rect(27, 25, 531, 486)),
-		"crop-75":   cropCopy(marked, image.Rect(70, 64, 490, 448)),
-	}
-
-	for name, transformed := range tests {
-		t.Run(name, func(t *testing.T) {
-			got, _, err := Extract(transformed, key, DefaultOptions())
+	for _, tc := range tests {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			message := bytes.Repeat([]byte{byte('A' + tc.size%20)}, tc.size)
+			options := DefaultOptions()
+			options.Profile = tc.profile
+			marked, embedInfo, err := EmbedWithInfo(testImage(560, 512), message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if embedInfo.Profile != tc.profile {
+				t.Fatalf("embedded profile %s, want %s", embedInfo.Profile, tc.profile)
+			}
+			got, extractInfo, err := ExtractWithInfo(marked, key)
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !bytes.Equal(got, message) {
-				t.Fatalf("got %q, want %q", got, message)
+				t.Fatalf("got %d bytes, want %d", len(got), len(message))
+			}
+			if extractInfo.Version != 3 || extractInfo.Profile != tc.profile {
+				t.Fatalf("extracted v%d/%s, want v3/%s", extractInfo.Version, extractInfo.Profile, tc.profile)
 			}
 		})
 	}
 }
 
-func TestV2IgnoresLegacyRepetition(t *testing.T) {
-	key := []byte("correct horse battery staple")
-	message := []byte("v2 ignores legacy repetition")
-	options := DefaultOptions()
-	options.Repetition = 2 // Invalid for v1, intentionally irrelevant to v2.
-
-	marked, err := Embed(testImage(560, 512), message, key, options)
-	if err != nil {
-		t.Fatalf("v2 embed rejected legacy-only repetition: %v", err)
+func TestV3TransformsByProfile(t *testing.T) {
+	key := []byte("profile transform test key")
+	tests := []struct {
+		profile Profile
+		message []byte
+	}{
+		{ProfileRobust, []byte("robust payload")},
+		{ProfileBalanced, []byte("balanced profile payload")},
+		{ProfileCapacity, []byte("capacity profile payload exercising full frame 1234567890")},
 	}
-	got, _, err := Extract(marked, key, options)
-	if err != nil {
-		t.Fatalf("v2 extraction rejected legacy-only repetition: %v", err)
-	}
-	if !bytes.Equal(got, message) {
-		t.Fatalf("got %q, want %q", got, message)
+	for _, tc := range tests {
+		t.Run(string(tc.profile), func(t *testing.T) {
+			options := DefaultOptions()
+			options.Profile = tc.profile
+			marked, err := Embed(testImage(560, 512), tc.message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var jpegBuffer bytes.Buffer
+			if err := jpeg.Encode(&jpegBuffer, marked, &jpeg.Options{Quality: 82}); err != nil {
+				t.Fatal(err)
+			}
+			jpegImage, err := jpeg.Decode(&jpegBuffer)
+			if err != nil {
+				t.Fatal(err)
+			}
+			transforms := map[string]image.Image{
+				"jpeg":      jpegImage,
+				"resize-75": resizeBilinear(marked, 420, 384),
+				"crop-75":   cropCopy(marked, image.Rect(70, 64, 490, 448)),
+			}
+			for name, transformed := range transforms {
+				t.Run(name, func(t *testing.T) {
+					got, info, err := ExtractWithInfo(transformed, key)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if !bytes.Equal(got, tc.message) || info.Profile != tc.profile {
+						t.Fatalf("recovered %q with %s; want %q with %s", got, info.Profile, tc.message, tc.profile)
+					}
+				})
+			}
+		})
 	}
 }
 
-func TestLegacyV1ExtractionCompatibility(t *testing.T) {
-	key := []byte("legacy compatibility key")
-	message := []byte("legacy v1 payload")
-	marked, err := embedLegacyForTest(testImage(560, 512), message, key, DefaultOptions())
+func TestV3AutoProfileExtraction(t *testing.T) {
+	key := []byte("automatic profile key")
+	message := bytes.Repeat([]byte("x"), 17)
+	marked, info, err := EmbedWithInfo(testImage(560, 512), message, key, DefaultOptions())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Profile != ProfileBalanced {
+		t.Fatalf("auto selected %s, want balanced", info.Profile)
+	}
+	got, extracted, err := ExtractWithInfo(marked, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, message) || extracted.Profile != ProfileBalanced {
+		t.Fatalf("automatic extraction got profile %s payload %q", extracted.Profile, got)
+	}
+}
+
+func TestWrongKeyAndUnmarkedImageAreBounded(t *testing.T) {
+	key := []byte("correct extraction key")
+	message := []byte("short message")
+	options := DefaultOptions()
+	options.Profile = ProfileRobust
+	marked, err := Embed(testImage(320, 288), message, key, options)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, _, err := Extract(marked, key, DefaultOptions())
-	if err != nil {
-		t.Fatalf("legacy v1 extraction failed: %v", err)
+	tests := map[string]image.Image{
+		"wrong-key": marked,
+		"unmarked":  testImage(320, 288),
 	}
-	if !bytes.Equal(got, message) {
-		t.Fatalf("got %q, want %q", got, message)
+	for name, carrier := range tests {
+		t.Run(name, func(t *testing.T) {
+			start := time.Now()
+			useKey := []byte("different extraction key")
+			if name == "unmarked" {
+				useKey = key
+			}
+			if _, _, err := Extract(carrier, useKey); err == nil {
+				t.Fatal("unexpected extraction success")
+			}
+			if elapsed := time.Since(start); elapsed > 20*time.Second {
+				t.Fatalf("failed extraction took %s; bounded-search regression suspected", elapsed)
+			}
+		})
 	}
 }
 
-func embedLegacyForTest(src image.Image, payload, key []byte, options Options) (*image.NRGBA, error) {
-	embedOptions, err := normalizeEmbedOptions(options)
-	if err != nil {
-		return nil, err
+func TestAnalyzeImageMatchesProfileMath(t *testing.T) {
+	analysis := AnalyzeImage(testImage(1920, 1080), 18)
+	if !analysis.ImageCompatible || analysis.RecommendedProfile != ProfileBalanced || analysis.ProfileCapacity != 32 {
+		t.Fatalf("unexpected analysis: %+v", analysis)
 	}
-	legacyOptions, err := normalizeLegacyOptions(options)
-	if err != nil {
-		return nil, err
+	if math.Abs(analysis.ProfileTileRedundancy-float64(eccBits)/672) > 0.001 {
+		t.Fatalf("unexpected profile redundancy %.4f", analysis.ProfileTileRedundancy)
 	}
-	frame := makeFrame(payload, key, 1)
-	bits := whiten(bytesToBits(frame), key, "pixseal-whiten-v1")
-	out := toNRGBA(src)
-	order := legacyBlockOrder(out.Bounds(), key)
-	required := len(bits) * legacyOptions.Repetition
-	if len(order) < required {
-		return nil, fmt.Errorf("test image has %d blocks, need %d", len(order), required)
+	if analysis.RecommendedStrength < 4 || analysis.RecommendedStrength > 120 {
+		t.Fatalf("invalid recommended strength %.1f", analysis.RecommendedStrength)
 	}
-	for index, bit := range bits {
-		for repetition := 0; repetition < legacyOptions.Repetition; repetition++ {
-			embedBlock(out, order[index*legacyOptions.Repetition+repetition], bit, embedOptions.Strength)
+}
+
+func TestV3FrameIgnoresTrailingPaddingButAuthenticatesHeader(t *testing.T) {
+	key := []byte("v3 frame authentication key")
+	message := []byte("short")
+	spec, _ := profileSpecFor(ProfileRobust)
+	frame := makeV3Frame(message, key, spec)
+
+	// Bytes after header || payload || tag are intentionally non-semantic padding.
+	paddingOffset := headerSize + len(message) + tagSize
+	if paddingOffset >= len(frame) {
+		t.Fatal("test message leaves no v3 padding")
+	}
+	frame[paddingOffset] ^= 0xff
+	got, err := parseV3Frame(frame, key, spec)
+	if err != nil || !bytes.Equal(got, message) {
+		t.Fatalf("trailing padding affected payload authentication: got=%q err=%v", got, err)
+	}
+
+	frame = makeV3Frame(message, key, spec)
+	frame[2] ^= 1
+	if _, err := parseV3Frame(frame, key, spec); err == nil {
+		t.Fatal("tampered v3 format/profile byte was accepted")
+	}
+}
+
+func TestV3SyncPatternObservationCounts(t *testing.T) {
+	key := []byte("sync-pattern-test-key")
+	want := map[Profile]int{
+		ProfileRobust:   106,
+		ProfileBalanced: 69,
+		ProfileCapacity: 42,
+	}
+	for _, spec := range v3Profiles {
+		pattern := newV3SyncPattern(key, spec)
+		if got := len(pattern.points); got != want[spec.profile] {
+			t.Fatalf("profile %s sync observations = %d, want %d", spec.profile, got, want[spec.profile])
 		}
 	}
-	return out, nil
+}
+
+func TestV3TileMappingObservationCounts(t *testing.T) {
+	for _, spec := range v3Profiles {
+		counts := make([]int, spec.codedBits)
+		for position := 0; position < eccBits; position++ {
+			counts[v3CodeIndex(position, spec.codedBits)]++
+		}
+		total := 0
+		minimum := counts[0]
+		maximum := counts[0]
+		for _, count := range counts {
+			total += count
+			if count < minimum {
+				minimum = count
+			}
+			if count > maximum {
+				maximum = count
+			}
+		}
+		if total != eccBits || maximum-minimum > 1 {
+			t.Fatalf("profile %s has uneven mapping min=%d max=%d total=%d", spec.profile, minimum, maximum, total)
+		}
+	}
 }
 
 func TestPixelPlaneBicubicMatchesReference(t *testing.T) {
