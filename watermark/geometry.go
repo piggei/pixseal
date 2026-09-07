@@ -11,7 +11,7 @@ const (
 	rotationProbeMaxDegrees  = 45
 	rotationProbeStep        = 0.25
 	rotationProbeFineStep    = 0.05
-	rotationProbeMinContrast = 12.0 // reference threshold at an 8-pixel lattice
+	rotationProbeMinContrast = 17.0 // reference threshold at an 8-pixel lattice
 	rotationAlignedContrast  = 20.0 // reference threshold at an 8-pixel lattice
 	rotationDecodeCandidates = 2
 	rotationCoarseCandidates = 3
@@ -57,12 +57,25 @@ func rotationCandidatePasses(candidate rotationCandidate) bool {
 // Contrast is normalized for block area before candidates from different
 // lattice sizes are ranked. Smaller lattices use fewer spatial samples, keeping
 // the multi-scale probe close to the cost of the build-3 single-scale search.
-func detectRotationCandidates(src *pixelPlane) []rotationCandidate {
+func hasStrongZeroDegreeLattice(src *pixelPlane) bool {
 	for _, size := range rotationProbeBlockSizes {
 		aligned := probeRotationAngle(src, 0, size)
 		if aligned.contrast >= rotationAlignedContrast*rotationContrastScale(size) {
-			return nil
+			return true
 		}
+	}
+	return false
+}
+
+func detectRotationCandidates(src *pixelPlane) []rotationCandidate {
+	// A strong zero-degree contrast alone is not enough once affine distortion is
+	// allowed: anisotropic scale or shear can create a misleading local peak at
+	// zero even when the periodic v3 lattice is not geometrically aligned. Build 6
+	// therefore uses the key-independent repetition signal to confirm the fast
+	// path. Native/wrong-key carriers retain the cheap exit, while low-coherence
+	// images continue to the bounded angle estimator.
+	if hasStrongZeroDegreeLattice(src) && nativeRepetitionCoherence(src) >= 0.82 {
+		return nil
 	}
 
 	coarseAll := make([]rotationCandidate, 0, 720)
@@ -828,4 +841,238 @@ func searchV3AxisAlignedAffine(src *pixelPlane, decoder *decoder) ([]byte, Extra
 		}
 	}
 	return nil, ExtractInfo{}, affineCandidate{}, false
+}
+
+// latticeCandidate describes a composed linear geometry candidate scored
+// directly from the repeated v3 DCT lattice. Unlike the build-6 composition
+// stage, this estimator does not depend on a prior rotation estimate.
+type latticeCandidate struct {
+	angle     float64
+	scaleX    float64
+	scaleY    float64
+	matrix    linearTransform
+	quick     float64
+	coherence float64
+	contrast  float64
+	phases    []point
+	decisive  bool
+}
+
+func rotationMatrix(degrees float64) linearTransform {
+	radians := degrees * math.Pi / 180
+	cosine, sine := math.Cos(radians), math.Sin(radians)
+	return linearTransform{a: cosine, b: -sine, c: sine, d: cosine}
+}
+
+func multiplyLinearTransforms(left, right linearTransform) linearTransform {
+	return linearTransform{
+		a: left.a*right.a + left.b*right.c,
+		b: left.a*right.b + left.b*right.d,
+		c: left.c*right.a + left.d*right.c,
+		d: left.c*right.b + left.d*right.d,
+	}
+}
+
+var directLatticeScale = [2]float64{1.10, 0.90}
+
+// quickLatticeCoherence is the inexpensive first stage of direct lattice
+// estimation. It samples a deterministic sparse subset of v3 tile positions
+// and measures sign agreement between adjacent repeated tiles through the
+// candidate transform. The score is key-independent and is used only for
+// ranking; HMAC remains the sole acceptance criterion.
+//
+// Pixel phase is searched coarsely on the even 4x4 grid and then refined in a
+// 3x3 neighbourhood. With 20 logical samples this rejects ordinary image
+// texture far more reliably than the build-6 orientation-only detector while
+// keeping the cost independent of image dimensions.
+func quickLatticeCoherence(src *pixelPlane, matrix linearTransform, size int) (float64, point) {
+	bounds, ok := affineOutputBounds(src, matrix)
+	if !ok {
+		return 0, point{}
+	}
+	blocksWide := bounds.width / size
+	blocksHigh := bounds.height / size
+	if blocksWide < tileWidth || blocksHigh < tileHeight {
+		return 0, point{}
+	}
+
+	logicalPositions := make([]int, 20)
+	for i := range logicalPositions {
+		// 97 is coprime with 1120, so the samples are spread over the whole tile.
+		logicalPositions[i] = (i*97 + 13) % eccBits
+	}
+
+	scorePhase := func(phase point) (float64, bool) {
+		same, total := 0, 0
+		compare := func(originAX, originAY, originBX, originBY int) {
+			for _, logical := range logicalPositions {
+				x := logical % tileWidth
+				y := logical / tileWidth
+				valueA, validA := readAffineBlockValue(src, bounds, matrix,
+					phase.x+(originAX+x)*size, phase.y+(originAY+y)*size, size)
+				valueB, validB := readAffineBlockValue(src, bounds, matrix,
+					phase.x+(originBX+x)*size, phase.y+(originBY+y)*size, size)
+				if !validA || !validB {
+					continue
+				}
+				total++
+				if (valueA >= 0) == (valueB >= 0) {
+					same++
+				}
+			}
+		}
+		if blocksWide >= 2*tileWidth {
+			startX := (blocksWide - 2*tileWidth) / 2
+			startY := (blocksHigh - tileHeight) / 2
+			compare(startX, startY, startX+tileWidth, startY)
+		}
+		if blocksHigh >= 2*tileHeight {
+			startX := (blocksWide - tileWidth) / 2
+			startY := (blocksHigh - 2*tileHeight) / 2
+			compare(startX, startY, startX, startY+tileHeight)
+		}
+		if total == 0 {
+			return 0, false
+		}
+		return float64(same) / float64(total), true
+	}
+
+	best, bestPhase := 0.0, point{}
+	for y := 0; y < size; y += 2 {
+		for x := 0; x < size; x += 2 {
+			phase := point{x: x, y: y}
+			if score, valid := scorePhase(phase); valid && score > best {
+				best, bestPhase = score, phase
+			}
+		}
+	}
+	coarse := bestPhase
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			phase := point{x: positiveMod(coarse.x+dx, size), y: positiveMod(coarse.y+dy, size)}
+			if score, valid := scorePhase(phase); valid && score > best {
+				best, bestPhase = score, phase
+			}
+		}
+	}
+	return best, bestPhase
+}
+
+// searchV3DirectLatticeComposition estimates the composed DCT lattice directly
+// instead of assuming that rotation can first be recovered independently from
+// anisotropic scale. This is the build-7 replacement for the experimental
+// build-6 rotation-first composition path.
+//
+// Build 7 deliberately promotes only the already-tested 110%x90% composition
+// baseline. Broader scale pairs remain research work instead of multiplying the
+// negative-case cost before the estimator has been validated on real carriers.
+//
+// The search is explicitly bounded:
+//   - 1 anisotropic scale pair (110%x90%)
+//   - 361 angles (-45..+45 at 0.25 degree)
+//   - 361 sparse lattice probes maximum
+//   - at most 16 candidates receive the stronger periodicity measurement
+//   - at most 4 candidates x 3 phases reach full-carrier authenticated decoding
+//
+// A quick-coherence gate of 0.825 prevents normal image texture from reaching
+// the expensive stages in the common case. The v3 frame is accepted only after
+// the existing CRC/HMAC checks succeed.
+func searchV3DirectLatticeComposition(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, latticeCandidate, bool) {
+	const (
+		quickMinimum      = 0.825
+		fullMinimum       = 0.72
+		quickShortlistMax = 16
+		fullShortlistMax  = 4
+	)
+
+	quickCandidates := make([]latticeCandidate, 0, quickShortlistMax)
+	considerQuick := func(candidate latticeCandidate) {
+		insertAt := len(quickCandidates)
+		for i, existing := range quickCandidates {
+			if candidate.quick > existing.quick {
+				insertAt = i
+				break
+			}
+		}
+		if insertAt >= quickShortlistMax {
+			return
+		}
+		quickCandidates = append(quickCandidates, latticeCandidate{})
+		copy(quickCandidates[insertAt+1:], quickCandidates[insertAt:])
+		quickCandidates[insertAt] = candidate
+		if len(quickCandidates) > quickShortlistMax {
+			quickCandidates = quickCandidates[:quickShortlistMax]
+		}
+	}
+
+	scale := directLatticeScale
+	for angle := -45.0; angle <= 45.000001; angle += 0.25 {
+		rotation := rotationMatrix(angle)
+		scaleMatrix := linearTransform{a: scale[0], d: scale[1]}
+		matrix := multiplyLinearTransforms(rotation, scaleMatrix)
+		quick, _ := quickLatticeCoherence(src, matrix, blockSize)
+		if quick < quickMinimum {
+			continue
+		}
+		considerQuick(latticeCandidate{
+			angle: angle, scaleX: scale[0], scaleY: scale[1], matrix: matrix, quick: quick,
+		})
+	}
+	if len(quickCandidates) == 0 {
+		return nil, ExtractInfo{}, latticeCandidate{}, false
+	}
+
+	for i := range quickCandidates {
+		entry := &quickCandidates[i]
+		probe := probeAffineMatrixDetailed(src, entry.matrix, blockSize)
+		candidate := affineCandidate{
+			kind: affineScaleXY, parameter: entry.scaleX, parameter2: entry.scaleY,
+			matrix: entry.matrix, blockSize: blockSize,
+		}
+		entry.coherence, entry.phases = bestAffineCoherence(src, candidate, probe)
+		entry.contrast = probe.contrast
+	}
+	sort.Slice(quickCandidates, func(i, j int) bool {
+		if quickCandidates[i].coherence == quickCandidates[j].coherence {
+			return quickCandidates[i].contrast > quickCandidates[j].contrast
+		}
+		return quickCandidates[i].coherence > quickCandidates[j].coherence
+	})
+	if len(quickCandidates) > 0 {
+		best := quickCandidates[0].coherence
+		second := 0.0
+		if len(quickCandidates) > 1 {
+			second = quickCandidates[1].coherence
+		}
+		// A very high coherence, or a clearly isolated high-coherence peak, is
+		// strong evidence that this narrow composed geometry has actually been
+		// identified. This distinction matters for wrong-key fast failure: pure
+		// rotation and rotate+resize can produce misleading moderate peaks, but
+		// they typically do not produce the same isolated lattice maximum.
+		quickCandidates[0].decisive = best >= 0.85 || (best >= 0.75 && (len(quickCandidates) == 1 || best-second >= 0.12))
+	}
+	if len(quickCandidates) > fullShortlistMax {
+		quickCandidates = quickCandidates[:fullShortlistMax]
+	}
+	bestEvidence := latticeCandidate{}
+	if len(quickCandidates) > 0 {
+		bestEvidence = quickCandidates[0]
+	}
+
+	for _, candidate := range quickCandidates {
+		if candidate.coherence < fullMinimum {
+			continue
+		}
+		for _, phase := range candidate.phases {
+			grid, ok := aggregateAffineGrid(src, candidate.matrix, blockSize, phase.x, phase.y)
+			if !ok {
+				continue
+			}
+			payload, info, _, found := decoder.decodeGrid(grid)
+			if found {
+				return payload, info, candidate, true
+			}
+		}
+	}
+	return nil, ExtractInfo{}, bestEvidence, false
 }

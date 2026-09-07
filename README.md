@@ -1,11 +1,13 @@
 # PixSeal
 
+![PixSeal — Hide messages. Keep the picture.](docs/assets/pixseal-banner.png)
+
 PixSeal is an experimental, pure-Go **robust image steganography** CLI for
 hiding short authenticated messages inside images. It embeds protected payload
 bits into luminance DCT coefficients while keeping the resulting changes
 visually unobtrusive under normal viewing conditions.
 
-Current development line: **v0.2.0 build 5**. The last stable release is
+Current development line: **v0.2.0 build 7**. The last stable release is
 **v0.1.0**.
 
 PixSeal is designed as a hidden-data channel rather than an ownership-marking
@@ -23,65 +25,81 @@ or claim compatibility with Google's SynthID algorithm.
 PixSeal does not claim statistical steganographic undetectability. It has not
 undergone a cryptographic or steganalytic security audit.
 
-## What's new in v0.2.0 build 5
+Project evolution and planned work are tracked separately in [`HISTORY.md`](HISTORY.md)
+and [`TODO.md`](TODO.md). Release-facing changes remain in [`CHANGELOG.md`](CHANGELOG.md).
 
-Build 5 adds the first **bounded affine recovery stage** without changing a
-single bit of format v3. The new stage is deliberately axis-aligned: it handles
-moderate non-uniform X/Y scaling and X/Y shear independently from the arbitrary-
-angle rotation stage introduced in builds 3 and 4.
+## What's new in v0.2.0 build 7
 
-The current affine hypothesis set is finite and explicit:
+Build 7 keeps **format v3 bit-for-bit unchanged** and replaces the build-6
+rotation-first composition heuristic with **direct DCT-lattice estimation** for
+the validated composed baseline.
+
+The change was driven by real-corpus failures: build 6 timed out on one private
+carrier and failed on another even though a generated carrier passed. The reason
+was structural rather than a single threshold: anisotropic scaling can move the
+apparent peak seen by the standalone rotation estimator, so "find rotation, then
+try scale" is not a reliable decomposition of the transformed lattice.
+
+Build 7 instead scores the repeated v3 tile under the composed transform itself:
 
 ```text
-X/Y scale values: 90%, 95%, 100%, 105%, 110%
-                 equal X/Y pairs are omitted
-                 20 anisotropic scale matrices
-
-shear:           X or Y axis
-                 +/-3, +/-5, +/-8, +/-10 degrees
-                 16 shear matrices
-
-                 36 affine matrices total
+anisotropic scale:  110%x90%
+rotation:           -45..+45 degrees, 0.25-degree lattice probes
+edit order:         anisotropic scale -> rotation
+profile:            robust baseline
 ```
 
-Rather than rendering dozens of fully rectified images, PixSeal evaluates the
-DCT lattice through a **virtual inverse-affine sampler**. A key-independent
-periodic-coherence check compares repeated v3 tiles and rejects weak hypotheses.
-At most six matrices reach authenticated single-tile probing, with at most three
-pixel phases each; only the four strongest failed sync candidates may receive a
-full-image repetition aggregate. HMAC-authenticated v3 decoding is still the
-only success criterion.
+The current direct estimator is deliberately narrow rather than pretending to
+solve general affine geometry:
 
-This two-level strategy is important for the `capacity` profile: after some
-affine transforms one tile can be too damaged to authenticate, while aggregating
-repeated observations across the carrier can still recover the frame.
+```text
+361 sparse composed-lattice probes maximum
+16 candidates receive stronger periodicity measurement maximum
+4 candidates x 3 phases reach full authenticated aggregation maximum
+```
 
-A new experimental target exercises the feature on the private corpus:
+The sparse first stage samples only 20 deterministic positions from the repeated
+v3 tile, so its work is essentially independent of the carrier dimensions. The
+stronger stage then uses tile-repetition coherence, and the existing CRC/HMAC
+checks remain the sole success criterion.
+
+Two real private regression images that produced `TIMEOUT` and `FAIL` in build 6
+both recover in build 7 under the same ImageMagick `110%x90% -> 12.3 degrees`
+transformation. Those private images are **not** stored in the repository or
+distributed source archive.
+
+A new development target exercises the currently validated composition:
 
 ```sh
-make affine-test
-STRICT=1 make affine-test
+make composition-test
+STRICT=1 make composition-test
 ```
 
-The default matrix uses ImageMagick to test `110%x90%`, `90%x110%`, `shear X
-8deg` and `shear Y 8deg` for `robust`, `balanced` and `capacity`.
+The default composition suite intentionally uses `profile robust` only. The extra
+2.50x coded-bit observation budget is currently the only profile for which this
+new composed path has been validated reliably. `balanced`, `capacity`, the
+opposite edit order (`rotation -> anisotropic scale`) and rotation combined with
+shear remain research tasks rather than advertised capabilities.
 
-Build 5 intentionally does **not** compose the new affine matrices with arbitrary
-rotation yet. Rotation + 75% resize/crop remains supported by the build-4 path;
-rotation + anisotropic scale/shear is the next controlled research step. This
-separation prevents an angle x affine Cartesian brute force from entering the
-failed-extraction path.
+The engineering records introduced in build 6 remain part of the project:
 
-Build 5 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
+- [`HISTORY.md`](HISTORY.md) preserves architectural and experimental milestones;
+- [`TODO.md`](TODO.md) tracks the active research roadmap;
+- the PixSeal project banner is stored locally in `docs/assets/` and displayed at
+  the top of this README.
+
+Build 7 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
 engineering history.
 
 ## Build
 
 The core and CLI are implemented in pure Go with no external runtime
-dependencies. The format/codec packages avoid platform-specific APIs, keeping
-the codebase suitable for future Android and iOS wrappers; mobile integration is
-not part of build 5. ImageMagick and GNU `timeout` are required only by the shell
-test suites.
+dependencies. The `watermark` package is deliberately independent from terminal
+I/O and platform-specific APIs so the same codec can later be reused by graphical
+frontends. The planned application direction is a desktop GUI for Windows/Linux
+and, especially, an Android-capable frontend; no GUI toolkit is selected or added
+in build 7. iOS remains a possible wrapper target as well. ImageMagick and GNU
+`timeout` are required only by the shell test suites.
 
 
 ```sh
@@ -295,7 +313,7 @@ fixed sparse DCT orientation probe followed by at most two full rectification
 candidates. The probe is periodic modulo 90 degrees and authenticated decoding
 of up to four quarter-turn variants resolves the quadrant.
 
-Build 4 introduced, and build 5 retains, two apparent DCT lattice sizes during arbitrary-angle estimation:
+Build 4 introduced, and build 7 retains, two apparent DCT lattice sizes during arbitrary-angle estimation:
 8 pixels (native scale) and 6 pixels (75% scale). The search is hierarchical and
 finite: two zero-degree alignment probes, at most 720 non-zero quarter-degree
 angle probes, at most 33 local 0.05-degree refinements, and at most two refined
@@ -308,7 +326,7 @@ rotation and what makes 75% resize + rotation practical without introducing an
 open-ended angle x scale Cartesian search.
 
 The supported experimental combined baseline is therefore centered on native
-scale and 75% scale. Arbitrary-angle + 50% resize is **not** claimed in build 5:
+scale and 75% scale. Arbitrary-angle + 50% resize is **not** claimed in build 7:
 development tests showed that the double interpolation can erase the signal at
 default strength even with the true angle known. Arbitrary fractional scales
 other than the existing 75% direct lattice are still research work.
@@ -318,7 +336,7 @@ A rectification candidate is skipped if its expanded canvas would exceed
 
 ## Format lineage and compatibility
 
-New `embed` operations create **PixSeal format v3** carriers, and build 5 extracts
+New `embed` operations create **PixSeal format v3** carriers, and build 7 extracts
 **v3 only**. The extractor identifies `robust`, `balanced` or `capacity`
 automatically from the authenticated v3 header.
 
@@ -369,17 +387,16 @@ make deep-test    # baseline JPEG/resize/crop transformations
 make extreme-test # progressive resize/crop limit exploration
 make geometry-test # rotation + bounded combined-geometry matrix
 make affine-test   # bounded anisotropic-scale/shear matrix
+make composition-test # experimental anisotropic-scale -> rotation baseline
 make all          # build + make test + make deep-test
 ```
 
 `make test`, `make deep-test`, `make extreme-test`, `make geometry-test` and
-`make affine-test` expect the private local `original pics/` directory. The images are excluded by `.gitignore` and must not
+`make affine-test`, and `make composition-test` expect the private local `original pics/` directory. The images are excluded by `.gitignore` and must not
 be included in source archives. Generated carriers and transformed images are
 created in temporary directories and removed automatically.
 
-The transformation, geometry and affine suites test `robust`, `balanced` and `capacity`
-explicitly with profile-appropriate payload lengths. This allows robustness differences to
-be compared rather than hidden behind `auto` selection.
+The baseline transformation, geometry and affine suites test `robust`, `balanced` and `capacity` explicitly with profile-appropriate payload lengths. The build-7 `composition-test` deliberately defaults to `robust` only, because broader-profile composed recovery is not yet a claimed capability.
 
 The shell robustness suites require:
 
@@ -394,7 +411,7 @@ corpus:
 go test ./...
 ```
 
-Cross-platform build check:
+Cross-platform CLI build check:
 
 ```sh
 make build-all
@@ -403,6 +420,16 @@ make build-all
 This produces Linux amd64, Windows amd64, macOS amd64 and macOS arm64 binaries
 under `dist/`; release archives should not contain those build products unless a
 binary distribution is being prepared deliberately.
+
+Reusable-core portability check (no GUI or mobile binary is produced):
+
+```sh
+make core-target-check
+```
+
+This currently compile-checks the pure-Go core for Linux/amd64, Windows/amd64,
+Android/arm64 and iOS/arm64. It is a guard against accidentally coupling the
+codec to the CLI while future GUI work remains deferred.
 
 ## Current limitations
 
@@ -416,9 +443,10 @@ binary distribution is being prepared deliberately.
 - Digital rotation is recovered experimentally, including fractional angles and
   quarter turns. The measured combined baseline around 75% resize and crop is
   retained, including both transformation orders.
-- Build 5 adds bounded **axis-aligned affine** recovery for discrete 90-110% X/Y
-  scale hypotheses and X/Y shear at 3/5/8/10 degrees. Rotation composed with
-  affine distortion is not yet synchronized.
+- Build 7 retains bounded **axis-aligned affine** recovery for discrete 90-110% X/Y
+  scale hypotheses and X/Y shear at 3/5/8/10 degrees. It additionally supports
+  the narrow direct-lattice `110%x90% -> rotation` robust baseline. General
+  rotation+affine synchronization is not yet claimed.
 - Arbitrary-angle + 50% resize is not currently recoverable at default strength
   in development tests; arbitrary perspective correction is not yet supported.
 - Failed extraction remains more expensive than successful extraction because
@@ -427,18 +455,18 @@ binary distribution is being prepared deliberately.
   large images.
 - The image-detail/strength recommendation is heuristic and has not yet been
   calibrated across a large corpus.
-- No neural model is used in v0.2 build 5.
+- No neural model is used in v0.2 build 7.
 - The format and implementation have not received an independent cryptographic
   or steganalytic audit.
 
 ## Development direction: geometric recovery
 
-Build 5 establishes the first **axis-aligned affine** baseline while keeping
-format v3 unchanged. The next controlled step is to compose the already bounded
-rotation estimator with the affine matrix model, then move to projective /
-perspective correction. The affine matrix should first be run against the private
-`original pics/` corpus to quantify profile-specific limits and failed-extraction
-timing.
+Build 7 replaces the first rotation-first composition experiment with direct
+estimation of the repeated **DCT lattice** while keeping format v3 unchanged. The
+next controlled step is to generalize lattice estimation beyond the single
+110%x90% baseline, then recover the two transformed basis vectors directly enough
+to cover broader affine matrices and eventually projective / perspective
+correction.
 
 The longer-term experimental goal remains a **print-camera channel**: embed a
 short message, print the carrier on paper, photograph it with a phone and recover
@@ -448,11 +476,11 @@ before adding printer, paper, lens, illumination and sensor effects.
 
 ## Development status
 
-**v0.2.0 build 5 is a development build, not the final v0.2.0 release.**
+**v0.2.0 build 7 is a development build, not the final v0.2.0 release.**
 
 The adaptive v3 format is intentionally documented now so changes during the
 build cycle can be reviewed explicitly. Build 2 deliberately dropped runtime v1/v2
-compatibility; builds 3, 4 and 5 keep v3 as the sole implementation baseline and
+compatibility; builds 3 through 7 keep v3 as the sole implementation baseline and
 extend only the bounded geometric recovery layer without changing the on-image
 format. The `build N`
 suffix will be removed only when the v0.2.0 release is finalized.

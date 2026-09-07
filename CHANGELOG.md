@@ -2,6 +2,68 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0 build 7 - 2026-09-08
+
+Development build. Not a final v0.2.0 release.
+
+### Direct DCT-lattice composition recovery
+
+- Kept the adaptive on-image format v3 bit-for-bit unchanged.
+- Replaced the build-6 rotation-first composition heuristic with a direct estimator that scores the repeated v3 DCT lattice under the composed transform itself.
+- Promoted only the already-declared `robust`, `110%x90% -> arbitrary rotation` baseline; broader scale pairs and profiles remain research work rather than increasing the negative-case search cost prematurely.
+- Added a sparse first stage using 20 deterministic tile positions and a fixed 0.25-degree sweep from -45 to +45 degrees: **361 composed lattice probes maximum**.
+- Retained at most 16 candidates for stronger periodicity measurement, then at most four matrices and three phases per matrix for full-carrier authenticated aggregation.
+- Continued to use CRC32 and HMAC-SHA256 authentication as the sole success criterion; geometric coherence only ranks hypotheses.
+- Removed the build-6 runtime dependency on the standalone rotation estimator for composed-scale recovery. This addresses the observed case where anisotropic scale displaced the apparent orientation peak.
+
+### Real-corpus regression
+
+- Added two private real-image regression cases supplied by PJ during development. They are used only locally and are **not** included in the repository or source archive.
+- Under the existing ImageMagick `110%x90% -> 12.3 degrees` composition test, build 6 produced one timeout and one failed extraction on those images.
+- The build-7 CLI recovered both authenticated messages and reported approximately `rotation-correction: -12.25 degrees` and `scale-correction: x=0.9091 y=1.1111`.
+- End-to-end `STRICT=1 make composition-test` on those two private originals completed **2 passed, 0 failed, 0 timeouts, 0 errors**.
+- Same-machine CLI spot checks on the transformed private carriers completed in about **5.5 s** and **3.0 s** respectively. These timings are engineering observations, not guarantees.
+- Added an authenticated-failure fast exit when strong direct-lattice coherence identifies the composed geometry but HMAC fails. The same two transformed carriers with a wrong key completed in about **5.4 s** and **2.9 s**, avoiding the build-6 timeout-style fallback cascade.
+
+### Tests and documentation
+
+- Added a pure-Go regression test for direct-lattice composition recovery and a fixed-search-space test that freezes the 361-angle baseline.
+- Updated README, algorithm notes, results, HISTORY, TODO, version metadata and composition-suite wording for build 7.
+- Preserved `HISTORY.md`, `TODO.md`, the repository banner and the GUI/mobile portability direction introduced in build 6.
+
+## v0.2.0 build 6 - 2026-09-07
+
+Development build. Not a final v0.2.0 release.
+
+### First bounded composed affine geometry
+
+- Kept format v3 bit-for-bit unchanged and extended only the decoder geometry layer.
+- Added an experimental composed path for anisotropic X/Y scaling followed by arbitrary digital rotation.
+- Avoided the full angle x affine Cartesian product: at most two rotation peaks are retained, each is quantized to 0.25 degrees and refined only within +/-2 degrees, then combined with four fixed anisotropic scale pairs (110%x90%, 90%x110%, 105%x95%, 95%x105%).
+- Capped the new stage at 136 composed matrix probes. Only the six strongest candidates survive geometric ranking and each contributes at most three full-carrier phase aggregates, for at most 18 authenticated composed probes.
+- HMAC-authenticated v3 decoding remains the sole success criterion.
+- `ExtractInfo` and CLI output can report rotation and anisotropic scale correction together when the composed path succeeds.
+- Kept the first claimed composition deliberately narrow: the validated regression baseline is `robust`, 110%x90% -> 12.3-degree rotation. Balanced/capacity, 90%x110%, broader angle envelopes, the reverse edit order and rotation+shear remain research tasks.
+
+### Composition regression suite
+
+- Added `make composition-test`, intentionally outside `make all`, plus `STRICT=1 make composition-test`.
+- The default suite uses only `original pics/`, generates transformed carriers in a temporary directory and validates the currently claimed robust baseline with ImageMagick.
+- A temporary generated 900x700 development carrier passed the default composition case with authenticated recovery and reported both rotation and scale corrections.
+
+### Project documentation
+
+- Added `HISTORY.md` for architectural/build history and `TODO.md` for the live engineering roadmap.
+- Added the PixSeal project banner under `docs/assets/` and displayed it at the top of the README.
+- Updated README, algorithm notes, results notes, version metadata and test instructions for build 6.
+- Kept the reusable `watermark` core free of CLI/UI dependencies and added `make core-target-check` to compile-check it for Linux, Windows, Android/arm64 and iOS/arm64 in preparation for future Windows/Linux/Android graphical frontends.
+
+### Performance notes
+
+- Tightened the reference arbitrary-rotation contrast gate after a regression test found weak rotation candidates on an unmarked synthetic image; authenticated behavior was already safe, but the stronger fast-reject gate avoids unnecessary geometry work.
+- Same-machine spot checks remained close to build 5 for ordinary negative inputs: an unmarked 900x700 image completed in about 6.2 s and an aligned carrier with a wrong key in about 10.0 s.
+- The generated robust 110%x90% -> 12.3-degree rotation case recovered in about 8-9 s in this environment; the same transformed carrier with a wrong key completed in about 8.7 s. These are engineering observations, not guarantees.
+
 ## v0.2.0 build 5 - 2026-09-07
 
 Development build. Not a final v0.2.0 release.

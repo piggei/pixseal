@@ -27,9 +27,13 @@ GEOMETRY_COMBINED_MODES ?= rotate-resize75 resize75-rotate rotate-crop80 crop80-
 GEOMETRY_MAX_MPIX ?= 50
 AFFINE_MODES ?= scale110x90 scale90x110 shearx8 sheary8
 AFFINE_MAX_MPIX ?= 50
+COMPOSITION_PROFILES ?= robust
+COMPOSITION_ANGLES ?= 12.3
+COMPOSITION_MODES ?= scale110x90-rotate
+COMPOSITION_MAX_MPIX ?= 50
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test all build-all clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test all build-all core-target-check clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -162,6 +166,21 @@ affine-test: build
 	STRICT="$(STRICT)" \
 	bash ./scripts/test-affine.sh
 
+# Experimental composed geometry suite; intentionally excluded from make all.
+composition-test: build
+	@echo "Running composed anisotropic-scale + rotation tests..."
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
+	TEST_KEY="$(TEST_KEY)" \
+	TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	COMPOSITION_PROFILES="$(COMPOSITION_PROFILES)" \
+	COMPOSITION_ANGLES="$(COMPOSITION_ANGLES)" \
+	COMPOSITION_MODES="$(COMPOSITION_MODES)" \
+	COMPOSITION_MAX_MPIX="$(COMPOSITION_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
+	STRICT="$(STRICT)" \
+	bash ./scripts/test-composition.sh
+
 # Run build + local round-trip tests + baseline transformation tests.
 all: test deep-test
 	@echo "Complete local test suite finished."
@@ -174,6 +193,16 @@ build-all:
 	@GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o dist/pixseal-macos-amd64 ./cmd/pixseal
 	@GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags="-s -w" -o dist/pixseal-macos-arm64 ./cmd/pixseal
 	@echo "Created cross-platform binaries in dist/"
+
+# Compile the reusable steganography core for representative future frontend targets.
+# This creates no distributable binaries; it is an architectural portability check.
+core-target-check:
+	@echo "Checking reusable core on desktop/mobile targets..."
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build ./watermark
+	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./watermark
+	@CGO_ENABLED=0 GOOS=android GOARCH=arm64 go build ./watermark
+	@CGO_ENABLED=0 GOOS=ios GOARCH=arm64 go build ./watermark
+	@echo "Core target checks passed: linux/amd64, windows/amd64, android/arm64, ios/arm64"
 
 clean:
 	@rm -rf -- dist

@@ -5,6 +5,205 @@ results** and **corpus-specific experimental measurements**. None of the results
 below proves statistical steganographic undetectability or guarantees recovery
 for unseen images.
 
+## v0.2.0 build 7 validation status
+
+Development build: **v0.2.0 build 7**, 8 September 2026.
+
+Build 7 keeps format v3 unchanged and replaces the build-6 rotation-first
+composition heuristic with direct scoring of the repeated v3 DCT lattice. The
+promoted composed baseline remains intentionally narrow: `robust`, 110%x90%
+anisotropic scale followed by arbitrary digital rotation.
+
+### Why the estimator changed
+
+PJ tested build 6 against two private real photographs using the default
+`make composition-test` transform. The results were:
+
+```text
+private carrier A: TIMEOUT (>60 s)
+private carrier B: FAIL
+```
+
+The generated development carrier had passed, so these results exposed an
+overfitting/generalization problem rather than a simple implementation error.
+Instrumentation showed that the correct 110%x90% + 12.3-degree matrix had strong
+tile coherence even when the standalone rotation estimator either found no useful
+peak or selected a texture-driven peak far from the true orientation.
+
+### Deterministic direct-lattice search bounds
+
+The build-7 baseline search is fixed in source:
+
+```text
+1 scale pair: 110%x90%
+361 angles: -45..+45 degrees at 0.25-degree spacing
+361 sparse lattice probes maximum
+
+20 deterministic logical tile samples per sparse probe
+16 candidates receive stronger coherence analysis maximum
+4 candidates retained for authenticated aggregation maximum
+3 phases per retained candidate maximum
+12 full-carrier authenticated probes maximum
+```
+
+The sparse and coherence scores are geometric ranking signals only. CRC32 and
+HMAC-SHA256 authentication of the v3 frame remain required for success.
+
+### Private real-corpus regression
+
+The two photographs that exposed build 6 were used only as local regression
+inputs and are not part of the repository or source archive. With the same
+ImageMagick pipeline used by `composition-test`:
+
+```text
+embed robust payload
+resize 110%x90%
+rotate 12.3 degrees on a white expanded canvas
+extract
+```
+
+build 7 produced:
+
+```text
+2 passed
+0 failed
+0 timeouts
+0 skipped
+0 errors
+```
+
+Both extractions reported approximately:
+
+```text
+rotation-correction: -12.25 degrees
+scale-correction: x=0.9091 y=1.1111
+```
+
+Same-machine CLI spot checks on the already transformed carriers completed in
+approximately **5.5 s** and **3.0 s**. These are engineering measurements only;
+they are not latency guarantees on other images or systems.
+
+With a wrong key, the same transformed carriers completed in approximately
+**5.4 s** and **2.9 s**. Build 7 treats strong direct-lattice coherence followed
+by failed HMAC as a bounded authentication failure and does not continue into
+unrelated rotation/resize searches. Unmarked-image cost remains image-dependent;
+on the larger private original it remained about 27 s, essentially unchanged from
+build 6, while the smaller private original completed in about 6 s.
+
+### Validation boundary
+
+Build 7 does not promote balanced/capacity composed recovery, 90%x110%,
+105%x95%, 95%x105%, the reverse transform order, rotation+shear, arbitrary affine
+matrices, perspective or print-camera recovery. Those remain explicit research
+tasks in `TODO.md`.
+
+### Build-7 source validation in this environment
+
+The following checks completed successfully after the direct-lattice integration:
+
+```text
+gofmt                                      PASS
+go vet ./...                               PASS
+go test -count=1 ./cmd/pixseal             PASS
+profile/frame/resize/quarter-turn tests     PASS
+arbitrary-rotation tests                    PASS
+rotation+resize/crop tests                  PASS
+direct-lattice composition unit test        PASS
+axis-aligned affine scale tests             PASS
+wrong-key/unmarked bounded unit tests       PASS
+shell syntax checks                         PASS
+make                                        PASS
+make build-all                              PASS
+make core-target-check                      PASS
+STRICT=1 make composition-test (2 private)  2/2 PASS
+```
+
+The monolithic uncached `go test ./watermark` / `go test ./...` invocation did not
+complete within the execution window of this environment even though the same
+test groups pass when run separately. It must therefore be rerun on PJ's Linux
+system and is **not** marked as passed here. The complete private `original pics/`
+corpus is also not available in this environment; only the two regression images
+supplied for the build-6 failure were used locally and neither is distributed.
+
+## v0.2.0 build 6 validation status
+
+Development build: **v0.2.0 build 6**, 7 September 2026.
+
+Build 6 keeps format v3 unchanged and adds the first bounded composition of
+anisotropic scale and arbitrary rotation. The claimed baseline is intentionally
+narrow and currently validated only for the `robust` profile.
+
+### Deterministic composed-search bounds
+
+```text
+2 retained rotation peaks maximum
+17 quarter-degree refinements per peak (+/-2 degrees)
+4 anisotropic scale pairs
+136 composed matrix probes maximum
+
+6 composed matrices retained maximum
+3 phases per retained matrix maximum
+18 full-carrier authenticated composed probes maximum
+```
+
+The new stage is not the full angle x 36-affine-matrix Cartesian product. HMAC
+authentication remains the only condition for a recovered message.
+
+### ImageMagick composed regression
+
+A temporary generated 900x700 carrier was embedded with the `robust` profile,
+resized anisotropically to 110%x90%, then rotated by 12.3 degrees using
+ImageMagick. The compiled build-6 CLI recovered the authenticated message and
+reported:
+
+```text
+rotation-correction: approximately -12.25 degrees
+scale-correction: x=0.9091 y=1.1111
+```
+
+The new `STRICT=1 make composition-test` target completed the default generated
+case with **1 passed, 0 failed, 0 timeouts, 0 errors**. This validates the first
+composed path and its shell harness; it is not a guarantee for arbitrary images,
+angles or affine matrices.
+
+### Performance spot checks
+
+Same-machine development observations on the generated 900x700 carrier:
+
+```text
+unmarked image                         ~6.2 s
+aligned carrier, wrong key            ~10.0 s
+110%x90% -> 12.3deg, valid robust      ~8-9 s
+110%x90% -> 12.3deg, wrong key         ~8.7 s
+```
+
+These values are engineering spot checks only. The important property is that the
+new composed stage has a fixed search budget and does not multiply all rotation
+angles by the full affine hypothesis set. During final build-6 regression testing,
+the key-independent rotation probe was also tightened after an unmarked synthetic
+image generated weak non-authenticating candidates; the dedicated fast-reject test
+now passes while the existing arbitrary-rotation and combined-geometry tests remain
+passing.
+
+### Current validation boundary
+
+Build 6 does **not** claim balanced/capacity recovery for the composed path,
+90%x110% in combination with rotation, the reverse transform order, rotation +
+shear, projective/perspective recovery or print-camera recovery. These remain in
+`TODO.md` and must not be inferred from the single development baseline above.
+
+Final build-6 source checks in this environment passed `gofmt`, `go vet ./...`,
+`go test -count=1 ./cmd/pixseal`, the full uncached `go test -count=1 ./watermark`
+package (about 57 s), shell syntax checks, native/cross-platform CLI builds and
+`make core-target-check` for Linux/Windows/Android/arm64/iOS/arm64. The aggregate
+`go test -count=1 ./...` invocation exceeded the 90-second command window here when
+Go ran packages concurrently, even though the same packages pass separately; it
+must therefore be rerun on PJ's Linux system rather than marked as passed here.
+
+The private `original pics/` corpus is not present in this environment. PJ should
+run the full local suite, including `STRICT=1 make composition-test`, before the
+next release candidate.
+
 ## v0.2.0 build 5 validation status
 
 Development build: **v0.2.0 build 5**, 7 September 2026.

@@ -521,6 +521,48 @@ func TestV3CombinedGeometryRecovery(t *testing.T) {
 	}
 }
 
+func TestV3DirectLatticeCompositionRecovery(t *testing.T) {
+	key := []byte("direct lattice composition key")
+	message := []byte("direct lattice")
+	options := DefaultOptions()
+	options.Profile = ProfileRobust
+	marked, err := Embed(testImage(700, 600), message, key, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scaled := resizeBilinear(marked,
+		int(math.Round(float64(marked.Bounds().Dx())*1.10)),
+		int(math.Round(float64(marked.Bounds().Dy())*0.90)))
+	transformed := rotateBilinearForTest(scaled, 12.3)
+
+	got, info, err := ExtractWithInfo(transformed, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, message) || info.Profile != ProfileRobust {
+		t.Fatalf("direct-lattice composition got payload=%q profile=%s", got, info.Profile)
+	}
+	if math.Abs(normalizeDegrees(info.RotationCorrectionDegrees+12.3)) > 0.20 {
+		t.Fatalf("rotation correction %.2f, want approximately -12.3", info.RotationCorrectionDegrees)
+	}
+	if math.Abs(info.ScaleXCorrection-1/1.10) > 0.001 || math.Abs(info.ScaleYCorrection-1/0.90) > 0.001 {
+		t.Fatalf("scale correction x=%.4f y=%.4f", info.ScaleXCorrection, info.ScaleYCorrection)
+	}
+}
+
+func TestDirectLatticeCompositionSearchIsFixed(t *testing.T) {
+	if directLatticeScale != [2]float64{1.10, 0.90} {
+		t.Fatalf("direct lattice baseline=%v, want [1.10 0.90]", directLatticeScale)
+	}
+	count := 0
+	for angle := -45.0; angle <= 45.000001; angle += 0.25 {
+		count++
+	}
+	if count != 361 {
+		t.Fatalf("direct lattice angle probe count=%d, want 361", count)
+	}
+}
+
 func TestRotationProbeRejectsUnmarkedSyntheticImage(t *testing.T) {
 	if candidates := detectRotationCandidates(newPixelPlane(testImage(400, 360))); len(candidates) != 0 {
 		t.Fatalf("unmarked image produced rotation candidates: %+v", candidates)

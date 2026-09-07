@@ -65,6 +65,35 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 		}
 	}
 
+	// Build 7 promotes the real-corpus composition regression to a direct lattice
+	// search before orientation-specific heuristics. This stage is intentionally
+	// narrow (110%x90% followed by arbitrary rotation) and dimension-independent:
+	// it scores the repeated v3 DCT lattice itself rather than trusting an angle
+	// estimate that anisotropic scaling may distort. Native coherent carriers skip
+	// it, preserving the cheap wrong-key path.
+	directLatticeEvidence := latticeCandidate{}
+	if nativeRepetitionCoherence(sourcePlane) < 0.82 {
+		payload, info, candidate, ok := searchV3DirectLatticeComposition(sourcePlane, decoder)
+		directLatticeEvidence = candidate
+		if ok {
+			info.RotationCorrectionDegrees = normalizeDegrees(-candidate.angle)
+			info.ScaleXCorrection = 1 / candidate.scaleX
+			info.ScaleYCorrection = 1 / candidate.scaleY
+			return payload, info, nil
+		}
+	}
+
+	// Preserve the build-5 axis-aligned affine fast path before arbitrary-angle
+	// probing when the DCT lattice still has a strong zero-degree signature. This
+	// distinguishes pure anisotropic scale/shear from composed geometry and avoids
+	// letting an affine-distorted carrier masquerade as a rotation candidate.
+	if hasStrongZeroDegreeLattice(sourcePlane) && nativeRepetitionCoherence(sourcePlane) < 0.82 {
+		if payload, info, candidate, ok := searchV3AxisAlignedAffine(sourcePlane, decoder); ok {
+			applyAffineCorrectionInfo(&info, candidate)
+			return payload, info, nil
+		}
+	}
+
 	// Arbitrary-angle recovery is a bounded two-stage search. First estimate
 	// lattice orientation with sparse DCT probes. Only high-contrast candidates
 	// are rectified and passed to the normal authenticated decoder. The angle
@@ -88,22 +117,23 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 		}
 	}
 
-	// Build 5 adds a separate, bounded axis-aligned affine stage. It is kept
-	// independent from arbitrary rotation on purpose: first validate anisotropic
-	// scale/shear reconstruction without multiplying the angle search space.
+	// Axis-aligned affine recovery remains available independently when no strong
+	// rotation is present.
 	if len(rotationCandidates) == 0 || rotationCandidateQuality(rotationCandidates[0]) < 25 {
 		if payload, info, candidate, ok := searchV3AxisAlignedAffine(sourcePlane, decoder); ok {
-			switch candidate.kind {
-			case affineScaleXY:
-				info.ScaleXCorrection = 1 / candidate.parameter
-				info.ScaleYCorrection = 1 / candidate.parameter2
-			case affineShearX:
-				info.ShearXCorrection = -candidate.parameter
-			case affineShearY:
-				info.ShearYCorrection = -candidate.parameter
-			}
+			applyAffineCorrectionInfo(&info, candidate)
 			return payload, info, nil
 		}
+	}
+
+	// If direct lattice estimation found a decisive composed-geometry peak but
+	// authentication failed, we have now also given the established axis-aligned
+	// affine and rotation paths a chance to recover legitimate alternate geometry.
+	// Do not continue into the expensive pure-resize normalization cascade: this
+	// is the bounded wrong-key/damaged-payload exit for the build-7 composition
+	// baseline.
+	if directLatticeEvidence.decisive {
+		return nil, ExtractInfo{}, errors.New("v3 hidden payload not found or key is incorrect")
 	}
 
 	// A very strong non-zero lattice peak means the geometry was identified but
@@ -161,6 +191,18 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 		}
 	}
 	return nil, ExtractInfo{}, errors.New("v3 hidden payload not found or key is incorrect")
+}
+
+func applyAffineCorrectionInfo(info *ExtractInfo, candidate affineCandidate) {
+	switch candidate.kind {
+	case affineScaleXY:
+		info.ScaleXCorrection = 1 / candidate.parameter
+		info.ScaleYCorrection = 1 / candidate.parameter2
+	case affineShearX:
+		info.ShearXCorrection = -candidate.parameter
+	case affineShearY:
+		info.ShearYCorrection = -candidate.parameter
+	}
 }
 
 func searchV3(src *pixelPlane, decoder *decoder, sizes []int) ([]byte, ExtractInfo, int, bool) {

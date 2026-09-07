@@ -1,8 +1,8 @@
 # PixSeal algorithm specification
 
 This document describes the adaptive **format v3** used by PixSeal
-v0.2.0 build 5. Runtime extraction is intentionally v3-only; formats v1 and v2
-are retained only as historical development context. Builds 3 through 5 add
+v0.2.0 build 7. Runtime extraction is intentionally v3-only; formats v1 and v2
+are retained only as historical development context. Builds 3 through 7 add
 bounded geometric recovery around the unchanged v3 on-image format.
 
 PixSeal is an experimental robust image-steganography system for short
@@ -286,7 +286,7 @@ Adaptive profile detection does **not** add another geometric search dimension.
 Each expensive grid aggregation is performed once and then scored against the
 three fixed v3 profile patterns.
 
-Build 5 retains the explicitly bounded rotation stage for the native 8-pixel
+Build 7 retains the explicitly bounded rotation stage for the native 8-pixel
 lattice and the 6-pixel lattice produced by a 75% resize, and adds a separate
 bounded axis-aligned affine stage. None of these decoder additions changes the
 on-image format.
@@ -497,7 +497,65 @@ shear X 8 degrees and shear Y 8 degrees across all three profiles. These are
 measured regression cases, not continuous guarantees over the complete +/-10%
 or +/-10-degree hypothesis range.
 
-### 10.6 Pure-resize inverse normalization
+### 10.6 Direct lattice estimation for composed scale + rotation
+
+Build 7 replaces the build-6 rotation-first composition heuristic while leaving
+the v3 on-image format unchanged. The claimed edit order remains deliberately
+narrow:
+
+```text
+anisotropic X/Y scale -> arbitrary rotation
+```
+
+Build 6 first tried to estimate rotation independently and then combine two
+rotation peaks with discrete anisotropic scales. Real-corpus testing showed that
+this decomposition is not reliable: anisotropic scale can move the apparent
+orientation peak enough that the correct composed matrix is never considered.
+
+Build 7 therefore evaluates the repeated **v3 DCT lattice directly** under the
+composed transform. For the currently promoted baseline, the forward matrix is
+`R * S` with `S = diag(1.10, 0.90)`. Angle is searched directly from -45 to +45
+degrees in 0.25-degree increments.
+
+The sparse first-stage score uses 20 deterministic logical tile positions. For
+each candidate matrix, it compares the sign of the DCT coefficient-difference
+signal in adjacent repeated tiles. Pixel phase is searched on a 4x4 even grid and
+refined locally by one pixel. The score is key-independent and only ranks
+geometry.
+
+The deterministic search budget is:
+
+```text
+1 anisotropic scale pair
+361 quarter-degree angles
+= 361 sparse composed-lattice probes maximum
+
+16 candidates receive stronger periodicity measurement maximum
+4 candidates retained for authenticated aggregation maximum
+3 pixel phases per retained candidate maximum
+= 12 full-carrier authenticated composed probes maximum
+```
+
+The stronger stage reuses the build-5 virtual affine sampler and repetition
+coherence. It is intentionally performed only on the small shortlist produced by
+the sparse stage.
+
+The final v3 HMAC remains the sole success criterion. On success, extraction
+reports both the inverse rotation correction and inverse X/Y scale correction.
+
+This build intentionally does **not** claim general rotation+affine recovery. The
+validated development baseline is the `robust` profile under 110%x90% scaling
+followed by a 12.3-degree rotation. Balanced/capacity profiles, the 90%x110% and
+smaller anisotropy cases, broader angle envelopes, the reverse order
+`rotation -> anisotropic scale`, and rotation combined with shear remain open
+research items.
+
+The next intended generalization is not a larger Cartesian table of angle/scale
+values. The preferred direction is to estimate the transformed horizontal and
+vertical lattice basis vectors directly, which naturally leads from affine
+geometry toward projective/homography recovery.
+
+### 10.7 Pure-resize inverse normalization
 
 If direct and rotation recovery fail, the original pure-resize path bicubically
 reconstructs the image toward the nominal original dimensions for these scale
@@ -608,7 +666,7 @@ at a bounded set of sample anchors (approximately no more than 256x256 anchors).
 Large images are sampled sparsely, but each gradient remains a one-pixel local
 difference.
 
-Build 5 retains the mean absolute luminance-gradient score introduced in build 1:
+Build 7 retains the mean absolute luminance-gradient score introduced in build 1:
 
 ```text
 score < 4      -> low detail    -> recommended strength 20
@@ -644,17 +702,21 @@ Sensitive messages should be encrypted separately before embedding.
 
 ## 15. Current unsupported geometry and direction
 
-Build 5 retains experimental recovery for digital rotation plus the first combined
+Build 7 retains experimental recovery for digital rotation plus the first combined
 75%-resize/crop baseline. It does not yet synchronize:
 
 - arbitrary-angle + 50% resize at default strength;
 - arbitrary fractional scales beyond the detected 75% lattice;
-- arbitrary rotation composed with anisotropic scale/shear;
+- arbitrary rotation composed with anisotropic scale outside the deliberately
+  narrow build-7 `robust` 110%x90% -> rotation baseline;
+- arbitrary rotation composed with X/Y shear;
 - affine transforms outside the discrete build-5 scale/shear hypotheses;
 - perspective transforms;
 - print-camera distortion.
 
-The next research step is composition of the bounded rotation and affine models, followed by perspective correction.
+The next research step is to generalize direct lattice estimation across more
+anisotropic cases/profiles and infer transformed lattice basis vectors directly,
+followed by bounded projective/perspective correction.
 The intended approach remains staged, bounded synchronization and geometric
 rectification rather than multiplying open-ended brute-force dimensions.
 
