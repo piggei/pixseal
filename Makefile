@@ -6,14 +6,21 @@ PIXSEAL := dist/pixseal
 ORIGINAL_PICS_DIR := original pics
 TEST_KEY ?= pixseal-test-key
 TEST_MESSAGE ?= PixSeal image test
-ROBUST_RESIZES ?= 75 50
-ROBUST_CROPS ?= 90 75
+ROBUST_RESIZES ?= 95 85 75 65 55 50
+ROBUST_CROPS ?= 90 75 50
+RANDOM_CROPS ?= 75 50
+RANDOM_CROP_COUNT ?= 1
+RANDOM_SEED ?= 20260907
 JPEG_QUALITY ?= 82
 ROBUST_MAX_MPIX ?= 100
+EXTRACT_TIMEOUT ?= 60
 STRICT ?= 0
+LIMIT_START ?= 95
+LIMIT_MIN ?= 10
+LIMIT_STEP ?= 5
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test all build-all clean
+.PHONY: build test test-unit test-images deep-test extreme-test all build-all clean
 
 # Default target: build the native Linux executable only.
 build: $(PIXSEAL)
@@ -69,10 +76,29 @@ deep-test: build
 	TEST_MESSAGE="$(TEST_MESSAGE)" \
 	ROBUST_RESIZES="$(ROBUST_RESIZES)" \
 	ROBUST_CROPS="$(ROBUST_CROPS)" \
+	RANDOM_CROPS="$(RANDOM_CROPS)" \
+	RANDOM_CROP_COUNT="$(RANDOM_CROP_COUNT)" \
+	RANDOM_SEED="$(RANDOM_SEED)" \
 	JPEG_QUALITY="$(JPEG_QUALITY)" \
 	ROBUST_MAX_MPIX="$(ROBUST_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
 	STRICT="$(STRICT)" \
 	bash ./scripts/test-robustness.sh
+
+# Explore resize and crop limits; intentionally excluded from make all.
+extreme-test: build
+	@echo "Running progressive limit tests..."
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
+	TEST_KEY="$(TEST_KEY)" \
+	TEST_MESSAGE="$(TEST_MESSAGE)" \
+	ROBUST_MAX_MPIX="$(ROBUST_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
+	LIMIT_START="$(LIMIT_START)" \
+	LIMIT_MIN="$(LIMIT_MIN)" \
+	LIMIT_STEP="$(LIMIT_STEP)" \
+	RANDOM_SEED="$(RANDOM_SEED)" \
+	bash ./scripts/test-limits.sh
 
 # Build, run the simple tests, then run the advanced transformation tests.
 all: test deep-test

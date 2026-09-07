@@ -33,18 +33,18 @@ Embed options:
   -out FILE          Output PNG (required)
   -key TEXT          Secret key, minimum 8 bytes (required)
   -message TEXT      Message to embed (required)
-  -repetition N      Odd repetition count, 1 to 31 (default 5)
-  -strength N        DCT embedding strength, 4 to 120 (default 34)
+  -repetition N      Legacy v1 repetition setting (default 5)
+  -strength N        DCT embedding strength, 4 to 120 (default 24)
 
 Extract options:
   -in FILE           Marked JPEG or PNG (required)
   -key TEXT          Secret key, minimum 8 bytes (required)
-  -repetition N      Same value used by embed (default 5)
-  -strength N        Accepted for compatibility (default 34)
+  -repetition N      Legacy v1 repetition setting (default 5)
+  -strength N        Accepted for compatibility (default 24)
 
 Capacity options:
   -in FILE           Input JPEG or PNG (required)
-  -repetition N      Odd repetition count, 1 to 31 (default 5)
+  -repetition N      Legacy option, ignored for v2 capacity
 
 Run "pixseal <command> -help" to show the options for a command.
 
@@ -124,8 +124,8 @@ func pngOutputPath(path string) string {
 
 func common(fs *flag.FlagSet) (*string, *int, *float64) {
 	key := fs.String("key", "", "secret key (required, minimum 8 bytes)")
-	repetition := fs.Int("repetition", 5, "odd repetition count from 1 to 31")
-	strength := fs.Float64("strength", 34, "DCT embedding strength from 4 to 120")
+	repetition := fs.Int("repetition", 5, "legacy v1 repetition count (odd, 1 to 31)")
+	strength := fs.Float64("strength", 24, "DCT embedding strength from 4 to 120")
 	return key, repetition, strength
 }
 
@@ -211,7 +211,7 @@ func extract(args []string) error {
 func capacity(args []string) error {
 	fs := newFlagSet("capacity", "Show usable payload capacity in bytes.")
 	in := fs.String("in", "", "input JPEG or PNG file (required)")
-	repetition := fs.Int("repetition", 5, "odd repetition count from 1 to 31")
+	repetition := fs.Int("repetition", 5, "legacy v1 repetition count (ignored for v2 capacity)")
 
 	if err := fs.Parse(args); err != nil {
 		return err
