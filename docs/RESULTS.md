@@ -1053,3 +1053,17 @@ elapsed extraction time when relevant
 the bounded search completed without an authenticated payload. `TIMEOUT` is an
 inconclusive harness result. `SKIP` means a configured test or decoder size bound
 prevented the candidate from being attempted.
+
+
+## v0.2.0 build 10 regression recovery
+
+Build 10 was driven by the build-9 `all-test` report rather than by a new geometry feature. On the private 800x757 LQ carrier, robust and balanced recover 95/85/75/65/55/50% pure resize again; capacity recovers through 55%. Capacity at 50% remains a known carrier/profile limit also reproduced with build 5.
+
+The private 16320x12288 (~201 MP) HQ PNG is above the 50 MP geometry-suite limit. Geometry, affine, composition and lattice scripts now identify its dimensions through PNG IHDR fallback and report policy SKIPs rather than dimension-read errors. The image itself is not distributed.
+
+These observations are experimental results on the private corpus, not recovery guarantees.
+
+
+## v0.2.0 build 11 perspective experiment
+
+Using ImageMagick-generated fixed-canvas perspective warps on the private real-image corpus, the build-11 two-hypothesis vertical-keystone decoder recovered 4/4 tested robust-profile cases across the LQ and MQ carriers (top edge narrowed by 4%, bottom edge narrowed by 4%). The ~201 MP HQ carrier was intentionally skipped by the 50 MP geometry-suite limit. These results are experimental and do not imply general print-camera or arbitrary-perspective robustness.

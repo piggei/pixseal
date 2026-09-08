@@ -34,12 +34,14 @@ COMPOSITION_MAX_MPIX ?= 50
 LATTICE_ANGLES ?= 12.3
 LATTICE_MODES ?= scale110x90-rotate scale90x110-rotate scale105x95-rotate scale95x105-rotate
 LATTICE_MAX_MPIX ?= 50
+PERSPECTIVE_MODES ?= top-narrow-4 bottom-narrow-4
+PERSPECTIVE_MAX_MPIX ?= 50
 ALL_TEST_REPORT ?=
 ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test all-test all build-all core-target-check vet clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test all build-all core-target-check vet clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -200,6 +202,15 @@ lattice-test: build
 	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
 	STRICT="$(STRICT)" \
 	bash ./scripts/test-lattice.sh
+
+# Experimental mild projective/keystone suite; intentionally excluded from make all.
+perspective-test: build
+	@echo "Running mild perspective tests..."
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
+	TEST_KEY="$(TEST_KEY)" TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	PERSPECTIVE_MODES="$(PERSPECTIVE_MODES)" PERSPECTIVE_MAX_MPIX="$(PERSPECTIVE_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" STRICT="$(STRICT)" bash ./scripts/test-perspective.sh
 
 # Run every test/check target sequentially, continue after individual failures,
 # and print one comparable summary at the end. Experimental suites are forced

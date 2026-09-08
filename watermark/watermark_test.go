@@ -2,6 +2,8 @@ package watermark
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"fmt"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -24,6 +26,42 @@ func testImage(width, height int) *image.NRGBA {
 		}
 	}
 	return img
+}
+
+func TestV3EncoderGoldenFingerprint(t *testing.T) {
+	key := []byte("encoder golden key")
+	message := []byte("golden-v3")
+	expected := map[Profile]string{
+		ProfileRobust:   "f78b3f97824780cbbd2a303d25b0d36c94f845cdd8213291fc76b263f14a08bb",
+		ProfileBalanced: "9b548bd4da9befab4d4ab97fb0d2fe758d79cd0c7ef30c0c32079f8c03874029",
+		ProfileCapacity: "cdf7007a900c05247b532e327b549607cdb7e8c2d677c71b46481b835edfc577",
+	}
+	for _, profile := range []Profile{ProfileRobust, ProfileBalanced, ProfileCapacity} {
+		t.Run(string(profile), func(t *testing.T) {
+			options := DefaultOptions()
+			options.Profile = profile
+			marked, err := Embed(testImage(560, 512), message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := sha256.Sum256(marked.Pix)
+			if hex := fmt.Sprintf("%x", got); hex != expected[profile] {
+				t.Fatalf("encoder fingerprint changed for %s: got %s, want %s", profile, hex, expected[profile])
+			}
+		})
+	}
+}
+
+func TestIsotropicScaleSearchIsFixed(t *testing.T) {
+	want := []int{95, 90, 85, 80, 70, 65, 60, 55, 45, 40, 35, 30, 25}
+	if len(normalizedScales) != len(want) {
+		t.Fatalf("isotropic scale search has %d candidates, want %d", len(normalizedScales), len(want))
+	}
+	for i, value := range want {
+		if normalizedScales[i] != value {
+			t.Fatalf("isotropic scale candidate %d = %d, want %d", i, normalizedScales[i], value)
+		}
+	}
 }
 
 func TestHammingCorrectsSingleBit(t *testing.T) {
@@ -566,7 +604,7 @@ func TestV3DirectLatticeBasisRecovery(t *testing.T) {
 
 func TestDirectLatticeBasisSearchIsFixed(t *testing.T) {
 	if len(latticeBasisShapes) != 4 {
-		t.Fatalf("lattice basis shape count=%d, want 4", len(latticeBasisShapes))
+		t.Fatalf("lattice basis shape count=%d, want 2", len(latticeBasisShapes))
 	}
 	if latticeBasisShapes[0].scaleX != 1.10 || latticeBasisShapes[0].scaleY != 0.90 ||
 		latticeBasisShapes[1].scaleX != 0.90 || latticeBasisShapes[1].scaleY != 1.10 ||
@@ -727,5 +765,11 @@ func TestAxisAlignedAffineSearchIsFixed(t *testing.T) {
 	hypotheses := axisAlignedAffineHypotheses()
 	if len(hypotheses) != 36 {
 		t.Fatalf("affine hypothesis count=%d, want 36", len(hypotheses))
+	}
+}
+
+func TestBuild11PerspectiveHypothesisBound(t *testing.T) {
+	if got := len(projectiveHypotheses); got != 2 {
+		t.Fatalf("perspective hypothesis count = %d, want 2", got)
 	}
 }

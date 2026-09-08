@@ -815,6 +815,143 @@ func quarterTurnRepetitionCoherence(src *pixelPlane) float64 {
 // virtual affine sampler. No corrected full-resolution image is materialized.
 // Repetition coherence gates the expensive path and ranks matrices without using
 // the key. Authentication remains the sole acceptance criterion.
+
+// isotropicScaleCandidate describes a pure, axis-aligned resize hypothesis. It
+// uses the same virtual affine sampler as the affine decoder, so no normalized
+// full-resolution bitmap needs to be materialized merely to test a scale.
+type isotropicScaleCandidate struct {
+	percent   int
+	scale     float64
+	matrix    linearTransform
+	coherence float64
+	contrast  float64
+	phases    []point
+	score     int
+	decisive  bool
+}
+
+// searchV3IsotropicScale restores the historical fractional-resize baseline
+// before more speculative rotation/lattice heuristics. Candidate scales are the
+// same fixed percentages used by the original inverse-normalization path.
+//
+// The search is bounded:
+//   - 13 fixed isotropic scale hypotheses;
+//   - at most three phase probes per hypothesis;
+//   - at most six full-carrier virtual aggregations.
+//
+// Repetition coherence ranks candidates without the key. Authentication remains
+// the sole success criterion. This path intentionally excludes 100/75/50%,
+// which are already covered by direct integer block sizes 8/6/4.
+func searchV3IsotropicScale(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, isotropicScaleCandidate, bool) {
+	const fullShortlistMax = 6
+
+	if nativeRepetitionCoherence(src) >= 0.82 {
+		return nil, ExtractInfo{}, isotropicScaleCandidate{}, false
+	}
+
+	candidates := make([]isotropicScaleCandidate, 0, len(normalizedScales))
+	for _, percent := range normalizedScales {
+		scale := float64(percent) / 100.0
+		candidate := affineCandidate{
+			kind:       affineScaleXY,
+			parameter:  scale,
+			parameter2: scale,
+			matrix:     linearTransform{a: scale, d: scale},
+			blockSize:  blockSize,
+		}
+		probe := probeAffineMatrixDetailed(src, candidate.matrix, blockSize)
+		coherence, phases := bestAffineCoherence(src, candidate, probe)
+		if len(phases) == 0 {
+			continue
+		}
+		entry := isotropicScaleCandidate{
+			percent:   percent,
+			scale:     scale,
+			matrix:    candidate.matrix,
+			coherence: coherence,
+			contrast:  probe.contrast,
+			phases:    phases,
+		}
+
+		// A single-tile authenticated hit is a cheap positive fast path. Even when
+		// it does not authenticate, preserve the best sync score as a secondary
+		// ranking signal for phase-sensitive carriers.
+		for _, phase := range phases {
+			grid, ok := aggregateAffineTile(src, candidate.matrix, blockSize, phase)
+			if !ok {
+				continue
+			}
+			payload, info, score, found := decoder.decodeGrid(grid)
+			if score > entry.score {
+				entry.score = score
+			}
+			if found {
+				return payload, info, entry, true
+			}
+		}
+		candidates = append(candidates, entry)
+	}
+
+	if len(candidates) == 0 {
+		return nil, ExtractInfo{}, isotropicScaleCandidate{}, false
+	}
+
+	// Repetition is the primary geometry signal; authenticated-header sync score
+	// breaks ties and helps when resampling weakens periodicity.
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].coherence == candidates[j].coherence {
+			if candidates[i].score == candidates[j].score {
+				return candidates[i].contrast > candidates[j].contrast
+			}
+			return candidates[i].score > candidates[j].score
+		}
+		return candidates[i].coherence > candidates[j].coherence
+	})
+
+	bestEvidence := candidates[0]
+	second := 0.0
+	if len(candidates) > 1 {
+		second = candidates[1].coherence
+	}
+	bestEvidence.decisive = bestEvidence.coherence >= 0.88 ||
+		(bestEvidence.coherence >= 0.78 && bestEvidence.score >= 800) ||
+		(bestEvidence.coherence >= 0.74 && bestEvidence.coherence-second >= 0.08)
+
+	if len(candidates) > fullShortlistMax {
+		candidates = candidates[:fullShortlistMax]
+	}
+	for i := range candidates {
+		entry := &candidates[i]
+		for _, phase := range entry.phases {
+			grid, ok := aggregateAffineGrid(src, entry.matrix, blockSize, phase.x, phase.y)
+			if !ok {
+				continue
+			}
+			payload, info, score, found := decoder.decodeGrid(grid)
+			if score > entry.score {
+				entry.score = score
+			}
+			if found {
+				return payload, info, *entry, true
+			}
+		}
+	}
+
+	// If virtual sampling is just short of authentication (notably capacity at
+	// aggressive fractional scales), the authenticated-header sync score is a
+	// better pointer to the historical physical-normalization fallback than raw
+	// repetition alone. Random/unmarked candidates remain far below this range.
+	for _, entry := range candidates {
+		if entry.score > bestEvidence.score {
+			bestEvidence = entry
+		}
+	}
+	bestEvidence.decisive = bestEvidence.score >= 900 ||
+		bestEvidence.coherence >= 0.88 ||
+		(bestEvidence.coherence >= 0.78 && bestEvidence.score >= 800)
+	return nil, ExtractInfo{}, bestEvidence, false
+}
+
 func searchV3AxisAlignedAffine(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, affineCandidate, bool) {
 	const minCoherence = 0.72
 	type probed struct {
@@ -1241,4 +1378,143 @@ func searchV3DirectLatticeBasis(src *pixelPlane, decoder *decoder) ([]byte, Extr
 		return payload, info, moderateEvidence, true
 	}
 	return nil, ExtractInfo{}, betterEvidence(anchorEvidence, moderateEvidence), false
+}
+
+// projectiveCandidate describes a small, bounded projective warp hypothesis.
+// Build 11 deliberately starts with four mild keystone shapes as a research
+// bridge toward general homography estimation; Format v3 is unchanged.
+type projectiveCandidate struct {
+	name string
+	quad [4][2]float64 // TL, TR, BL, BR in normalized observed coordinates
+}
+
+var projectiveHypotheses = [...]projectiveCandidate{
+	{name: "top-narrow-4", quad: [4][2]float64{{.04, 0}, {.96, 0}, {0, 1}, {1, 1}}},
+	{name: "bottom-narrow-4", quad: [4][2]float64{{0, 0}, {1, 0}, {.04, 1}, {.96, 1}}},
+}
+
+type homography struct{ h [9]float64 }
+
+func solveLinear8(a [8][9]float64) ([8]float64, bool) {
+	for col := 0; col < 8; col++ {
+		pivot := col
+		for row := col + 1; row < 8; row++ {
+			if math.Abs(a[row][col]) > math.Abs(a[pivot][col]) {
+				pivot = row
+			}
+		}
+		if math.Abs(a[pivot][col]) < 1e-12 {
+			return [8]float64{}, false
+		}
+		a[col], a[pivot] = a[pivot], a[col]
+		v := a[col][col]
+		for j := col; j < 9; j++ {
+			a[col][j] /= v
+		}
+		for row := 0; row < 8; row++ {
+			if row == col {
+				continue
+			}
+			f := a[row][col]
+			for j := col; j < 9; j++ {
+				a[row][j] -= f * a[col][j]
+			}
+		}
+	}
+	var out [8]float64
+	for i := range out {
+		out[i] = a[i][8]
+	}
+	return out, true
+}
+
+func homographyForQuad(width, height int, quad [4][2]float64) (homography, bool) {
+	if width < 2 || height < 2 {
+		return homography{}, false
+	}
+	src := [4][2]float64{{0, 0}, {float64(width - 1), 0}, {0, float64(height - 1)}, {float64(width - 1), float64(height - 1)}}
+	var a [8][9]float64
+	for i := 0; i < 4; i++ {
+		x, y := src[i][0], src[i][1]
+		u, v := quad[i][0]*float64(width-1), quad[i][1]*float64(height-1)
+		a[2*i] = [9]float64{x, y, 1, 0, 0, 0, -u * x, -u * y, u}
+		a[2*i+1] = [9]float64{0, 0, 0, x, y, 1, -v * x, -v * y, v}
+	}
+	s, ok := solveLinear8(a)
+	if !ok {
+		return homography{}, false
+	}
+	return homography{h: [9]float64{s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], 1}}, true
+}
+
+func (h homography) mapPoint(x, y float64) (float64, float64, bool) {
+	d := h.h[6]*x + h.h[7]*y + h.h[8]
+	if math.Abs(d) < 1e-12 {
+		return 0, 0, false
+	}
+	return (h.h[0]*x + h.h[1]*y + h.h[2]) / d, (h.h[3]*x + h.h[4]*y + h.h[5]) / d, true
+}
+
+func readProjectiveBlockValue(src *pixelPlane, h homography, originX, originY, size int) (float64, bool) {
+	table := readCosTables[size]
+	c23, c32 := 0.0, 0.0
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			sx, sy, ok := h.mapPoint(float64(originX+x), float64(originY+y))
+			if !ok {
+				return 0, false
+			}
+			l, ok := samplePlaneLuminance(src, sx, sy)
+			if !ok {
+				return 0, false
+			}
+			c23 += l * table[3][x] * table[2][y]
+			c32 += l * table[2][x] * table[3][y]
+		}
+	}
+	return math.Abs(c23) - math.Abs(c32), true
+}
+
+func aggregateProjectiveGrid(src *pixelPlane, h homography, size, offsetX, offsetY int) ([]float64, bool) {
+	w, hgt := src.bounds.Dx(), src.bounds.Dy()
+	bw := (w - offsetX) / size
+	bh := (hgt - offsetY) / size
+	if bw < tileWidth || bh < tileHeight {
+		return nil, false
+	}
+	grid := make([]float64, eccBits)
+	valid := 0
+	for by := 0; by < bh; by++ {
+		for bx := 0; bx < bw; bx++ {
+			v, ok := readProjectiveBlockValue(src, h, offsetX+bx*size, offsetY+by*size, size)
+			if !ok {
+				continue
+			}
+			grid[(by%tileHeight)*tileWidth+bx%tileWidth] += v
+			valid++
+		}
+	}
+	return grid, valid >= tileWidth*tileHeight
+}
+
+func searchV3MildPerspective(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, string, bool) {
+	// Fixed four-shape bank, each with a small phase neighbourhood. This is a
+	// deliberately bounded first print-camera experiment, not general perspective.
+	phases := [...]point{{0, 0}}
+	for _, candidate := range projectiveHypotheses {
+		h, ok := homographyForQuad(src.bounds.Dx(), src.bounds.Dy(), candidate.quad)
+		if !ok {
+			continue
+		}
+		for _, phase := range phases {
+			grid, ok := aggregateProjectiveGrid(src, h, blockSize, phase.x, phase.y)
+			if !ok {
+				continue
+			}
+			if payload, info, _, found := decoder.decodeGrid(grid); found {
+				return payload, info, candidate.name, true
+			}
+		}
+	}
+	return nil, ExtractInfo{}, "", false
 }

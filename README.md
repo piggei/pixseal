@@ -7,7 +7,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits into luminance DCT coefficients while keeping the resulting changes
 visually unobtrusive under normal viewing conditions.
 
-Current development line: **v0.2.0 build 9**. The last stable release is
+Current development line: **v0.2.0 build 11**. The last stable release is
 **v0.1.0**.
 
 PixSeal is designed as a hidden-data channel rather than an ownership-marking
@@ -28,88 +28,15 @@ undergone a cryptographic or steganalytic security audit.
 Project evolution and planned work are tracked separately in [`HISTORY.md`](HISTORY.md)
 and [`TODO.md`](TODO.md). Release-facing changes remain in [`CHANGELOG.md`](CHANGELOG.md).
 
-## What's new in v0.2.0 build 9
+## What's new in v0.2.0 build 11
 
-Build 9 keeps **format v3 bit-for-bit unchanged** and expands the direct
-DCT-lattice basis bank introduced in builds 7/8. The decoder still represents a
-candidate carrier geometry by transformed horizontal and vertical lattice basis
-vectors (`u`, `v`), but the promoted discrete bank now covers two anisotropy
-magnitudes in both orientations:
+Build 11 keeps Format v3 and the encoder bit-for-bit unchanged and starts the first bounded **projective/perspective recovery** experiment. The mature build-10 direct, isotropic-resize and axis-aligned-affine paths keep priority.
 
-```text
-110%x90%
- 90%x110%
-105%x95%
- 95%x105%
+The decoder adds a deliberately tiny projective bank with two vertical keystone hypotheses: a 4% narrowing of either the top or bottom edge. Each hypothesis is sampled virtually through a homography; no rectified bitmap is materialized and only the aligned phase is authenticated. This is a research bridge toward print-camera recovery, **not** general homography support.
 
-rotation: -45..+45 degrees at 0.25-degree spacing
-profile:  robust composed-geometry baseline
-edit order: anisotropic scale -> rotation
-```
+A new `make perspective-test` generates the two keystone transforms with ImageMagick. On the private LQ and MQ regression carriers the build-11 prototype recovered all four generated cases (2 images x 2 directions); the ~201 MP HQ carrier is skipped by the existing geometry limit. `make all-test` now includes `perspective-test`.
 
-The 105%x95% / 95%x105% cases are important because they show that the direct
-lattice representation is not tied only to the original +/-10% anchors. A
-prototype that tried to refine `u` and `v` more continuously also recovered
-positive cases, but made negative extraction too expensive; it is therefore
-**not promoted** in build 9. The runtime remains a fixed, reviewable basis bank.
-
-The search budget is explicit:
-
-```text
-4 basis shapes
-361 angles per shape
-1444 sparse lattice probes maximum
-
-anchor shapes (110x90 / 90x110): up to 48 quick candidates each
-moderate shapes (105x95 / 95x105): up to 240 quick candidates each
-576 stronger repetition/coherence evaluations maximum
-
-4 matrices x 3 phases reach full authenticated aggregation maximum
-12 full-carrier authenticated probes maximum
-```
-
-The larger bounded shortlist for the moderate anisotropies is deliberate. Real
-photographs showed stronger pixel-phase sensitivity near 105%x95% than at the
-original anchors; reducing this shortlist caused real regression cases to be
-missed. HMAC-SHA256 authentication remains the sole success criterion.
-
-Build 9 also improves the exact-quarter-turn gate. PixSeal uses the repeated tile
-periodicity itself: native orientation repeats every `35x32` blocks, while 90/270
-degrees swap the observable periods to `32x35`. This prevents unrelated composed
-geometry from paying for unnecessary 90/180/270-degree full decodes while
-preserving the very fast quarter-turn path.
-
-The two private photographs that exposed build 6 remain external regression
-material. At 12.3 degrees they recover under all four promoted anisotropic basis
-shapes; the source photographs are **not** distributed with PixSeal.
-
-A new sequential test orchestrator is available:
-
-```sh
-make all-test
-make all-test ALL_TEST_REPORT=reports/build9.txt
-```
-
-`all-test` runs the distinct test/check suites one after another, continues after
-individual failures, forces strict result semantics for the experimental suites
-and prints one final timing/status table. `ALL_TEST_TARGETS` can select a subset
-for smoke or comparative runs.
-
-`lattice-test` now defaults to all four basis shapes. The older
-`composition-test` remains as the historical build-7 regression baseline.
-Continuous/general affine estimation, rotation+shear composition,
-`balanced`/`capacity` composed recovery and reverse edit order remain research
-tasks rather than advertised capabilities.
-
-The engineering records remain first-class project files:
-
-- [`HISTORY.md`](HISTORY.md) preserves architectural and experimental milestones;
-- [`TODO.md`](TODO.md) tracks the active research roadmap;
-- the PixSeal project banner is stored locally in `docs/assets/` and displayed at
-  the top of this README.
-
-Build 9 remains **v3-only** at runtime. Formats v1 and v2 are retained only as
-engineering history.
+Build 10 remains the functional baseline for resize recovery. Build 11 does not change the pure-resize sampler, adaptive profiles, payload format or embedding.
 
 ## Build
 
@@ -118,7 +45,7 @@ dependencies. The `watermark` package is deliberately independent from terminal
 I/O and platform-specific APIs so the same codec can later be reused by graphical
 frontends. The planned application direction is a desktop GUI for Windows/Linux
 and, especially, an Android-capable frontend; no GUI toolkit is selected or added
-in build 9. iOS remains a possible wrapper target as well. ImageMagick and GNU
+in build 11. iOS remains a possible wrapper target as well. ImageMagick and GNU
 `timeout` are required only by the shell test suites.
 
 
@@ -356,7 +283,7 @@ A rectification candidate is skipped if its expanded canvas would exceed
 
 ## Format lineage and compatibility
 
-New `embed` operations create **PixSeal format v3** carriers, and build 9 extracts
+New `embed` operations create **PixSeal format v3** carriers, and build 10 extracts
 **v3 only**. The extractor identifies `robust`, `balanced` or `capacity`
 automatically from the authenticated v3 header.
 
@@ -478,7 +405,7 @@ codec to the CLI while future GUI work remains deferred.
   large images.
 - The image-detail/strength recommendation is heuristic and has not yet been
   calibrated across a large corpus.
-- No neural model is used in v0.2 build 9.
+- No neural model is used in v0.2 build 10.
 - The format and implementation have not received an independent cryptographic
   or steganalytic audit.
 
@@ -503,11 +430,13 @@ effects.
 
 ## Development status
 
-**v0.2.0 build 9 is a development build, not the final v0.2.0 release.**
+Build 10 is a regression-recovery build: Format v3 and embedding remain unchanged. Pure isotropic resize recovery is again prioritized before speculative rotation/lattice heuristics, and large-PNG test probing no longer depends on ImageMagick decoding the carrier.
+
+**v0.2.0 build 10 is a development build, not the final v0.2.0 release.**
 
 The adaptive v3 format is intentionally documented now so changes during the
 build cycle can be reviewed explicitly. Build 2 deliberately dropped runtime v1/v2
-compatibility; builds 3 through 9 keep v3 as the sole implementation baseline and
+compatibility; builds 3 through 10 keep v3 as the sole implementation baseline and
 extend only the bounded geometric recovery layer without changing the on-image
 format. The `build N`
 suffix will be removed only when the v0.2.0 release is finalized.

@@ -186,6 +186,14 @@ estimator. The next architectural step remains continuous or locally refined
 inference of `u` and `v`, including non-orthogonal bases for shear, rather than
 adding an ever-growing list of edit-specific cases.
 
+## v0.2.0 build 10 - regression recovery
+
+The build-9 `all-test` report exposed a clear regression pattern on a small real carrier: direct 8/6/4-pixel grids at 100/75/50% survived while fractional resize levels were often cut off by false rotation/lattice candidates. Build 10 deliberately stopped adding geometry features and restored baseline ordering.
+
+Pure isotropic resize is now a first-class bounded recovery stage. It samples known scale hypotheses virtually and permits at most one targeted physical normalization when sync evidence is strong. Advanced unauthenticated geometry heuristics are no longer allowed to suppress this established path. A deterministic encoder fingerprint test was also added to freeze Format-v3 embedding while decoder research continues.
+
+The same report revealed false errors on the private ~201 MP HQ PNG because several scripts asked ImageMagick to decode enough of the image merely to obtain dimensions. Build 10 added PNG-IHDR probing so those suites now skip the image by policy instead of reporting an error.
+
 ## v0.2.0 build 9 — Broader lattice bank and unified test reports
 
 Build 9 kept format v3 unchanged and expanded the build-8 transformed-lattice
@@ -243,3 +251,7 @@ embed message
 Achieving this requires robust geometric synchronization as well as tolerance to
 printing, optics, illumination, sensor processing and recompression. It remains
 a research goal rather than a current capability.
+
+## v0.2.0 build 11 — First projective step
+
+Build 11 preserved the frozen Format-v3 encoder and introduced the first projective decoder experiment. Instead of brute-forcing homography parameters, PixSeal gained a virtual projective sampler with two fixed 4% vertical-keystone hypotheses. This established that the existing v3 DCT signal can survive a mild synthetic projective warp on both the private LQ and MQ carriers without changing embedding. The result is intentionally recorded as a bounded research baseline, not as general perspective support.

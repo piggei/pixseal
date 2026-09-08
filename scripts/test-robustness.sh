@@ -47,6 +47,10 @@ else
 	exit 2
 fi
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=test-common.sh
+source "$SCRIPT_DIR/test-common.sh"
+
 mapfile -d '' images < <(find "$PICS_DIR" -maxdepth 1 -type f \
 	\( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' \) -print0 | sort -z)
 if (( ${#images[@]} == 0 )); then
@@ -143,7 +147,7 @@ for image in "${images[@]}"; do
 	echo "Image: $name"
 	width=""
 	height=""
-	read -r width height < <("${identify_tool[@]}" -ping -format '%w %h\n' "$image" 2>/dev/null) || true
+	read -r width height < <(read_image_dimensions "$image") || true
 	if [[ ! "$width" =~ ^[0-9]+$ || ! "$height" =~ ^[0-9]+$ ]]; then
 		file_info="$(file -b "$image" 2>/dev/null || true)"
 		if [[ "$file_info" =~ ([0-9]+)[[:space:]]*x[[:space:]]*([0-9]+) ]]; then

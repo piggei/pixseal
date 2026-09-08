@@ -366,6 +366,55 @@ func toNRGBA(src image.Image) *image.NRGBA {
 	return output
 }
 
+func resizePixelPlaneBilinear(src *pixelPlane, width, height int) *pixelPlane {
+	sourceWidth := src.bounds.Dx()
+	sourceHeight := src.bounds.Dy()
+	output := &pixelPlane{
+		bounds: image.Rect(0, 0, width, height),
+		rgb:    make([]uint8, width*height*3),
+	}
+	scaleX := float64(sourceWidth) / float64(width)
+	scaleY := float64(sourceHeight) / float64(height)
+
+	for y := 0; y < height; y++ {
+		sourceY := (float64(y)+.5)*scaleY - .5
+		y0 := int(math.Floor(sourceY))
+		fy := sourceY - float64(y0)
+		if y0 < 0 {
+			y0, fy = 0, 0
+		}
+		y1 := y0 + 1
+		if y1 >= sourceHeight {
+			y1 = sourceHeight - 1
+		}
+		for x := 0; x < width; x++ {
+			sourceX := (float64(x)+.5)*scaleX - .5
+			x0 := int(math.Floor(sourceX))
+			fx := sourceX - float64(x0)
+			if x0 < 0 {
+				x0, fx = 0, 0
+			}
+			x1 := x0 + 1
+			if x1 >= sourceWidth {
+				x1 = sourceWidth - 1
+			}
+			row0 := y0 * sourceWidth
+			row1 := y1 * sourceWidth
+			outIndex := (y*width + x) * 3
+			for channel := 0; channel < 3; channel++ {
+				c00 := float64(src.rgb[(row0+x0)*3+channel])
+				c10 := float64(src.rgb[(row0+x1)*3+channel])
+				c01 := float64(src.rgb[(row1+x0)*3+channel])
+				c11 := float64(src.rgb[(row1+x1)*3+channel])
+				top := c00*(1-fx) + c10*fx
+				bottom := c01*(1-fx) + c11*fx
+				output.rgb[outIndex+channel] = clamp(top*(1-fy) + bottom*fy)
+			}
+		}
+	}
+	return output
+}
+
 func resizePixelPlaneBicubic(src *pixelPlane, width, height int) *pixelPlane {
 	sourceWidth := src.bounds.Dx()
 	sourceHeight := src.bounds.Dy()

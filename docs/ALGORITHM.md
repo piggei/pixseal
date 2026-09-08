@@ -757,3 +757,19 @@ the carrier, photograph it with a phone, geometrically rectify the photograph,
 then recover the authenticated v3 payload. Digital rotation, combined
 resize/crop and basis-bank tests are controlled validation stages; they are not
 evidence that the physical print-camera channel already works.
+
+
+## Decoder ordering and regression rule (build 10)
+
+Format v3 and the encoder are unchanged. The decoder treats established recovery paths as baselines: an unauthenticated advanced geometry heuristic must not suppress an older path unless deterministic/authenticated evidence makes that path inapplicable.
+
+After direct 8/6/4-pixel grids and quarter-turn handling, pure isotropic resize is tested with a bounded virtual sampler over 95, 90, 85, 80, 70, 65, 60, 55, 45, 40, 35, 30 and 25 percent hypotheses. Strong sync may select one scale for a targeted physical normalization fallback. Affine, lattice-bank and arbitrary-rotation recovery remain later stages.
+
+The encoder is protected by deterministic pixel fingerprints for all three adaptive profiles. These tests are implementation regression guards, not cryptographic commitments.
+
+
+## Build 11 experimental projective recovery
+
+Build 11 does not alter Format v3 or embedding. After direct, isotropic-resize and axis-aligned-affine recovery, the decoder may test a fixed bank of **two** mild vertical-keystone homographies: 4% top-edge narrowing or 4% bottom-edge narrowing. Each homography maps coordinates in the rectified 8-pixel DCT lattice directly into the observed carrier and samples luminance bilinearly; no intermediate rectified image is allocated. Only phase `(0,0)` is authenticated for each hypothesis, so the new projective stage is bounded at two full projective grid aggregations. CRC32/HMAC validation remains the sole success criterion.
+
+This is an experimental print-camera stepping stone, not general homography estimation. Horizontal keystone, arbitrary corner displacement, projective+rotation composition and camera-lens effects are not claimed by build 11.

@@ -11,7 +11,7 @@ fi
 # Keep the default list explicit: all-test is intended to be a stable, readable
 # report rather than an accidental traversal of every Make target. The optional
 # ALL_TEST_TARGETS override is useful for smoke-testing the orchestrator itself.
-default_targets="vet test deep-test extreme-test geometry-test affine-test composition-test lattice-test core-target-check"
+default_targets="vet test deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
 read -r -a targets <<< "${ALL_TEST_TARGETS:-$default_targets}"
 if (( ${#targets[@]} == 0 )); then
     echo "error: ALL_TEST_TARGETS resolved to an empty list" >&2
@@ -28,6 +28,7 @@ label_for() {
         affine-test) echo "axis-aligned affine" ;;
         composition-test) echo "build-7 composition regression" ;;
         lattice-test) echo "direct lattice bank" ;;
+        perspective-test) echo "mild projective perspective" ;;
         core-target-check) echo "desktop/mobile core portability" ;;
         *) echo "$1" ;;
     esac
@@ -50,7 +51,7 @@ if command -v magick >/dev/null 2>&1; then
 elif command -v convert >/dev/null 2>&1; then
     printf 'ImageMagick: %s\n' "$(convert -version 2>/dev/null | head -n 1)"
 fi
-printf 'STRICT=%s is used for robustness/geometry/affine/composition/lattice suites.\n' "${ALL_TEST_STRICT:-1}"
+printf 'STRICT=%s is used for robustness/geometry/affine/composition/lattice/perspective suites.\n' "${ALL_TEST_STRICT:-1}"
 if [[ -n "$REPORT" ]]; then
     printf 'Report: %s\n' "$REPORT"
 fi
@@ -65,7 +66,7 @@ for i in "${!targets[@]}"; do
     section_start="$(date +%s)"
 
     case "$target" in
-        deep-test|geometry-test|affine-test|composition-test|lattice-test)
+        deep-test|geometry-test|affine-test|composition-test|lattice-test|perspective-test)
             make --no-print-directory STRICT="${ALL_TEST_STRICT:-1}" "$target"
             status=$?
             ;;

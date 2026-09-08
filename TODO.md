@@ -1,3 +1,12 @@
+
+## Build 10 regression gates
+
+- [x] Restore fractional pure-resize recovery before speculative rotation/lattice paths.
+- [x] Add deterministic Format-v3 encoder fingerprints.
+- [x] Make huge-PNG dimension probing independent of ImageMagick resource limits.
+- [ ] Run the complete `make all-test` on PJ's Linux corpus and compare against the build-9 report.
+- [ ] Resume new geometry research only after baseline regressions are confirmed closed.
+
 # PixSeal TODO
 
 This is the live engineering roadmap for PixSeal. Items describe intended work,
@@ -46,8 +55,8 @@ release-facing changes belong in `CHANGELOG.md`.
       visible corner markers.
 - [ ] Rectify only a small ranked set of projective candidates before HMAC
       validation.
-- [ ] Add deterministic synthetic perspective tests before any physical-camera
-      experiments.
+- [x] Add the first deterministic synthetic perspective test (build 11: bounded 4% vertical keystone bank).
+- [ ] Generalize projective recovery beyond the build-11 two-hypothesis vertical-keystone baseline before claiming perspective support.
 
 ### Print-camera experiment
 

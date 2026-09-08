@@ -311,6 +311,9 @@ func extract(args []string) error {
 	if info.ShearYCorrection != 0 {
 		fmt.Printf("shear-y-correction: %.2f degrees\n", math.Atan(info.ShearYCorrection)*180/math.Pi)
 	}
+	if info.PerspectiveCorrection != "" {
+		fmt.Printf("perspective-correction: %s\n", info.PerspectiveCorrection)
+	}
 	return nil
 }
 

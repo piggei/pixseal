@@ -2,6 +2,46 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0 build 11 - 2026-09-08
+
+Development build. Not a final v0.2.0 release.
+
+### First bounded projective recovery
+
+- Kept Format v3, adaptive profiles and the encoder bit-for-bit unchanged.
+- Added a virtual homography sampler and a deliberately small two-hypothesis vertical-keystone bank: top edge -4% and bottom edge -4%.
+- Mature direct, pure-resize and axis-aligned-affine recovery retain priority; projective probing runs before the more expensive lattice/rotation heuristics.
+- The projective bank performs no bitmap rectification and authenticates only the aligned phase, keeping the new stage explicitly bounded.
+- Added `perspective-correction` metadata to successful extraction output.
+- Added `make perspective-test` and included it in `make all-test`.
+- ImageMagick-generated LQ/MQ regression tests recovered 4/4 mild-perspective cases in the development environment; the private ~201 MP HQ image is skipped by the configured geometry limit.
+- This is explicitly not general perspective/homography recovery; arbitrary camera pose and local projective estimation remain research work.
+
+## v0.2.0 build 10 - 2026-09-08
+
+Development build. Not a final v0.2.0 release.
+
+### Regression recovery
+
+- Kept the adaptive on-image Format v3 and encoder bit-for-bit unchanged.
+- Restored pure isotropic resize recovery ahead of speculative rotation/lattice heuristics, preventing false angle candidates from suppressing the established resize path.
+- Added a bounded virtual isotropic-scale sampler for 95/90/85/80/70/65/60/55/45/40/35/30/25% hypotheses; only a strongly supported single scale may trigger physical normalization.
+- Added a targeted single-scale normalization fallback for cases where geometry sync is strong but the virtual sample does not authenticate.
+- Preserved direct 8/6/4-pixel paths for 100/75/50% and kept later affine/rotation/lattice stages available after the resize baseline.
+- Added deterministic v3 encoder pixel fingerprints for robust, balanced and capacity profiles so future decoder work cannot silently alter embedding output.
+
+### Test and tooling fixes
+
+- Unified large-PNG dimension probing across geometry, affine, composition and lattice scripts. If ImageMagick cannot inspect a huge PNG under its resource limits, the scripts read PNG IHDR dimensions without decoding pixels.
+- The 16320x12288 (~201 MP) private HQ regression image is therefore reported as an intentional 50 MP geometry-suite SKIP instead of an erroneous dimension-read failure.
+- Kept `make all-test` reporting from build 9 and documented build 10 as a regression-recovery build rather than a new geometry feature build.
+
+### Real-corpus findings
+
+- On the private 800x757 LQ regression image, robust and balanced again recover 95/85/75/65/55/50% resize cases; capacity recovers through 55%.
+- Capacity at 50% on that LQ carrier remains a known signal limit and was independently observed with build 5, so it is not classified as a build-9 regression.
+- No private regression images are included in the source archive.
+
 ## v0.2.0 build 9 - 2026-09-08
 
 Development build. Not a final v0.2.0 release.
