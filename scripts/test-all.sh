@@ -36,6 +36,16 @@ label_for() {
 
 statuses=()
 durations=()
+release_targets=(vet test deep-test core-target-check)
+
+is_release_target() {
+    local needle="$1"
+    local item
+    for item in "${release_targets[@]}"; do
+        [[ "$item" == "$needle" ]] && return 0
+    done
+    return 1
+}
 started="$(date '+%Y-%m-%d %H:%M:%S %z')"
 start_epoch="$(date +%s)"
 
@@ -93,13 +103,30 @@ printf '%s\n' '=================================================================
 printf '%-22s %-12s %10s\n' 'Target' 'Result' 'Seconds'
 printf '%-22s %-12s %10s\n' '----------------------' '------------' '----------'
 failed=0
+release_failed=0
+research_failed=0
 for i in "${!targets[@]}"; do
     printf '%-22s %-12s %10s\n' "${targets[$i]}" "${statuses[$i]}" "${durations[$i]}"
     if [[ "${statuses[$i]}" != "PASS" ]]; then
         ((failed += 1))
+        if is_release_target "${targets[$i]}"; then
+            ((release_failed += 1))
+        else
+            ((research_failed += 1))
+        fi
     fi
 done
 printf '\nTotal elapsed: %ss\n' "$total_elapsed"
+if (( release_failed == 0 )); then
+    echo 'Release baseline: PASS'
+else
+    printf 'Release baseline: FAIL (%d release-gate target%s failed)\n' "$release_failed" "$([[ $release_failed -eq 1 ]] && echo '' || echo 's')"
+fi
+if (( research_failed == 0 )); then
+    echo 'Research suites: PASS'
+else
+    printf 'Research suites: ATTENTION (%d experimental target%s failed)\n' "$research_failed" "$([[ $research_failed -eq 1 ]] && echo '' || echo 's')"
+fi
 if (( failed == 0 )); then
     echo 'Overall: PASS'
     exit 0

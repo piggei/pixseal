@@ -4,16 +4,23 @@
 - [x] Restore fractional pure-resize recovery before speculative rotation/lattice paths.
 - [x] Add deterministic Format-v3 encoder fingerprints.
 - [x] Make huge-PNG dimension probing independent of ImageMagick resource limits.
-- [ ] Run the complete `make all-test` on PJ's Linux corpus and compare against the build-9 report.
-- [ ] Resume new geometry research only after baseline regressions are confirmed closed.
-
 # PixSeal TODO
 
 This is the live engineering roadmap for PixSeal. Items describe intended work,
 not guaranteed future features. Completed milestones belong in `HISTORY.md` and
 release-facing changes belong in `CHANGELOG.md`.
 
-## v0.2.0 development
+## v0.2.0 release-candidate checklist
+
+- [x] Freeze Format v3 and deterministic encoder fingerprints.
+- [x] Add a release-baseline gate separate from research-suite results.
+- [x] Audit README, ALGORITHM, RESULTS, HISTORY, TODO and CHANGELOG for RC scope.
+- [ ] Run `make release-check` on PJ's Linux corpus.
+- [ ] Run the complete `make all-test ALL_TEST_REPORT=report_v0.2.0-rc1.txt` and review all research-limit changes.
+- [ ] Remove the `-rc1` suffix only after final validation.
+
+
+## Post-v0.2.0 research (planned v0.3.0 line)
 
 ### Geometry and synchronization
 

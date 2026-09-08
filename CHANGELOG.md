@@ -2,6 +2,22 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0-rc1 - 2026-09-08
+
+Release candidate for the v0.2.0 line. No new codec or geometric-recovery
+algorithm is introduced relative to build 11.
+
+### Release consolidation
+
+- Froze Format v3, adaptive profile semantics and deterministic encoder fingerprints for release validation.
+- Promoted the build-10 pure-resize recovery path as part of the release baseline.
+- Retained build-11 bounded projective probing as an explicitly experimental capability, not general perspective support.
+- Added `make release-check` for the release baseline: vet, unit/image round trips, baseline JPEG/resize/crop transforms and reusable-core portability.
+- Updated `make all-test` reporting to distinguish **Release baseline** from **Research suites** while preserving a non-zero overall exit status for any strict suite failure.
+- Clarified that arbitrary geometry, affine/lattice composition and perspective results are corpus-specific experimental measurements, not recovery guarantees.
+- Moved direct-lattice/homography/print-camera work to the post-v0.2.0 research roadmap.
+- Audited README, algorithm specification, results, history, TODO, version metadata and repository contents for RC consistency.
+
 ## v0.2.0 build 11 - 2026-09-08
 
 Development build. Not a final v0.2.0 release.

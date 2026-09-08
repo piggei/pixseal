@@ -773,3 +773,9 @@ The encoder is protected by deterministic pixel fingerprints for all three adapt
 Build 11 does not alter Format v3 or embedding. After direct, isotropic-resize and axis-aligned-affine recovery, the decoder may test a fixed bank of **two** mild vertical-keystone homographies: 4% top-edge narrowing or 4% bottom-edge narrowing. Each homography maps coordinates in the rectified 8-pixel DCT lattice directly into the observed carrier and samples luminance bilinearly; no intermediate rectified image is allocated. Only phase `(0,0)` is authenticated for each hypothesis, so the new projective stage is bounded at two full projective grid aggregations. CRC32/HMAC validation remains the sole success criterion.
 
 This is an experimental print-camera stepping stone, not general homography estimation. Horizontal keystone, arbitrary corner displacement, projective+rotation composition and camera-lens effects are not claimed by build 11.
+## v0.2.0 release boundary
+
+`v0.2.0-rc1` freezes Format v3 and the build-11 decoder architecture for release validation. No algorithmic change is introduced by the RC. The supported release baseline is authenticated v3 embedding/extraction plus the established JPEG, isotropic-resize and crop recovery paths. Rotation, affine/lattice composition and the fixed two-hypothesis projective stage are retained as bounded experimental recovery mechanisms whose corpus measurements are not guarantees.
+
+General homography estimation, local lattice inference and physical print-camera recovery are outside the v0.2.0 release boundary. Any future format-level synchronization change must use a new explicitly versioned format rather than silently changing v3.
+

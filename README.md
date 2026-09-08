@@ -7,8 +7,8 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits into luminance DCT coefficients while keeping the resulting changes
 visually unobtrusive under normal viewing conditions.
 
-Current development line: **v0.2.0 build 11**. The last stable release is
-**v0.1.0**.
+Current release candidate: **v0.2.0-rc1**. The last stable release is **v0.1.0**.
+The RC freezes the v0.2.0 feature set while final corpus validation is completed.
 
 PixSeal is designed as a hidden-data channel rather than an ownership-marking
 product. Digital watermarking techniques are part of the mechanism used to
@@ -28,15 +28,30 @@ undergone a cryptographic or steganalytic security audit.
 Project evolution and planned work are tracked separately in [`HISTORY.md`](HISTORY.md)
 and [`TODO.md`](TODO.md). Release-facing changes remain in [`CHANGELOG.md`](CHANGELOG.md).
 
-## What's new in v0.2.0 build 11
+## v0.2.0-rc1 release candidate
 
-Build 11 keeps Format v3 and the encoder bit-for-bit unchanged and starts the first bounded **projective/perspective recovery** experiment. The mature build-10 direct, isotropic-resize and axis-aligned-affine paths keep priority.
+`v0.2.0-rc1` consolidates the proven build-11 code line without adding a new
+codec or geometry feature. Format v3, adaptive profiles and deterministic encoder
+fingerprints are frozen for release validation. The build-10 isotropic-resize
+recovery remains the digital baseline; build-11 projective probing remains a
+bounded experimental capability.
 
-The decoder adds a deliberately tiny projective bank with two vertical keystone hypotheses: a 4% narrowing of either the top or bottom edge. Each hypothesis is sampled virtually through a homography; no rectified bitmap is materialized and only the aligned phase is authenticated. This is a research bridge toward print-camera recovery, **not** general homography support.
+Release validation is intentionally separated from research exploration:
 
-A new `make perspective-test` generates the two keystone transforms with ImageMagick. On the private LQ and MQ regression carriers the build-11 prototype recovered all four generated cases (2 images x 2 directions); the ~201 MP HQ carrier is skipped by the existing geometry limit. `make all-test` now includes `perspective-test`.
+- **Release baseline:** `go vet`, unit/image round trips, JPEG/resize/crop
+  `deep-test`, and reusable-core portability.
+- **Research suites:** progressive limits, arbitrary/combined geometry, affine,
+  lattice composition and mild projective perspective. These remain visible and
+  strict in `make all-test`, but corpus-specific failures are documented research
+  limits rather than silent release promises.
 
-Build 10 remains the functional baseline for resize recovery. Build 11 does not change the pure-resize sampler, adaptive profiles, payload format or embedding.
+Use `make release-check` for the release baseline, or `make all-test
+ALL_TEST_REPORT=report.txt` for the complete comparative report. The final
+`v0.2.0` release will remove the `-rc1` suffix after RC validation.
+
+The physical print-camera channel is **not** a v0.2.0 capability. It is a
+research target for the next development line; the current mild perspective
+path only demonstrates bounded synthetic projective recovery.
 
 ## Build
 
@@ -45,7 +60,7 @@ dependencies. The `watermark` package is deliberately independent from terminal
 I/O and platform-specific APIs so the same codec can later be reused by graphical
 frontends. The planned application direction is a desktop GUI for Windows/Linux
 and, especially, an Android-capable frontend; no GUI toolkit is selected or added
-in build 11. iOS remains a possible wrapper target as well. ImageMagick and GNU
+in v0.2.0-rc1. iOS remains a possible wrapper target as well. ImageMagick and GNU
 `timeout` are required only by the shell test suites.
 
 
@@ -428,21 +443,23 @@ the authenticated payload. Controlled digital lattice tests are how PixSeal
 separates geometry problems from printer, paper, lens, illumination and sensor
 effects.
 
-## Development status
+## Release status
 
-Build 10 is a regression-recovery build: Format v3 and embedding remain unchanged. Pure isotropic resize recovery is again prioritized before speculative rotation/lattice heuristics, and large-PNG test probing no longer depends on ImageMagick decoding the carrier.
+**v0.2.0-rc1 is a release candidate.** Format v3 and the encoder are frozen for
+release validation; no new algorithmic feature was added after build 11.
 
-**v0.2.0 build 10 is a development build, not the final v0.2.0 release.**
+The release baseline covers authenticated round trips, JPEG, pure resize, crop,
+random crop, static analysis and core portability. Advanced digital rotation,
+affine/lattice composition and the two-hypothesis projective path remain
+experimental: measured successes are useful regression evidence, not universal
+recovery guarantees.
 
-The adaptive v3 format is intentionally documented now so changes during the
-build cycle can be reviewed explicitly. Build 2 deliberately dropped runtime v1/v2
-compatibility; builds 3 through 10 keep v3 as the sole implementation baseline and
-extend only the bounded geometric recovery layer without changing the on-image
-format. The `build N`
-suffix will be removed only when the v0.2.0 release is finalized.
+Formats v1 and v2 remain historical engineering formats only. Runtime support is
+v3-only. Print-camera extraction, arbitrary homography estimation and local
+lattice estimation are explicitly outside the v0.2.0 release scope.
 
-Measured behavior for the stable v0.1 baseline and validation status for this
-build are recorded in [`docs/RESULTS.md`](docs/RESULTS.md).
+Measured behavior and validation status are recorded in
+[`docs/RESULTS.md`](docs/RESULTS.md).
 
 ## License
 

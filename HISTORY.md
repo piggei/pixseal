@@ -255,3 +255,11 @@ a research goal rather than a current capability.
 ## v0.2.0 build 11 — First projective step
 
 Build 11 preserved the frozen Format-v3 encoder and introduced the first projective decoder experiment. Instead of brute-forcing homography parameters, PixSeal gained a virtual projective sampler with two fixed 4% vertical-keystone hypotheses. This established that the existing v3 DCT signal can survive a mild synthetic projective warp on both the private LQ and MQ carriers without changing embedding. The result is intentionally recorded as a bounded research baseline, not as general perspective support.
+## v0.2.0-rc1 — Release consolidation
+
+The release candidate returns to the build-11 code line after the build-12 local-consensus experiment failed to improve the real corpus and increased runtime. No new recovery algorithm is added in the RC. Format v3 and its deterministic encoder fingerprints are frozen while release-facing behavior, documentation and test semantics are consolidated.
+
+The RC explicitly separates the stable release baseline from research suites. JPEG, pure resize, crop, authenticated round trips and reusable-core portability form the release gate. Arbitrary rotation, affine/lattice composition and mild projective recovery remain measured experimental capabilities. General homography estimation and the physical print-camera channel move to the next research line.
+
+Build 12 remains part of engineering history as a non-promoted experiment: the reconstructed local-consensus fallback reproduced build-11 functional results on the PJ corpus while increasing total test runtime, so it was not used as the RC base.
+

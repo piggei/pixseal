@@ -1067,3 +1067,9 @@ These observations are experimental results on the private corpus, not recovery 
 ## v0.2.0 build 11 perspective experiment
 
 Using ImageMagick-generated fixed-canvas perspective warps on the private real-image corpus, the build-11 two-hypothesis vertical-keystone decoder recovered 4/4 tested robust-profile cases across the LQ and MQ carriers (top edge narrowed by 4%, bottom edge narrowed by 4%). The ~201 MP HQ carrier was intentionally skipped by the 50 MP geometry-suite limit. These results are experimental and do not imply general print-camera or arbitrary-perspective robustness.
+## v0.2.0-rc1 validation status
+
+The RC contains the build-11 codec/decoder behavior with release-facing consolidation only. Format v3 and deterministic encoder fingerprints are frozen. The release baseline is defined as static analysis, authenticated unit/image round trips, baseline JPEG/resize/crop robustness and reusable-core portability. Advanced geometry suites remain strict research measurements and may expose corpus-specific limits without being represented as universal release guarantees.
+
+The last pre-RC PJ-corpus report for build 11 recorded a fully passing baseline (`test`, 72/72 `deep-test`, `composition-test`, `lattice-test`, `perspective-test`, and core portability) while arbitrary geometry and affine suites retained known corpus-specific failures. RC-specific corpus validation remains to be run on PJ's Linux system; results must not be inferred from the build-11 report merely because the algorithm is unchanged.
+

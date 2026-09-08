@@ -1,14 +1,15 @@
-// Package buildinfo contains the development version displayed by PixSeal.
+// Package buildinfo contains the version displayed by PixSeal.
 package buildinfo
 
-import "fmt"
-
 const (
-	Version = "0.2.0"
-	Build   = 11
+	Version    = "0.2.0"
+	Prerelease = "rc1"
 )
 
-// String returns the human-readable development version.
+// String returns the human-readable version.
 func String() string {
-	return fmt.Sprintf("v%s build %d", Version, Build)
+	if Prerelease != "" {
+		return "v" + Version + "-" + Prerelease
+	}
+	return "v" + Version
 }

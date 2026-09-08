@@ -41,7 +41,7 @@ ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test all build-all core-target-check vet clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check all build-all core-target-check vet clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -225,6 +225,11 @@ all-test:
 vet:
 	@echo "Running go vet..."
 	@go vet ./...
+
+# Release-candidate gate: static analysis, unit/round-trip tests, baseline
+# transformations and reusable-core portability. Requires original pics/.
+release-check: vet test deep-test core-target-check
+	@echo "Release baseline checks passed."
 
 # Run build + local round-trip tests + baseline transformation tests.
 all: test deep-test
