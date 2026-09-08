@@ -5,6 +5,232 @@ results** and **corpus-specific experimental measurements**. None of the results
 below proves statistical steganographic undetectability or guarantees recovery
 for unseen images.
 
+## v0.2.0 build 9 validation status
+
+Development build: **v0.2.0 build 9**, 8 September 2026.
+
+Build 9 keeps format v3 bit-for-bit unchanged and expands the direct
+DCT-lattice basis bank from two to four anisotropic shapes. It also introduces
+`make all-test` as the preferred sequential comparative test orchestrator.
+
+### Deterministic lattice-bank bounds
+
+The promoted build-9 bank is fixed in source:
+
+```text
+4 basis shapes: 110%x90%, 90%x110%, 105%x95%, 95%x105%
+361 angles per shape: -45..+45 degrees at 0.25-degree spacing
+1444 sparse lattice probes maximum
+
+20 deterministic logical tile samples per sparse probe
+48 quick candidates maximum for each +/-10% anchor shape
+240 quick candidates maximum for each +/-5% moderate shape
+576 stronger repetition/coherence evaluations maximum
+4 matrices retained for authenticated aggregation maximum
+3 phases per retained matrix maximum
+12 full-carrier authenticated probes maximum
+```
+
+The sparse and stronger coherence scores are key-independent geometry-ranking
+signals only. A recovered frame must still pass v3 CRC32 and HMAC-SHA256
+authentication.
+
+### Private real-corpus regression
+
+The two private photographs that exposed the build-6 composition failure remain
+external regression inputs and are not distributed. With ImageMagick at 12.3
+degrees, development verification recovered both new moderate anisotropies on
+both photographs, in addition to the two build-8 anchor anisotropies:
+
+| Private carrier | 110%x90% | 90%x110% | 105%x95% | 95%x105% |
+|---|---|---|---|---|
+| real photograph A | PASS | PASS | PASS | PASS |
+| real photograph B | PASS | PASS | PASS | PASS |
+
+End-to-end `STRICT=1 make lattice-test` on the final build-9 decoder completed
+**8 passed, 0 failed, 0 timeouts, 0 skipped, 0 errors**.
+
+The new 105%x95% / 95%x105% cases were observed at roughly 8-10 seconds per
+successful extraction on this development machine. These are engineering
+observations, not latency guarantees.
+
+A smaller shortlist for the moderate shapes was tested and caused a real
+regression miss; the final 240-candidate-per-moderate-shape bound is therefore a
+measured correctness/performance compromise.
+
+### Continuous-refinement experiment
+
+A denser/local refinement prototype for the basis vectors recovered additional
+positive cases, but negative extraction approached unacceptable runtimes. The
+prototype was **not promoted**. Build 9 remains a bounded discrete basis bank.
+
+### all-test reporting
+
+`make all-test` executes the distinct test/check targets sequentially and reports
+status plus elapsed seconds for each section. Experimental transformation suites
+run with strict semantics by default. Optional `ALL_TEST_REPORT=<path>` captures
+the complete output for build-to-build comparison.
+
+The full private `original pics/` corpus is not distributed. Final aggregate
+`all-test` results therefore belong to PJ's Linux workstation and should be
+attached or summarized separately when comparing builds.
+
+### Final source-tree validation in this environment
+
+The build-9 closeout caught and fixed one small-carrier quarter-turn regression:
+the new tile-period gate initially treated an unmeasurable repetition score as a
+failed score. After distinguishing "not enough carrier area for two periods"
+from low coherence, the 90/180/270-degree regression test passed again.
+
+The following checks completed successfully on the final source tree:
+
+```text
+gofmt                                    PASS
+go vet ./...                             PASS
+go test -count=1 ./cmd/pixseal           PASS
+core/profile/frame + baseline tests      PASS
+quarter-turn recovery                    PASS
+arbitrary-rotation recovery              PASS
+rotation + resize/crop recovery          PASS
+direct lattice-basis recovery            PASS
+fixed lattice-bank bound                 PASS
+axis-aligned affine scale recovery       PASS
+wrong-key/unmarked bounded tests         PASS
+shell syntax checks                      PASS
+make                                      PASS
+make build-all                            PASS
+make core-target-check                    PASS
+STRICT=1 make composition-test (2 real)  2/2 PASS
+STRICT=1 make lattice-test (2x4 real)      8/8 PASS
+```
+
+A smoke invocation of the new orchestrator using `ALL_TEST_TARGETS="vet
+core-target-check"` completed with a valid report and `Overall: PASS`, confirming
+sequential execution, report capture and final-summary behavior. The complete
+default `make all-test` run was also started, but its `make test` section invokes
+the monolithic `go test ./...`, which exceeds this environment's execution
+window. Therefore the full aggregate run is **not** marked as passed here and
+remains a required comparative run on PJ's Linux workstation.
+
+### Validation boundary
+
+Build 9 does **not** claim continuous/general affine estimation, arbitrary
+rotation combined with shear, balanced/capacity composed recovery, reverse edit
+order, perspective or print-camera recovery. Those remain explicit research
+tasks in `TODO.md`.
+
+## v0.2.0 build 8 validation status
+
+Development build: **v0.2.0 build 8**, 8 September 2026.
+
+Build 8 keeps format v3 bit-for-bit unchanged and generalizes the build-7
+direct composed search into the first symmetric **DCT-lattice basis bank**. The
+decoder represents each promoted geometry by transformed horizontal and vertical
+lattice basis vectors rather than by a rotation-detector result followed by a
+scale guess.
+
+### Deterministic lattice-bank bounds
+
+The build-8 bank is fixed in source:
+
+```text
+2 basis shapes: 110%x90% and 90%x110%
+361 angles per shape: -45..+45 degrees at 0.25-degree spacing
+722 sparse lattice probes maximum
+
+20 deterministic logical tile samples per sparse probe
+48 quick candidates retained per shape maximum
+96 matrices receive stronger periodicity/coherence analysis maximum
+4 matrices retained for authenticated aggregation maximum
+3 phases per retained matrix maximum
+12 full-carrier authenticated probes maximum
+```
+
+The sparse and stronger coherence scores are key-independent geometry-ranking
+signals only. A recovered frame must still pass v3 CRC32 and HMAC-SHA256
+authentication.
+
+### Private real-corpus regression
+
+The two photographs that exposed the build-6 composition failure were reused only
+as temporary local regression inputs. They are not part of the repository or
+distributed source archive. With ImageMagick and the default build-8
+`lattice-test` angle of 12.3 degrees:
+
+| Private carrier | 110%x90% -> rotate | 90%x110% -> rotate |
+|---|---|---|
+| real photograph A | PASS | PASS |
+| real photograph B | PASS | PASS |
+
+End-to-end result: **4 passed, 0 failed, 0 timeouts, 0 skipped, 0 errors**.
+Successful extractions reported approximately `rotation-correction: -12.25
+degrees`; the inverse X/Y scale correction correctly swapped between the two
+basis shapes.
+
+During development, positive-angle spot checks at 5 and 20 degrees succeeded on
+both promoted shapes on the smaller real photograph. The first implementation
+under-ranked a -15-degree carrier at the sparse stage; retaining an independent
+bounded shortlist per basis shape corrected that asymmetry, and manual -15-degree
+spot checks then recovered both promoted shapes. These are engineering observations,
+not a continuous-angle or unseen-image guarantee.
+
+Same-machine spot checks with the final build-8 decoder on the smaller private
+carrier measured approximately:
+
+```text
+110%x90% -> 12.3deg, valid key     4.68 s
+90%x110% -> 12.3deg, valid key     4.64 s
+110%x90% -> 12.3deg, wrong key     9.84 s
+unmarked original                  8.03 s
+```
+
+These are development observations on one machine and must not be interpreted as
+latency guarantees.
+
+### Source validation in this environment
+
+The following checks completed successfully on the final build-8 source tree:
+
+```text
+gofmt check                              PASS
+go vet ./...                             PASS
+go test -count=1 ./cmd/pixseal           PASS
+core/profile/image watermark test group  PASS
+quarter-turn/rotation test group         PASS
+combined-geometry test                   PASS
+direct lattice-basis recovery test       PASS
+fixed lattice-bank bound test            PASS
+axis-aligned affine scale test            PASS
+fixed affine-search bound test            PASS
+shell syntax checks                       PASS
+make                                      PASS
+make build-all                            PASS
+make core-target-check                    PASS
+STRICT=1 make composition-test (2 real)   2/2 PASS
+STRICT=1 make lattice-test (2x2 real)     4/4 PASS
+```
+
+The monolithic uncached `go test -count=1 ./watermark` invocation exceeded this
+environment's 240-second execution window even though the same test groups and
+individual long-running geometry tests pass when run separately. The aggregate
+`go test -count=1 ./...` / `make test` therefore remains a required validation on
+PJ's Linux workstation and is not marked as passed here. A full private
+`affine-test` run was also started on the two supplied originals; the robust cases
+shown before the environment timeout passed, but the complete matrix was not
+finished here and is not reported as a pass.
+
+### Validation boundary
+
+Build 8 does **not** claim continuous/general affine estimation, arbitrary
+rotation combined with shear, 105%x95% / 95%x105% composed recovery,
+`balanced`/`capacity` composed recovery, reverse edit order, perspective or
+print-camera recovery. Those remain explicit research tasks in `TODO.md`.
+
+The complete private `original pics/` corpus is not distributed. PJ should run
+`go test -count=1 ./...`, the standard local suites and `STRICT=1 make
+lattice-test` on the development workstation before treating this build as a
+release candidate.
+
 ## v0.2.0 build 7 validation status
 
 Development build: **v0.2.0 build 7**, 8 September 2026.

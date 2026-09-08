@@ -2,6 +2,66 @@
 
 All notable changes to PixSeal are documented here.
 
+## v0.2.0 build 9 - 2026-09-08
+
+Development build. Not a final v0.2.0 release.
+
+### Expanded direct lattice-basis recovery
+
+- Kept the adaptive on-image format v3 bit-for-bit unchanged.
+- Expanded the direct DCT-lattice basis bank from two to four promoted anisotropic shapes: 110%x90%, 90%x110%, 105%x95% and 95%x105%, each followed by arbitrary rotation from -45 to +45 degrees at 0.25-degree spacing.
+- Preserved the basis-vector representation (`u`, `v`) rather than reintroducing separate rotation/scale parameter searches.
+- Kept the search bounded at 1444 sparse probes, at most 576 stronger repetition/coherence evaluations, and at most four matrices with three phases each for full authenticated aggregation.
+- Retained smaller 48-candidate shortlists for the original +/-10% anchors and introduced bounded 240-candidate shortlists for the +/-5% shapes after real-image tests showed substantially greater pixel-phase sensitivity there.
+- Improved exact-quarter-turn gating using the repeated tile periods: native orientation is checked as 35x32 blocks while 90/270-degree candidates are identified by the swapped 32x35 periodicity.
+- Fixed the quarter-turn gate for small carriers that contain a decodable v3 tile but not two complete tile periods: repetition coherence is now treated as unavailable rather than negative evidence, preserving 90/180/270-degree recovery without weakening the gate on larger carriers.
+- Continued to require a valid v3 CRC32/HMAC-SHA256 frame for every successful extraction; all lattice metrics are geometry-ranking signals only.
+
+### Test orchestration and reporting
+
+- Added `make all-test` to execute the distinct test/check suites sequentially, continue after individual failures and print one final status/timing summary.
+- Added `ALL_TEST_REPORT=<path>` to tee the complete run to a report file suitable for build-to-build comparison.
+- Added `ALL_TEST_TARGETS="..."` for targeted comparative/smoke runs and `ALL_TEST_STRICT` to control strict semantics for experimental suites.
+- `all-test` records PixSeal version, host, Go version and ImageMagick version when available.
+- Expanded `make lattice-test` to exercise all four promoted basis shapes.
+
+### Experimental findings
+
+- Reused the two private real photographs from builds 7/8 as external regression material; neither source image is included in the repository or source archive.
+- Verified the complete final `STRICT=1 make lattice-test` matrix on the two private regression photographs: four promoted basis shapes per image, **8/8 authenticated recoveries with no failures or timeouts**.
+- Tested a more continuous/local `u`,`v` refinement prototype. Positive cases recovered, but negative extraction became too expensive, so that strategy was deliberately **not promoted** into build 9.
+- Continuous/general affine estimation, rotation+shear composition, balanced/capacity composed recovery and reverse edit order remain research tasks.
+
+### Documentation and versioning
+
+- Updated README, algorithm specification, results, HISTORY, TODO and version metadata to `v0.2.0 build 9`.
+
+## v0.2.0 build 8 - 2026-09-08
+
+Development build. Not a final v0.2.0 release.
+
+### Symmetric DCT-lattice basis bank
+
+- Kept the adaptive on-image format v3 bit-for-bit unchanged.
+- Generalized the build-7 direct composed search from one hard-coded 110%x90% geometry into a small bank expressed as transformed horizontal/vertical DCT-lattice basis vectors (`u`, `v`).
+- Added the symmetric promoted basis shapes 110%x90% and 90%x110%, each searched from -45 to +45 degrees at 0.25-degree spacing.
+- Kept the search explicitly bounded at 722 sparse basis probes, at most 48 quick candidates per shape (96 stronger-coherence evaluations total), and at most four matrices with three phases each for full authenticated aggregation.
+- Changed the first-stage ranking to preserve a bounded shortlist independently for each basis shape. Real-image testing showed that the 20-position sparse score can under-rank a correct negative-angle matrix even when stronger tile periodicity is high.
+- Continued to require a valid v3 CRC32/HMAC-SHA256 frame for every successful extraction; lattice coherence is used only to rank geometry.
+- Added `make lattice-test` / `STRICT=1 make lattice-test` as a separate experimental corpus target; it intentionally remains outside `make all`.
+
+### Real-corpus validation
+
+- Reused the two private photographs that exposed the build-6 failure as local regression material; neither image is included in the repository or source archive.
+- End-to-end ImageMagick testing at 12.3 degrees recovered both photographs under both promoted anisotropic orientations: **4 passed, 0 failed, 0 timeouts, 0 errors**.
+- Additional development spot checks recovered both promoted basis shapes at positive and negative rotations, including -15 degrees on the smaller real photograph after the per-shape shortlist change.
+- Preserved the existing build-7 110%x90% composition path as a historical regression target while making the build-8 lattice bank the new experimental basis-recovery target.
+
+### Scope and documentation
+
+- Build 8 is still a bounded discrete basis bank, not a continuous/general affine estimator. Continuous/local inference of `u` and `v`, rotation+shear composition, additional anisotropic pairs, balanced/capacity composed recovery and reverse edit order remain research tasks.
+- Updated README, algorithm specification, results, HISTORY, TODO and version metadata for build 8.
+
 ## v0.2.0 build 7 - 2026-09-08
 
 Development build. Not a final v0.2.0 release.

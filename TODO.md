@@ -15,12 +15,18 @@ release-facing changes belong in `CHANGELOG.md`.
       DCT-lattice scoring after real-corpus timeout/failure results (build 7).
 - [x] Use the two private failing photographs as local regression cases without
       including either source image in distributed archives.
-- [ ] Generalize direct lattice composition beyond the current 110%x90% / robust
-      baseline before claiming broader affine invariance.
-- [ ] Estimate the transformed horizontal and vertical lattice basis vectors
-      directly instead of adding separate angle/scale/shear searches indefinitely.
-- [ ] Generalize rotation + anisotropic scale to 90%x110%, 105%x95%, 95%x105%,
-      broader angles, balanced/capacity and the reverse transformation order.
+- [x] Generalize the direct composed search from the build-7 110%x90% case to a
+      symmetric build-8 lattice-basis bank covering both 110%x90% and 90%x110%
+      before rotation, while preserving a fixed search budget.
+- [ ] Move from the build-9 discrete basis bank to continuous or locally refined
+      inference of the transformed horizontal and vertical lattice basis vectors
+      (`u`, `v`) instead of growing an edit-specific table indefinitely. A first
+      build-9 prototype recovered positives but was rejected because negative-case
+      runtime was too high.
+- [x] Extend the direct lattice bank to 105%x95% and 95%x105% before rotation
+      using real-corpus evidence (build 9).
+- [ ] Extend composed recovery to balanced/capacity and the reverse transformation
+      order only when real-corpus evidence supports each promotion.
 - [ ] Compose arbitrary rotation with X/Y shear using the same bounded-candidate
       principle.
 - [ ] Add regression cases for rotation + affine combinations on all adaptive
@@ -86,12 +92,15 @@ release-facing changes belong in `CHANGELOG.md`.
 
 ### Testing and release hardening
 
+- [x] Add `make all-test` with sequential execution, strict experimental-suite
+      semantics, comparative timing/status summary and optional full report capture.
 - [ ] Run `go test ./...` uncached on PJ's Linux system after every substantial
       geometry change.
 - [ ] Run `make test`, `make deep-test`, `make extreme-test`,
-      `STRICT=1 make geometry-test`, `STRICT=1 make affine-test` and
-      `STRICT=1 make composition-test` on
-      `original pics/` before release candidates.
+      `STRICT=1 make geometry-test`, `STRICT=1 make affine-test`,
+      `STRICT=1 make composition-test` and `STRICT=1 make lattice-test` on
+      `original pics/` before release candidates; `make all-test` is the preferred
+      one-command comparative wrapper for the complete sequence.
 - [ ] Record relevant corpus results in `docs/RESULTS.md` without implying that
       observed thresholds are universal guarantees.
 - [ ] Audit README, CLI help, algorithm specification, HISTORY, TODO and

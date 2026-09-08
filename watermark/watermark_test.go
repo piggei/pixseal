@@ -521,45 +521,67 @@ func TestV3CombinedGeometryRecovery(t *testing.T) {
 	}
 }
 
-func TestV3DirectLatticeCompositionRecovery(t *testing.T) {
-	key := []byte("direct lattice composition key")
-	message := []byte("direct lattice")
-	options := DefaultOptions()
-	options.Profile = ProfileRobust
-	marked, err := Embed(testImage(700, 600), message, key, options)
-	if err != nil {
-		t.Fatal(err)
+func TestV3DirectLatticeBasisRecovery(t *testing.T) {
+	key := []byte("direct lattice basis key")
+	tests := []struct {
+		name   string
+		scaleX float64
+		scaleY float64
+	}{
+		{name: "110x90", scaleX: 1.10, scaleY: 0.90},
+		{name: "90x110", scaleX: 0.90, scaleY: 1.10},
+		{name: "105x95", scaleX: 1.05, scaleY: 0.95},
+		{name: "95x105", scaleX: 0.95, scaleY: 1.05},
 	}
-	scaled := resizeBilinear(marked,
-		int(math.Round(float64(marked.Bounds().Dx())*1.10)),
-		int(math.Round(float64(marked.Bounds().Dy())*0.90)))
-	transformed := rotateBilinearForTest(scaled, 12.3)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			message := []byte("direct lattice")
+			options := DefaultOptions()
+			options.Profile = ProfileRobust
+			marked, err := Embed(testImage(700, 600), message, key, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			scaled := resizeBilinear(marked,
+				int(math.Round(float64(marked.Bounds().Dx())*tc.scaleX)),
+				int(math.Round(float64(marked.Bounds().Dy())*tc.scaleY)))
+			transformed := rotateBilinearForTest(scaled, 12.3)
 
-	got, info, err := ExtractWithInfo(transformed, key)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(got, message) || info.Profile != ProfileRobust {
-		t.Fatalf("direct-lattice composition got payload=%q profile=%s", got, info.Profile)
-	}
-	if math.Abs(normalizeDegrees(info.RotationCorrectionDegrees+12.3)) > 0.20 {
-		t.Fatalf("rotation correction %.2f, want approximately -12.3", info.RotationCorrectionDegrees)
-	}
-	if math.Abs(info.ScaleXCorrection-1/1.10) > 0.001 || math.Abs(info.ScaleYCorrection-1/0.90) > 0.001 {
-		t.Fatalf("scale correction x=%.4f y=%.4f", info.ScaleXCorrection, info.ScaleYCorrection)
+			got, info, err := ExtractWithInfo(transformed, key)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, message) || info.Profile != ProfileRobust {
+				t.Fatalf("direct-lattice basis got payload=%q profile=%s", got, info.Profile)
+			}
+			if math.Abs(normalizeDegrees(info.RotationCorrectionDegrees+12.3)) > 0.20 {
+				t.Fatalf("rotation correction %.2f, want approximately -12.3", info.RotationCorrectionDegrees)
+			}
+			if math.Abs(info.ScaleXCorrection-1/tc.scaleX) > 0.001 || math.Abs(info.ScaleYCorrection-1/tc.scaleY) > 0.001 {
+				t.Fatalf("scale correction x=%.4f y=%.4f", info.ScaleXCorrection, info.ScaleYCorrection)
+			}
+		})
 	}
 }
 
-func TestDirectLatticeCompositionSearchIsFixed(t *testing.T) {
-	if directLatticeScale != [2]float64{1.10, 0.90} {
-		t.Fatalf("direct lattice baseline=%v, want [1.10 0.90]", directLatticeScale)
+func TestDirectLatticeBasisSearchIsFixed(t *testing.T) {
+	if len(latticeBasisShapes) != 4 {
+		t.Fatalf("lattice basis shape count=%d, want 4", len(latticeBasisShapes))
+	}
+	if latticeBasisShapes[0].scaleX != 1.10 || latticeBasisShapes[0].scaleY != 0.90 ||
+		latticeBasisShapes[1].scaleX != 0.90 || latticeBasisShapes[1].scaleY != 1.10 ||
+		latticeBasisShapes[2].scaleX != 1.05 || latticeBasisShapes[2].scaleY != 0.95 ||
+		latticeBasisShapes[3].scaleX != 0.95 || latticeBasisShapes[3].scaleY != 1.05 {
+		t.Fatalf("unexpected lattice basis bank: %+v", latticeBasisShapes)
 	}
 	count := 0
-	for angle := -45.0; angle <= 45.000001; angle += 0.25 {
-		count++
+	for range latticeBasisShapes {
+		for angle := -45.0; angle <= 45.000001; angle += 0.25 {
+			count++
+		}
 	}
-	if count != 361 {
-		t.Fatalf("direct lattice angle probe count=%d, want 361", count)
+	if count != 1444 {
+		t.Fatalf("direct lattice probe count=%d, want 1444", count)
 	}
 }
 

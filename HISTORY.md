@@ -157,12 +157,78 @@ estimate transformed lattice basis vectors directly rather than continually addi
 separate rotation/scale/shear heuristics. That representation is also the natural
 bridge toward projective geometry and the eventual print-camera channel.
 
+## v0.2.0 build 8 — First symmetric lattice-basis bank
+
+Build 8 kept format v3 unchanged and generalized the build-7 direct composed
+search from one hard-coded anisotropic geometry into the first explicit bank of
+transformed lattice bases.
+
+Each candidate is represented by the observed horizontal and vertical basis
+vectors (`u`, `v`) of the PixSeal DCT lattice. The first promoted bank contains
+two symmetric anisotropic shapes, 110%x90% and 90%x110%, each searched over the
+same bounded quarter-degree orientation range.
+
+Real-corpus testing again shaped the implementation. A sparse 20-position score
+was sufficient for the original positive-angle baseline but could under-rank the
+correct geometry at negative angles. Build 8 therefore changed the ranking to
+retain at most 48 quick candidates per basis shape before stronger repetition
+analysis. The full authenticated budget remains only four matrices with three
+phases each.
+
+The two private photographs that exposed build 6 were rerun through ImageMagick
+at 12.3 degrees under both anisotropic orientations. `STRICT=1 make lattice-test`
+completed with 4/4 recovered messages and no timeout. Additional development
+spot checks recovered positive and negative rotations on the promoted basis
+shapes.
+
+This build deliberately stops short of calling the bank a general affine
+estimator. The next architectural step remains continuous or locally refined
+inference of `u` and `v`, including non-orthogonal bases for shear, rather than
+adding an ever-growing list of edit-specific cases.
+
+## v0.2.0 build 9 — Broader lattice bank and unified test reports
+
+Build 9 kept format v3 unchanged and expanded the build-8 transformed-lattice
+bank from two to four anisotropic basis shapes. In addition to the 110%x90% and
+90%x110% anchors, the decoder now promotes 105%x95% and 95%x105% before
+arbitrary rotation. These moderate anisotropies are important because they show
+that the lattice representation generalizes beyond one deformation magnitude.
+
+Real-image experimentation again influenced the search budget. The moderate
+shapes showed stronger sensitivity to pixel phase than the +/-10% anchors;
+shrinking their quick shortlist caused a private regression carrier to be missed.
+Build 9 therefore keeps a larger but still finite shortlist for those shapes
+while preserving a maximum of four matrices and three phases for full
+authenticated aggregation.
+
+The final end-to-end lattice regression on the two private photographs exercised
+all four promoted basis shapes and completed 8/8 authenticated recoveries with no
+failures or timeouts. The photographs remain external test material and are not
+distributed.
+
+A prototype attempted more continuous/local refinement of the observed lattice
+vectors `u` and `v`. It recovered positive composed cases but pushed negative
+extraction toward unacceptable runtimes. The prototype was not promoted. This is
+recorded intentionally: future continuous estimation needs **more information per
+probe**, not merely a denser search.
+
+Build 9 also introduced `make all-test`, a sequential orchestrator that runs all
+distinct test/check suites, continues after individual failures and emits one
+summary containing status and elapsed time. Optional report capture makes the
+output suitable for comparing geometric robustness and runtime across builds.
+
+Final closeout also exposed a small-carrier edge case in the new quarter-turn
+periodicity gate: carriers with one decodable tile but insufficient area for two
+full periods were being treated as low-coherence. The gate now distinguishes
+unmeasurable repetition from negative evidence, preserving bounded 90/180/270
+degree recovery on small carriers.
+
 ## Current direction
 
-The next controlled step is to generalize direct lattice estimation beyond the
-single 110%x90% baseline and infer the transformed horizontal/vertical lattice
-basis more directly. That should cover broader affine cases without multiplying
-independent angle/scale/shear searches. After that, the project will move toward
+The next controlled step is to move beyond the expanded discrete build-9 basis bank and
+infer or locally refine the transformed horizontal/vertical lattice vectors
+directly, without paying for a dense negative-case search. That should cover broader affine cases, including shear, without
+multiplying independent angle/scale/shear searches. After that, the project will move toward
 bounded projective/perspective recovery.
 
 The long-term experimental target is a physical-channel test:

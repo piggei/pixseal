@@ -1,3 +1,3 @@
-PixSeal v0.2.0 build 7
+PixSeal v0.2.0 build 9
 
-Development build replacing rotation-first composed geometry with bounded direct v3 DCT-lattice estimation while keeping the adaptive on-image format unchanged.
+Development build expanding direct DCT-lattice basis recovery to moderate anisotropies and adding sequential all-suite reporting while keeping format v3 unchanged.

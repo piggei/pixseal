@@ -51,12 +51,26 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	if ok {
 		return payload, info, nil
 	}
+	nativeCoherence := nativeRepetitionCoherence(sourcePlane)
 
 	// Exact 90/180/270-degree rotations preserve the 8x8 lattice and can be
-	// corrected losslessly. A sync-score gate prevents three extra full probes on
-	// ordinary negative inputs while retaining a bounded fast path for quarter turns.
+	// corrected losslessly. Build 9 adds a key-independent repetition gate: 90/270
+	// swap the 35x32 tile periods to 32x35, while 180 keeps the native period. This
+	// prevents a high content-derived sync score from launching three expensive
+	// full quarter-turn probes on unrelated composed geometry.
 	if directScore >= 760 && !exceedsPixelLimit(sourcePlane.bounds.Dx(), sourcePlane.bounds.Dy(), maxSearchPixels) {
-		for quarterTurns := 1; quarterTurns <= 3; quarterTurns++ {
+		quarterTurnsToTry := make([]int, 0, 3)
+		// Repetition coherence is a fast gate only when the carrier is large
+		// enough to contain two complete logical periods. A small carrier can
+		// still contain one fully decodable tile, so lack of measurable
+		// repetition must not suppress exact quarter-turn recovery.
+		if !canMeasureAlignedRepetition(sourcePlane, tileHeight, tileWidth) || quarterTurnRepetitionCoherence(sourcePlane) >= 0.82 {
+			quarterTurnsToTry = append(quarterTurnsToTry, 1, 3)
+		}
+		if !canMeasureAlignedRepetition(sourcePlane, tileWidth, tileHeight) || nativeCoherence >= 0.82 {
+			quarterTurnsToTry = append(quarterTurnsToTry, 2)
+		}
+		for _, quarterTurns := range quarterTurnsToTry {
 			corrected := rotatePixelPlaneQuarter(sourcePlane, quarterTurns)
 			if payload, info, _, ok := searchV3(corrected, decoder, candidateBlockSizes[:]); ok {
 				info.RotationCorrectionDegrees = normalizeDegrees(float64(quarterTurns * 90))
@@ -65,15 +79,15 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 		}
 	}
 
-	// Build 7 promotes the real-corpus composition regression to a direct lattice
-	// search before orientation-specific heuristics. This stage is intentionally
-	// narrow (110%x90% followed by arbitrary rotation) and dimension-independent:
-	// it scores the repeated v3 DCT lattice itself rather than trusting an angle
-	// estimate that anisotropic scaling may distort. Native coherent carriers skip
-	// it, preserving the cheap wrong-key path.
+	// Build 8 introduced a small real-corpus basis bank. Build 9 expands that bank
+	// to symmetric +/-5% and +/-10% anisotropies while keeping the same direct
+	// lattice search model. The bank scores the repeated v3 DCT lattice directly
+	// instead of trusting a standalone rotation estimate that anisotropic scaling
+	// may distort. Native coherent carriers skip it, preserving the cheap
+	// wrong-key path.
 	directLatticeEvidence := latticeCandidate{}
-	if nativeRepetitionCoherence(sourcePlane) < 0.82 {
-		payload, info, candidate, ok := searchV3DirectLatticeComposition(sourcePlane, decoder)
+	if nativeCoherence < 0.82 {
+		payload, info, candidate, ok := searchV3DirectLatticeBasis(sourcePlane, decoder)
 		directLatticeEvidence = candidate
 		if ok {
 			info.RotationCorrectionDegrees = normalizeDegrees(-candidate.angle)
@@ -87,7 +101,7 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	// probing when the DCT lattice still has a strong zero-degree signature. This
 	// distinguishes pure anisotropic scale/shear from composed geometry and avoids
 	// letting an affine-distorted carrier masquerade as a rotation candidate.
-	if hasStrongZeroDegreeLattice(sourcePlane) && nativeRepetitionCoherence(sourcePlane) < 0.82 {
+	if hasStrongZeroDegreeLattice(sourcePlane) && nativeCoherence < 0.82 {
 		if payload, info, candidate, ok := searchV3AxisAlignedAffine(sourcePlane, decoder); ok {
 			applyAffineCorrectionInfo(&info, candidate)
 			return payload, info, nil
@@ -130,8 +144,8 @@ func extractV3(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	// authentication failed, we have now also given the established axis-aligned
 	// affine and rotation paths a chance to recover legitimate alternate geometry.
 	// Do not continue into the expensive pure-resize normalization cascade: this
-	// is the bounded wrong-key/damaged-payload exit for the build-7 composition
-	// baseline.
+	// is the bounded wrong-key/damaged-payload exit for the build-9 lattice-basis
+	// bank.
 	if directLatticeEvidence.decisive {
 		return nil, ExtractInfo{}, errors.New("v3 hidden payload not found or key is incorrect")
 	}

@@ -1,8 +1,8 @@
 # PixSeal algorithm specification
 
 This document describes the adaptive **format v3** used by PixSeal
-v0.2.0 build 7. Runtime extraction is intentionally v3-only; formats v1 and v2
-are retained only as historical development context. Builds 3 through 7 add
+v0.2.0 build 9. Runtime extraction is intentionally v3-only; formats v1 and v2
+are retained only as historical development context. Builds 3 through 8 add
 bounded geometric recovery around the unchanged v3 on-image format.
 
 PixSeal is an experimental robust image-steganography system for short
@@ -339,6 +339,15 @@ The gated quarter-turn branch therefore adds at most:
 This preserves quarter-turn compatibility with the existing 100%, 75% and 50%
 direct resize paths without adding a new scale search.
 
+Build 9 additionally gates exact quarter turns with key-independent tile-period
+coherence: native/180-degree geometry repeats as `35x32` blocks, while 90/270
+degrees swap the periods to `32x35`. The coherence gate is used only when the
+carrier is large enough to contain **two complete logical periods** along at
+least one axis. A smaller carrier can still contain one decodable tile; in that
+case repetition is classified as *not measurable* rather than as evidence
+against the quarter-turn candidate, and the bounded direct-score gate remains
+available.
+
 ### 10.3 Arbitrary-angle multi-lattice orientation probe
 
 A naive full decode for every angle and every scale would multiply failed-
@@ -497,63 +506,85 @@ shear X 8 degrees and shear Y 8 degrees across all three profiles. These are
 measured regression cases, not continuous guarantees over the complete +/-10%
 or +/-10-degree hypothesis range.
 
-### 10.6 Direct lattice estimation for composed scale + rotation
+### 10.6 Direct lattice-basis estimation for composed anisotropy + rotation
 
-Build 7 replaces the build-6 rotation-first composition heuristic while leaving
-the v3 on-image format unchanged. The claimed edit order remains deliberately
-narrow:
+Build 9 keeps the v3 on-image format unchanged and expands the explicit
+**lattice-basis bank** introduced in build 8.
 
-```text
-anisotropic X/Y scale -> arbitrary rotation
-```
-
-Build 6 first tried to estimate rotation independently and then combine two
-rotation peaks with discrete anisotropic scales. Real-corpus testing showed that
-this decomposition is not reliable: anisotropic scale can move the apparent
-orientation peak enough that the correct composed matrix is never considered.
-
-Build 7 therefore evaluates the repeated **v3 DCT lattice directly** under the
-composed transform. For the currently promoted baseline, the forward matrix is
-`R * S` with `S = diag(1.10, 0.90)`. Angle is searched directly from -45 to +45
-degrees in 0.25-degree increments.
-
-The sparse first-stage score uses 20 deterministic logical tile positions. For
-each candidate matrix, it compares the sign of the DCT coefficient-difference
-signal in adjacent repeated tiles. Pixel phase is searched on a 4x4 even grid and
-refined locally by one pixel. The score is key-independent and only ranks
-geometry.
-
-The deterministic search budget is:
+A candidate linear carrier geometry is represented by two column vectors:
 
 ```text
-1 anisotropic scale pair
-361 quarter-degree angles
-= 361 sparse composed-lattice probes maximum
+u = transformed horizontal source-pixel basis
+v = transformed vertical source-pixel basis
 
-16 candidates receive stronger periodicity measurement maximum
-4 candidates retained for authenticated aggregation maximum
-3 pixel phases per retained candidate maximum
-= 12 full-carrier authenticated composed probes maximum
+      [ ux  vx ]
+M  =  [        ]
+      [ uy  vy ]
 ```
 
-The stronger stage reuses the build-5 virtual affine sampler and repetition
-coherence. It is intentionally performed only on the small shortlist produced by
-the sparse stage.
+This representation is independent of CLI edit names. Build 9 still uses a
+discrete bank rather than continuously estimating the matrix, but it evaluates
+the basis vectors directly instead of trusting a standalone rotation estimate
+followed by a scale guess.
 
-The final v3 HMAC remains the sole success criterion. On success, extraction
-reports both the inverse rotation correction and inverse X/Y scale correction.
+The promoted basis shapes are:
 
-This build intentionally does **not** claim general rotation+affine recovery. The
-validated development baseline is the `robust` profile under 110%x90% scaling
-followed by a 12.3-degree rotation. Balanced/capacity profiles, the 90%x110% and
-smaller anisotropy cases, broader angle envelopes, the reverse order
-`rotation -> anisotropic scale`, and rotation combined with shear remain open
-research items.
+```text
+A: u=(1.10,0.00), v=(0.00,0.90)   # 110%x90%
+B: u=(0.90,0.00), v=(0.00,1.10)   #  90%x110%
+C: u=(1.05,0.00), v=(0.00,0.95)   # 105%x95%
+D: u=(0.95,0.00), v=(0.00,1.05)   #  95%x105%
+```
 
-The next intended generalization is not a larger Cartesian table of angle/scale
-values. The preferred direction is to estimate the transformed horizontal and
-vertical lattice basis vectors directly, which naturally leads from affine
-geometry toward projective/homography recovery.
+For an orientation angle `theta`, both vectors are rotated together before the
+matrix is scored. The angle range is fixed:
+
+```text
+-45 .. +45 degrees, step 0.25 degrees
+361 angles per basis shape
+4 basis shapes
+1444 sparse lattice probes maximum
+```
+
+For each matrix the first stage uses 20 deterministic logical tile positions and
+compares DCT-sign agreement between adjacent repeated v3 tiles. Pixel phase is
+searched on the even 4x4 grid and locally refined by one pixel. The score is
+key-independent and can only rank geometry.
+
+Real-corpus testing shows different phase sensitivity for the two anisotropy
+magnitudes. Build 9 therefore uses two bounded shortlist sizes:
+
+```text
+110%x90% / 90%x110%: 48 quick candidates per shape maximum
+105%x95% / 95%x105%: 240 quick candidates per shape maximum
+
+stronger repetition/coherence evaluations maximum:
+48 + 48 + 240 + 240 = 576
+
+4 matrices retained for authenticated aggregation maximum
+3 pixel phases per retained matrix maximum
+12 full-carrier authenticated probes maximum
+```
+
+The stronger stage uses the virtual affine sampler from build 5 and measures
+periodicity over a larger deterministic subset of the repeated tile. Candidates
+below the stronger coherence threshold are discarded before full-carrier
+aggregation. HMAC-SHA256 authentication of the recovered v3 frame remains the
+sole success criterion. When a basis candidate succeeds, the CLI reports the
+inverse rotation and inverse X/Y scale corrections.
+
+The larger moderate-anisotropy shortlist is not an arbitrary performance trade:
+reducing it during development caused a real private regression carrier to miss
+the correct 105%x95% geometry. The bound is therefore explicit and is tracked as
+a negative-case performance cost.
+
+A denser/local refinement prototype for `u` and `v` was also evaluated in build
+9. It recovered positive cases but made negative extraction too expensive, so it
+was deliberately not promoted. Future continuous estimation must extract richer
+geometric information per probe rather than simply increasing candidate density.
+
+The private real photographs used for regression are external development
+material and are not part of distributed archives.
 
 ### 10.7 Pure-resize inverse normalization
 
@@ -702,26 +733,27 @@ Sensitive messages should be encrypted separately before embedding.
 
 ## 15. Current unsupported geometry and direction
 
-Build 7 retains experimental recovery for digital rotation plus the first combined
-75%-resize/crop baseline. It does not yet synchronize:
+Build 9 retains experimental recovery for digital rotation, the measured
+75%-resize/crop combinations, the discrete axis-aligned affine bank and the
+first symmetric anisotropic lattice-basis bank. It does not yet synchronize:
 
 - arbitrary-angle + 50% resize at default strength;
 - arbitrary fractional scales beyond the detected 75% lattice;
-- arbitrary rotation composed with anisotropic scale outside the deliberately
-  narrow build-7 `robust` 110%x90% -> rotation baseline;
+- continuous anisotropic scale + rotation outside the four promoted build-9
+  `robust` basis shapes (110%x90%, 90%x110%, 105%x95% and 95%x105%);
 - arbitrary rotation composed with X/Y shear;
-- affine transforms outside the discrete build-5 scale/shear hypotheses;
+- continuous affine transforms outside the discrete build-5/build-9 banks;
 - perspective transforms;
 - print-camera distortion.
 
-The next research step is to generalize direct lattice estimation across more
-anisotropic cases/profiles and infer transformed lattice basis vectors directly,
-followed by bounded projective/perspective correction.
-The intended approach remains staged, bounded synchronization and geometric
-rectification rather than multiplying open-ended brute-force dimensions.
+The next research step is continuous or locally refined estimation of the two
+transformed lattice basis vectors **without a dense negative-case search**, followed
+by bounded projective/perspective recovery. The intended approach remains staged, bounded synchronization and
+geometric rectification rather than multiplying open-ended brute-force
+parameters.
 
 A later experimental target is recovery through a print-camera channel: print
 the carrier, photograph it with a phone, geometrically rectify the photograph,
-then recover the authenticated v3 payload. Digital rotation and combined
-resize/crop are controlled validation stages for orientation, scale and phase;
-they are not evidence that the print-camera channel already works.
+then recover the authenticated v3 payload. Digital rotation, combined
+resize/crop and basis-bank tests are controlled validation stages; they are not
+evidence that the physical print-camera channel already works.

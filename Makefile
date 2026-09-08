@@ -31,9 +31,15 @@ COMPOSITION_PROFILES ?= robust
 COMPOSITION_ANGLES ?= 12.3
 COMPOSITION_MODES ?= scale110x90-rotate
 COMPOSITION_MAX_MPIX ?= 50
+LATTICE_ANGLES ?= 12.3
+LATTICE_MODES ?= scale110x90-rotate scale90x110-rotate scale105x95-rotate scale95x105-rotate
+LATTICE_MAX_MPIX ?= 50
+ALL_TEST_REPORT ?=
+ALL_TEST_TARGETS ?=
+ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test all build-all core-target-check clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test all-test all build-all core-target-check vet clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -180,6 +186,34 @@ composition-test: build
 	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
 	STRICT="$(STRICT)" \
 	bash ./scripts/test-composition.sh
+
+# Experimental direct lattice-basis suite; intentionally excluded from make all.
+lattice-test: build
+	@echo "Running direct lattice-basis composition tests..."
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PICS_DIR="$(CURDIR)/$(ORIGINAL_PICS_DIR)" \
+	TEST_KEY="$(TEST_KEY)" \
+	TEST_MESSAGE_ROBUST="$(TEST_MESSAGE_ROBUST)" \
+	LATTICE_ANGLES="$(LATTICE_ANGLES)" \
+	LATTICE_MODES="$(LATTICE_MODES)" \
+	LATTICE_MAX_MPIX="$(LATTICE_MAX_MPIX)" \
+	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" \
+	STRICT="$(STRICT)" \
+	bash ./scripts/test-lattice.sh
+
+# Run every test/check target sequentially, continue after individual failures,
+# and print one comparable summary at the end. Experimental suites are forced
+# into STRICT=1 so a reported FAIL/TIMEOUT is reflected in the target status.
+# Set ALL_TEST_REPORT=path/to/report.txt to tee the complete run to a file.
+all-test:
+	@ALL_TEST_REPORT="$(ALL_TEST_REPORT)" \
+	ALL_TEST_TARGETS="$(ALL_TEST_TARGETS)" \
+	ALL_TEST_STRICT="$(ALL_TEST_STRICT)" \
+	bash ./scripts/test-all.sh
+
+vet:
+	@echo "Running go vet..."
+	@go vet ./...
 
 # Run build + local round-trip tests + baseline transformation tests.
 all: test deep-test
