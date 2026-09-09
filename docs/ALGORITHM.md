@@ -1,8 +1,10 @@
-# PixSeal v0.2.0 — Format v3 and decoder specification
+# PixSeal — Format v3 stable specification and v0.3 research diagnostics
 
-This document describes the implementation shipped in **v0.2.0**. Historical
-strategies from intermediate builds belong in `HISTORY.md` and are not normative
-for the current decoder.
+Sections 1-19 describe the stable Format v3 and production decoder shipped in
+**v0.2.0**; those rules remain unchanged in **v0.3.0-dev1**. Historical
+strategies from intermediate builds belong in `HISTORY.md`. The final appendix
+documents the separate v0.3 research diagnostic and is not part of the on-image
+format or authenticated extraction contract.
 
 PixSeal is an experimental robust-steganography system for short authenticated
 messages. DCT watermarking is the carrier mechanism; it is not an ownership
@@ -321,3 +323,55 @@ Formats v1 and v2 were internal experimental formats. Runtime extraction is
 v3-only because no external v1/v2 compatibility population existed when the
 v0.2 line was consolidated. Historical details belong in `HISTORY.md` and
 `CHANGELOG.md`.
+
+## 20. v0.3.0-dev1 local-lattice diagnostic (non-normative)
+
+`DiagnoseGeometry` is intentionally separate from `ExtractWithInfo`. Its output
+is research evidence only; no confidence or lattice score can authenticate a
+watermark. Only the existing Format v3 frame/HMAC path can do that.
+
+The dev1 pipeline is:
+
+```text
+decoded source image
+  -> bounded luminance diagnostic level(s)
+  -> spatial regions (3x3 by default)
+  -> coarse orthogonal u/v candidates
+  -> distributed block/phase probing across each region
+  -> quick 35x32 tile-repetition ranking
+  -> bounded local refinement and full-repetition shortlist
+  -> per-region candidate pools
+  -> 90-degree-equivalence alignment
+  -> cross-region consensus
+  -> diagnostic lattice evidence
+```
+
+For very large inputs, the diagnostic luminance plane is sampled directly from
+the decoded image at a power-of-two divisor chosen to keep the analysis level
+within `MaxAnalysisDimension` (2048 by default). This avoids another full RGB
+search copy, but the standard Go decoder still materializes the source image.
+
+Default dev1 budgets per region are deterministic and exposed in JSON:
+
+```text
+coarse basis candidates       117
+refined basis candidates      243
+quick repetition candidates   117
+full repetition shortlist      12 per stage
+max full repetition candidates 25 per region
+max phase hypotheses/basis     16
+sample blocks/phase            25
+regions                         9 (default; bounded to 16)
+```
+
+The estimator reports `u` and `v` in native source-pixel coordinates even when a
+downsampled diagnostic level is used. Local regions do not independently decide
+the global geometry; a consensus stage aligns the square lattice's quarter-turn
+equivalent bases before measuring consistency.
+
+Dev1 is not yet a general projective decoder. Arbitrary-angle candidate
+generation is still insufficiently reliable on transformed carriers, so no
+homography is fitted and no diagnostic candidate is promoted into the production
+extractor. This separation is deliberate to avoid overfitting and unbounded
+search growth.
+

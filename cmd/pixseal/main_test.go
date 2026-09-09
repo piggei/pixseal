@@ -19,7 +19,7 @@ import (
 
 func TestSubcommandHelpReturnsFlagErrHelp(t *testing.T) {
 	for name, fn := range map[string]func([]string) error{
-		"embed": embed, "extract": extract, "capacity": capacity, "analyze": analyze,
+		"embed": embed, "extract": extract, "capacity": capacity, "analyze": analyze, "diagnose": diagnose,
 	} {
 		t.Run(name, func(t *testing.T) {
 			if err := fn([]string{"-help"}); !errors.Is(err, flag.ErrHelp) {

@@ -146,3 +146,19 @@ The initial RC4 research geometry run contained two 60-second timeouts; a
 targeted 120-second rerun recovered both and reproduced the RC2 experimental
 reference of 65/120 with zero timeouts. The remaining geometry/affine failures
 are retained as measured research limits rather than release-baseline failures.
+
+## v0.3.0-dev1 — local lattice diagnostic
+
+Started the v0.3 line from the final v0.2.0 baseline without changing Format v3,
+the deterministic encoder or the production extraction search order. Added a
+separate bounded diagnostic estimator that measures local lattice basis vectors,
+phase, DCT margin, periodic/tile repetition coherence and cross-region consensus.
+The diagnostic path uses sampled luminance working planes and exposes explicit
+search budgets/timings through CLI JSON.
+
+The first checkpoint intentionally stops before integration into `ExtractWithInfo`.
+Canonical marked/unmarked discrimination is covered by new regressions, while
+arbitrary-angle automatic estimation remains a measured limitation. A private
+print-camera harness was added with HMAC-only PASS semantics and clean SKIP when
+the undistributed real corpus is unavailable.
+

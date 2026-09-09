@@ -37,12 +37,15 @@ LATTICE_MODES ?= scale110x90-rotate scale90x110-rotate scale105x95-rotate scale9
 LATTICE_MAX_MPIX ?= 50
 PERSPECTIVE_MODES ?= top-narrow-4 bottom-narrow-4
 PERSPECTIVE_MAX_MPIX ?= 50
+PRINT_CAMERA_DIR ?= print-camera private
+PRINT_CAMERA_KEY ?= Piccotti
+PRINT_CAMERA_TIMEOUT ?= 180
 ALL_TEST_REPORT ?=
 ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit release-unit research-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
+.PHONY: build test test-unit release-unit research-unit lattice-estimator-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -67,6 +70,23 @@ release-unit:
 	@echo "Running release-gate Go tests..."
 	@go test ./cmd/pixseal ./internal/buildinfo -count=1
 	@go test ./watermark -run 'Test(V3EncoderGoldenFingerprint|StrengthRejectsNonFiniteValues|AnalyzerUsesSameWhiteAlphaFlatteningAsEncoder|WorkingImageLimitRejectsBeforePixelPlaneAllocation|WorkingImageLimitRejectsIntegerOverflow|IsotropicScaleSearchIsFixed|HammingCorrectsSingleBit|ProfileSelectionThresholds|ExplicitProfileCapacityErrors|V3ProfileRoundTrips|V3TransformsByProfile|V3AutoProfileExtraction|WrongKeyAndUnmarkedImageAreBounded|AnalyzeImageMatchesProfileMath|V3FrameIgnoresTrailingPaddingButAuthenticatesHeader|V3SyncPatternObservationCounts|V3TileMappingObservationCounts)$$' -count=1
+
+
+# v0.3 bounded local-lattice diagnostic regressions. These are research tests and
+# deliberately remain outside the v0.2-derived release-unit gate.
+lattice-estimator-test:
+	@echo "Running v0.3 local-lattice estimator regressions..."
+	@go test ./watermark -run '^TestDiagnostic' -count=1
+
+# Private real print -> paper -> smartphone regression gate. The two original
+# photographs are never distributed with the source tree. Missing corpus is a
+# clean SKIP; when present, PASS requires an authenticated Format v3 HMAC.
+print-camera-test: build
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PRINT_CAMERA_DIR="$(CURDIR)/$(PRINT_CAMERA_DIR)" \
+	PRINT_CAMERA_KEY="$(PRINT_CAMERA_KEY)" \
+	PRINT_CAMERA_TIMEOUT="$(PRINT_CAMERA_TIMEOUT)" \
+	bash ./scripts/test-print-camera.sh
 
 # Deterministic Go regressions for experimental geometry. all-test runs this
 # separately so research failures cannot make the release baseline red.

@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.3.0-dev1 — 2026-09-09
+
+First research checkpoint toward print -> paper -> smartphone recovery. Format
+v3, the deterministic encoder and the production `ExtractWithInfo` decoder are
+unchanged from the qualified v0.2.0 baseline.
+
+### Added
+
+- Separate `watermark.DiagnoseGeometry` API and `pixseal diagnose` CLI command.
+- Bounded sampled-luminance diagnostic pyramid for large inputs.
+- Local `u/v` basis, phase, DCT differential margin, periodic coherence and
+  35x32 v3 tile-repetition measurements.
+- Per-region candidate pools with cross-region geometric consensus and explicit
+  handling of 90-degree square-lattice basis equivalence.
+- Explicit coarse/refined/repetition/phase/sample budgets and per-stage timings
+  in JSON output.
+- Optional independent baseline HMAC attempt when a key is supplied. Diagnostic
+  lattice evidence cannot by itself authenticate a payload.
+- `make lattice-estimator-test`.
+- `make print-camera-test`, which uses the two private original smartphone
+  photographs when present, SKIPs cleanly when absent, and reports PASS only for
+  an authenticated Format v3 payload.
+
+### Research status
+
+- Canonical marked synthetic/digital carriers can produce coherent local lattice
+  evidence while corresponding unmarked inputs remain negative in the dev1
+  regression path.
+- Arbitrary-angle automatic local-basis estimation is not yet reliable enough to
+  feed homography fitting; this remains the next geometry milestone.
+- No claim of real print-camera payload recovery is made by dev1.
+
 ## v0.2.0 — 2026-09-09
 
 Final release of the Format v3 line, promoted from RC4 after qualification on

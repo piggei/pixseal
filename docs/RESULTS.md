@@ -165,3 +165,42 @@ that every machine has sufficient RAM for every image below it.
 
 No experimental PASS guarantees recovery on an arbitrary future image, and no
 failed experimental geometry case invalidates the authenticated digital baseline.
+
+## v0.3.0-dev1 research checkpoint — 2026-09-09
+
+The dev1 change is isolated from Format v3, embedding and `ExtractWithInfo`; the
+v0.2 qualification numbers above therefore remain the stable comparison
+baseline. New diagnostic tests add two explicit properties:
+
+- a deterministic marked synthetic carrier must produce bounded local-lattice
+  evidence while its corresponding unmarked source remains negative;
+- optional correct-key authentication uses the existing HMAC path, while a wrong
+  key cannot turn lattice evidence into an authenticated payload.
+
+Local manual qualification on the private digital corpus is recorded only as a
+research observation, not a release guarantee. With robust-profile marked copies
+of the two qualification images, the 2026-09-09 dev1 run measured:
+
+| Input | Lattice evidence | Global consistency | Global `u` | Global `v` |
+|---|---:|---:|---:|---:|
+| marked `PJ_piccolo.png` | true | 0.939 | (7.95, -0.02) | (-0.02, 8.03) |
+| unmarked `PJ_piccolo.png` | false | 0.414 | (5.50, -5.30) | (4.70, 5.23) |
+| marked `PJ_lingua.PNG` | true | 0.981 | (8.07, 0.00) | (0.00, 8.00) |
+| unmarked `PJ_lingua.PNG` | false | 0.442 | (6.31, -1.91) | (1.76, 6.50) |
+
+The marked canonical carriers therefore resolve very close to the native 8-pixel
+lattice while the corresponding unmarked originals remain below the evidence
+gate. Exact values are content dependent and are not frozen as interoperability
+requirements.
+
+The real `foto stampa.PNG` / `foto stampa storta.PNG` corpus is intentionally not
+distributed. `make print-camera-test` therefore SKIPs when that private corpus is
+not installed. When it is installed, only an authenticated Format v3 HMAC can
+produce PASS; useful lattice evidence without HMAC is reported as research, not
+success.
+
+Known dev1 limit: automatic arbitrary-angle local-basis estimation is not yet
+reliable enough to fit a general homography. Synthetic probing shows measurable
+repetition evidence near the true transformed lattice, but candidate generation
+and bounded refinement need further work before the homography milestone.
+

@@ -6,6 +6,7 @@
 
 # Local source images used by tests
 /original pics/
+/print-camera private/
 
 # Test and coverage artifacts
 coverage.out

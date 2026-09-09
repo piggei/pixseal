@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -33,6 +34,7 @@ Commands:
   extract    Recover and authenticate a hidden message with bounded geometric recovery
   capacity   Show the usable payload capacity of an image
   analyze    Recommend a v3 profile and embedding settings
+  diagnose   Experimental bounded local-lattice diagnostics (v0.3 research)
 
 Supported image formats:
   Input       PNG (.png), JPEG (.jpg, .jpeg)
@@ -61,6 +63,14 @@ Analyze options:
   -message TEXT      Message whose UTF-8 byte length should be analyzed
   -bytes N           Payload byte count to analyze instead of -message
 
+Diagnose options:
+  -in FILE           Input JPEG or PNG (required)
+  -key TEXT          Optional key for an independent baseline HMAC attempt
+  -json              Emit machine-readable JSON
+  -regions N         Diagnostic region grid, N x N (default 3, maximum 4)
+  -max-dim N         Maximum diagnostic pyramid dimension (default 2048)
+  -levels N          Maximum diagnostic pyramid levels (default 2, maximum 3)
+
 Run "pixseal <command> -help" to show the options for a command.
 
 Examples:
@@ -68,6 +78,7 @@ Examples:
   pixseal extract -in sealed.png -key "a long secret"
   pixseal capacity -in photo.png -details
   pixseal analyze -in photo.png -message "hidden message"
+  pixseal diagnose -in captured.jpg -json
 `, buildinfo.String())
 
 func main() {
@@ -86,6 +97,8 @@ func main() {
 		err = capacity(os.Args[2:])
 	case "analyze":
 		err = analyze(os.Args[2:])
+	case "diagnose":
+		err = diagnose(os.Args[2:])
 	case "help", "-help", "--help", "-h":
 		rootUsage()
 		return
@@ -591,5 +604,91 @@ func analyze(args []string) error {
 		fmt.Printf("Warning:                   %s\n", warning)
 	}
 	fmt.Println("Note:                      robustness results are experimental; this analysis is not a recovery guarantee")
+	return nil
+}
+
+func diagnose(args []string) error {
+	fs := newFlagSet("diagnose", "Experimental v0.3 local-lattice diagnostics. Lattice evidence is not watermark authentication.")
+	in := fs.String("in", "", "input JPEG or PNG file (required)")
+	key := fs.String("key", "", "optional key for an independent baseline v3 authentication attempt")
+	jsonOutput := fs.Bool("json", false, "emit machine-readable JSON")
+	regions := fs.Int("regions", 3, "diagnostic region grid, N x N (1 to 4)")
+	maxDimension := fs.Int("max-dim", 2048, "maximum diagnostic pyramid dimension (512 to 4096)")
+	levels := fs.Int("levels", 2, "maximum diagnostic pyramid levels (1 to 3)")
+
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 0 {
+		fs.Usage()
+		return fmt.Errorf("unexpected positional argument %q", fs.Arg(0))
+	}
+	if *in == "" {
+		fs.Usage()
+		return fmt.Errorf("-in is required")
+	}
+	if *regions < 1 || *regions > 4 {
+		return fmt.Errorf("-regions must be from 1 to 4")
+	}
+	if *maxDimension < 512 || *maxDimension > 4096 {
+		return fmt.Errorf("-max-dim must be from 512 to 4096")
+	}
+	if *levels < 1 || *levels > 3 {
+		return fmt.Errorf("-levels must be from 1 to 3")
+	}
+
+	img, format, err := openImageWithFormat(*in)
+	if err != nil {
+		return err
+	}
+	options := watermark.DefaultDiagnosticOptions()
+	options.RegionsX = *regions
+	options.RegionsY = *regions
+	options.MaxAnalysisDimension = *maxDimension
+	options.MaxLevels = *levels
+	options.AttemptAuthentication = *key != ""
+	report, err := watermark.DiagnoseGeometry(img, []byte(*key), options)
+	if err != nil {
+		return err
+	}
+	if *jsonOutput {
+		encoder := json.NewEncoder(os.Stdout)
+		encoder.SetIndent("", "  ")
+		return encoder.Encode(report)
+	}
+
+	fmt.Printf("Image:                    %s\n", *in)
+	fmt.Printf("Format:                   %s\n", strings.ToUpper(format))
+	fmt.Printf("Dimensions:               %d x %d\n", report.Width, report.Height)
+	fmt.Printf("Pyramid levels:           ")
+	for index, level := range report.Levels {
+		if index > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Printf("1/%d=%dx%d", level.Divisor, level.Width, level.Height)
+	}
+	fmt.Println()
+	fmt.Printf("Local regions:            %d\n", len(report.Regions))
+	for _, region := range report.Regions {
+		fmt.Printf("  [%d,%d] div=%d u=(%.2f,%.2f) v=(%.2f,%.2f) period=(%.2f,%.2f) angle=%.2f axis=%.2f coherence=%.3f repeat=%.3f confidence=%.3f\n",
+			region.RegionX, region.RegionY, region.AnalysisDivisor,
+			region.U.X, region.U.Y, region.V.X, region.V.Y,
+			region.PeriodU, region.PeriodV, region.OrientationDegrees,
+			region.InterAxisDegrees, region.PeriodicCoherence, region.TileRepetitionCoherence, region.Confidence)
+	}
+	fmt.Printf("Global basis:             u=(%.2f,%.2f) v=(%.2f,%.2f)\n", report.GlobalU.X, report.GlobalU.Y, report.GlobalV.X, report.GlobalV.Y)
+	fmt.Printf("Global consistency:       %.3f\n", report.GlobalConsistency)
+	fmt.Printf("Consensus regions:        %d/%d (%.3f)\n", report.ConsensusRegions, len(report.Regions), report.ConsensusFraction)
+	fmt.Printf("Lattice evidence:         %t  [diagnostic only]\n", report.LatticeEvidence)
+	fmt.Printf("Authentication status:    %s\n", report.AuthenticationStatus)
+	fmt.Printf("Authenticated payload:    %t\n", report.AuthenticatedPayload)
+	if report.AuthenticatedPayload {
+		fmt.Printf("Authenticated profile:    %s\n", report.AuthenticatedProfile)
+		fmt.Printf("Authentication confidence: %.2f\n", report.AuthenticationConfidence)
+	}
+	fmt.Printf("Timing:                   pyramid=%dms lattice=%dms auth=%dms total=%dms\n",
+		report.Timings.PyramidMilliseconds, report.Timings.LocalLatticeMilliseconds,
+		report.Timings.AuthenticationMilliseconds, report.Timings.TotalMilliseconds)
+	fmt.Printf("Note:                     %s\n", report.Note)
 	return nil
 }

@@ -7,7 +7,9 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits in luminance DCT coefficients while trying to keep the visual change small
 under normal viewing conditions.
 
-Current release: **v0.2.0**.
+Current development snapshot: **v0.3.0-dev1**.
+
+Stable release baseline: **v0.2.0**.
 
 PixSeal is a hidden-data channel, not an ownership-marking product. Digital
 watermarking is the robustness mechanism; the project goal is robust
@@ -15,9 +17,10 @@ steganography for short messages. PixSeal does **not** claim statistical
 undetectability and has not undergone a professional cryptographic or
 steganalytic audit.
 
-Format v3 is the interoperability baseline for the v0.2.0 line. Its on-image
-layout and deterministic encoder fingerprints are frozen during release
-hardening.
+Format v3 remains the interoperability baseline. Its on-image layout and
+deterministic encoder fingerprints are **frozen** during the first v0.3 research
+phase: the new work is decoder/diagnostic geometry only unless oracle evidence
+demonstrates that the physical channel destroys the v3 signal.
 
 Project history and future work are kept in [`HISTORY.md`](HISTORY.md) and
 [`TODO.md`](TODO.md). Release-facing changes are in
@@ -40,6 +43,31 @@ rotation, axis-aligned affine transforms, a fixed direct lattice-basis bank and
 two mild projective/keystone hypotheses. These are measured research
 capabilities, not universal guarantees. General homography estimation and the
 physical print-camera channel are outside v0.2.0 scope.
+
+## What v0.3.0-dev1 adds
+
+The first v0.3 research snapshot deliberately leaves the encoder, Format v3 and
+the production `ExtractWithInfo` search order unchanged. It adds a separate,
+bounded geometry diagnostic path:
+
+- `watermark.DiagnoseGeometry`, kept independent from authenticated extraction;
+- a sampled luminance analysis plane and bounded diagnostic pyramid for large
+  inputs, avoiding an additional full RGB search copy;
+- 3x3-by-default local regions that estimate lattice basis vectors `u` and `v`,
+  phase, DCT differential margin, periodic coherence and v3 tile-repetition
+  coherence;
+- per-region shortlists followed by cross-region consensus, including the 90
+  degree basis symmetry of the square lattice;
+- explicit candidate/phase/sample budgets and per-stage timing in machine output;
+- `pixseal diagnose` with human-readable or JSON output;
+- an optional, independent baseline HMAC attempt when `-key` is supplied; lattice
+  evidence alone is never reported as an authenticated watermark;
+- `make lattice-estimator-test` and a private `make print-camera-test` harness.
+
+`v0.3.0-dev1` is a **research checkpoint**, not a new robustness claim. The
+current local estimator discriminates canonical marked/unmarked synthetic and
+qualification-style digital carriers, but arbitrary-angle automatic local-basis
+estimation, homography fitting and real print-camera recovery remain open work.
 
 ## Build
 
@@ -140,6 +168,20 @@ confidentiality is required.
 
 See [`docs/ALGORITHM.md`](docs/ALGORITHM.md) for the precise specification.
 
+## Geometry diagnostics (v0.3 research)
+
+```sh
+pixseal diagnose -in capture.jpg
+pixseal diagnose -in capture.jpg -json
+pixseal diagnose -in capture.jpg -key "a long secret" -json
+```
+
+The diagnostic command reports local and global lattice evidence, bounded search
+budgets and timings. Supplying a key additionally runs the existing baseline
+authenticated extractor when the image is within its bounded search policy. The
+diagnostic estimator does **not** use its lattice candidates to authenticate the
+payload in dev1. A valid Format v3 HMAC remains the only success criterion.
+
 ## Analyze and capacity
 
 ```sh
@@ -188,8 +230,10 @@ verified ~200 MP class usable while avoiding obviously unbounded allocations.
 Some **generated geometry candidates** use the stricter 50,000,000-pixel search
 bound. Such candidates are skipped rather than materialized.
 
-The v0.3 research line may replace the full pixel plane with a lazy/tiled/sparse
-representation; that architectural change is intentionally not part of v0.2.0.
+The v0.3 diagnostic path now builds sampled luminance analysis planes rather than
+an additional full RGB extraction plane. The Go image decoder still materializes
+the decoded source image; dev1 therefore reduces diagnostic working copies but
+is not a streaming/tiled image decoder.
 
 ## Decoder order
 
@@ -274,6 +318,8 @@ make                 # build only
 make test            # complete Go tests + local image round trips
 make release-unit    # release-gate Go regressions only
 make research-unit   # experimental geometry Go regressions
+make lattice-estimator-test # v0.3 bounded local-lattice diagnostics
+make print-camera-test # private real print-camera corpus; SKIP when absent
 make deep-test       # stable JPEG/resize/crop baseline
 make extreme-test    # non-strict progressive resize/crop limit map
 make geometry-test   # experimental rotation/combined geometry
@@ -299,7 +345,10 @@ failures visible separately from the release baseline and reports partial target
 sets as `PARTIAL`/`NOT RUN` rather than as a full qualification PASS.
 
 The local shell suites use `original pics/`, which is private and excluded from
-source archives. An empty test corpus is an error rather than a false PASS.
+source archives. An empty qualification corpus is an error rather than a false
+PASS. `print-camera-test` separately expects the two original private smartphone
+photographs and cleanly reports `SKIP` when they are absent; when present, it can
+report `PASS` only if the authenticated Format v3 payload is recovered.
 
 The full shell qualification harness is intended for **Linux/WSL with Bash >= 4,
 GNU-compatible userland (including `timeout` and `sort -z`) and ImageMagick**.
@@ -311,7 +360,9 @@ This harness requirement is separate from reusable-core portability.
 - Minimum aligned embed geometry: 280x256 pixels.
 - CLI embedding currently accepts text via `-message`; the core stores bytes.
 - General affine inference, arbitrary homography estimation and print-camera
-  recovery are not v0.2.0 guarantees.
+  recovery are not v0.2.0 guarantees and are not yet achieved by v0.3.0-dev1.
+- The v0.3.0-dev1 local estimator still needs stronger arbitrary-angle candidate
+  generation before it can feed a general homography model.
 - Experimental rotation/affine performance is image-content dependent.
 - Failed extraction can be substantially more expensive than successful
   extraction because bounded candidates must be exhausted.
@@ -320,7 +371,11 @@ This harness requirement is separate from reusable-core portability.
 
 ## Release status
 
-**v0.2.0** is the qualified final release of the Format v3 line. It was
+**v0.3.0-dev1** is an experimental development snapshot. It preserves the
+qualified v0.2.0 encoder/Format-v3/production-extractor baseline and adds only a
+separate diagnostic research path.
+
+**v0.2.0** remains the qualified stable release of the Format v3 line. It was
 promoted from RC4 after the stable release baseline passed on the private
 qualification corpus with 72/72 baseline transformations recovered. The
 experimental geometry measurements remain explicitly non-normative and are
