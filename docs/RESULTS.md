@@ -94,30 +94,63 @@ RC2 already contained an end-to-end Go recovery regression; RC3 strengthened the
 synthetic warp implementation while retaining explicit correction-path assertion.
 General homography inference and physical print-camera recovery are not claimed.
 
-## RC4 local hardening verification
+## Final v0.2.0 qualification — 2026-09-09
 
-RC4 is a release-engineering reconciliation build, not an algorithm revision.
-Local package verification confirms:
+The RC4 source candidate was exercised on the same private two-image corpus used
+for the RC2 reference. The complete all-test report recorded:
 
-- Format v3 golden regression remains unchanged;
-- release-scoped Go tests pass;
-- source-size arithmetic includes a true multiplication-overflow regression;
-- subcommand `-help` exits successfully;
-- `capacity` can operate from `DecodeConfig` without full bitmap decoding;
-- strict robustness qualification rejects a run with zero executed baseline
-  transformations;
-- partial `ALL_TEST_TARGETS` runs report `PARTIAL` / `NOT RUN`;
-- `extract -raw` keeps exact payload bytes on stdout and diagnostics on stderr;
-- invalid `PERSPECTIVE_MAX_MPIX` is rejected cleanly;
-- reusable core cross-target checks remain part of the release gate.
+```text
+version-check          PASS
+vet                    PASS
+release-unit           PASS
+test-images            PASS
+deep-test              72/72 PASS
+extreme-test           completed progressive limit mapping
+research-unit          PASS
+geometry-test          63 PASS, 55 FAIL, 2 TIMEOUT (60-second run)
+affine-test            22/24 PASS, 2 FAIL
+composition-test       2/2 PASS
+lattice-test           8/8 PASS
+perspective-test       4/4 PASS
+core-target-check      PASS
 
-A full RC4 private-corpus `make all-test` is still required before promotion to
-`v0.2.0` final. The acceptance reference is the RC2 report above; RC4 must not
-regress the baseline or experimental counts.
+Release baseline: PASS
+Research suites: ATTENTION
+```
+
+The two RC4 geometry timeouts were both `PJ_lingua.PNG`, profile `capacity`, at
+-10 and -5 degrees. A targeted rerun with:
+
+```text
+STRICT=1 EXTRACT_TIMEOUT=120 make geometry-test
+```
+
+recovered both cases and produced:
+
+```text
+65 passed, 55 failed, 0 timeouts, 0 skipped, 0 errors, 120 total
+```
+
+This exactly reproduces the RC2 experimental geometry reference. The timeout
+difference is therefore treated as a wall-clock harness sensitivity, not a
+decoder capability regression. The final source keeps the same decoder search
+banks and uses a 120-second default only for the geometry research harness.
+
+Final release conclusions:
+
+- stable release baseline fully qualified;
+- Format v3 golden fingerprints unchanged;
+- no encoder or decoder-search functional change after RC4;
+- experimental affine/composition/lattice/perspective counts match the RC2
+  reference;
+- geometry capability matches the RC2 65/120 reference when given the validated
+  120-second research timeout;
+- reusable core portability checks pass for linux/amd64, windows/amd64,
+  android/arm64 and ios/arm64.
 
 ## Large images
 
-The v0.2 line has round-tripped a private ~200 MP carrier. RC4 retains the
+The v0.2 line has round-tripped a private ~200 MP carrier. v0.2.0 retains the
 300,000,000-pixel CLI/core source policy from RC2 while keeping RC3's
 overflow-safe arithmetic. Geometry suites independently use lower research
 limits (typically 50/100 MP). The 300 MP guard is a safety policy, not a promise

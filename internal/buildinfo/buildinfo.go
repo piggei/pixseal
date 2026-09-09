@@ -3,7 +3,7 @@ package buildinfo
 
 const (
 	Version    = "0.2.0"
-	Prerelease = "rc4"
+	Prerelease = ""
 )
 
 // String returns the human-readable version.

@@ -1,6 +1,6 @@
 # PixSeal v0.2.0 — Format v3 and decoder specification
 
-This document describes the implementation shipped in **v0.2.0-rc4**. Historical
+This document describes the implementation shipped in **v0.2.0**. Historical
 strategies from intermediate builds belong in `HISTORY.md` and are not normative
 for the current decoder.
 

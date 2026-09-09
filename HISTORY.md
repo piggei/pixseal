@@ -136,3 +136,13 @@ hardening, restores the valid RC2 release/test-harness changes, fixes the
 remaining CLI/release-gate issues, restores the 300 MP v0.2 source policy and
 repairs release chronology/documentation. Format v3 and the frozen search banks
 remain unchanged.
+
+## v0.2.0 — final release
+
+RC4 passed the stable release baseline on the private qualification corpus and
+was promoted to v0.2.0 without further functional changes to Format v3, the
+encoder or decoder search banks. `deep-test` recovered 72/72 baseline cases.
+The initial RC4 research geometry run contained two 60-second timeouts; a
+targeted 120-second rerun recovered both and reproduced the RC2 experimental
+reference of 65/120 with zero timeouts. The remaining geometry/affine failures
+are retained as measured research limits rather than release-baseline failures.

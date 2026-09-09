@@ -7,7 +7,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits in luminance DCT coefficients while trying to keep the visual change small
 under normal viewing conditions.
 
-Current release candidate: **v0.2.0-rc4**.
+Current release: **v0.2.0**.
 
 PixSeal is a hidden-data channel, not an ownership-marking product. Digital
 watermarking is the robustness mechanism; the project goal is robust
@@ -320,10 +320,11 @@ This harness requirement is separate from reusable-core portability.
 
 ## Release status
 
-**v0.2.0-rc4** is a reconciliation/hardening candidate for the v0.2.0 final
-release. It preserves the Format v3 encoder and RC3 filesystem hardening while
-restoring RC2 release/research separation, strict release qualification, raw
-stdout/stderr scripting semantics and accurate RC1→RC2→RC3 history.
+**v0.2.0** is the qualified final release of the Format v3 line. It was
+promoted from RC4 after the stable release baseline passed on the private
+qualification corpus with 72/72 baseline transformations recovered. The
+experimental geometry measurements remain explicitly non-normative and are
+recorded separately from the release gate.
 
 Qualification results are recorded in [`docs/RESULTS.md`](docs/RESULTS.md).
 

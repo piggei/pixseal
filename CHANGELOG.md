@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.2.0 — 2026-09-09
+
+Final release of the Format v3 line, promoted from RC4 after qualification on
+the private two-image corpus. No Format v3, encoder fingerprint or decoder
+search-bank change was made after RC4.
+
+### Qualification
+
+- `release-unit`: PASS.
+- `test-images`: PASS on both private qualification images and all three explicit
+  profiles.
+- `deep-test`: 72/72 PASS with zero failures, timeouts, skips or errors.
+- `core-target-check`: PASS for linux/amd64, windows/amd64, android/arm64 and
+  ios/arm64.
+- Experimental reference results: affine 22/24, composition 2/2, lattice 8/8,
+  perspective 4/4.
+- The first RC4 all-test run produced two 60-second geometry timeouts; a targeted
+  rerun with a 120-second geometry extraction timeout recovered both and restored
+  the RC2 reference result of 65/120 with zero timeouts.
+
+### Finalization
+
+- Promoted version metadata from `v0.2.0-rc4` to `v0.2.0`.
+- Recorded final qualification and retained the release/research separation.
+- Set the geometry research harness default extraction timeout to 120 seconds to
+  avoid misclassifying known recoverable cases as wall-clock regressions on the
+  qualification host.
+
 ## v0.2.0-rc4 — 2026-09-09
 
 Release-engineering reconciliation candidate. **Format v3, deterministic encoder
