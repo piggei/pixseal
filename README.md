@@ -2,83 +2,81 @@
 
 ![PixSeal — Hide messages. Keep the picture.](docs/assets/pixseal-banner.png)
 
-PixSeal is an experimental, pure-Go **robust image steganography** CLI for
-hiding short authenticated messages inside images. It embeds protected payload
-bits into luminance DCT coefficients while keeping the resulting changes
-visually unobtrusive under normal viewing conditions.
+PixSeal is an experimental, pure-Go **robust image steganography** tool for
+hiding short authenticated messages inside images. It embeds protected bits in
+luminance DCT coefficients and repeats the protected frame across the image so
+that digital transforms such as JPEG recompression, resize and crop can often be
+survived.
 
-Current release candidate: **v0.2.0-rc1**. The last stable release is **v0.1.0**.
-The RC freezes the v0.2.0 feature set while final corpus validation is completed.
+Current package: **v0.2.0-rc2**. This release candidate keeps the on-image
+**Format v3** and encoder bit-for-bit compatible with the qualified v0.2.0 RC1
+line while hardening CLI validation, output-file safety, test harnesses and the
+technical documentation.
 
-PixSeal is designed as a hidden-data channel rather than an ownership-marking
-product. Digital watermarking techniques are part of the mechanism used to
-obtain robustness; the project goal is robust steganography for short messages.
-The core format stores arbitrary bytes. The current CLI exposes them as UTF-8
-text through `-message`.
+PixSeal is a hidden-data channel, not an ownership-marking product. Classical
+watermarking techniques are part of the mechanism; the project goal is robust
+steganography for short messages. PixSeal does **not** claim statistical
+undetectability and has not received a professional cryptographic or
+steganalytic audit.
 
-The project direction was initially inspired by the general idea demonstrated by
-systems such as Google SynthID: machine-readable information can be embedded in
-media while retaining useful robustness after transformations. PixSeal is an
-independent classical DCT implementation; it does **not** implement, reproduce
-or claim compatibility with Google's SynthID algorithm.
+The project was inspired by the general idea that machine-readable information
+can remain embedded in transformed media. PixSeal is an independent classical
+DCT implementation and does not implement or claim compatibility with Google
+SynthID.
 
-PixSeal does not claim statistical steganographic undetectability. It has not
-undergone a cryptographic or steganalytic security audit.
+See also:
 
-Project evolution and planned work are tracked separately in [`HISTORY.md`](HISTORY.md)
-and [`TODO.md`](TODO.md). Release-facing changes remain in [`CHANGELOG.md`](CHANGELOG.md).
+- [`docs/ALGORITHM.md`](docs/ALGORITHM.md) — current Format v3 and decoder specification;
+- [`docs/RESULTS.md`](docs/RESULTS.md) — release qualification and research results;
+- [`HISTORY.md`](HISTORY.md) — chronological engineering history;
+- [`CHANGELOG.md`](CHANGELOG.md) — release/build changes;
+- [`TODO.md`](TODO.md) — open work only.
 
-## v0.2.0-rc1 release candidate
+## Release scope
 
-`v0.2.0-rc1` consolidates the proven build-11 code line without adding a new
-codec or geometry feature. Format v3, adaptive profiles and deterministic encoder
-fingerprints are frozen for release validation. The build-10 isotropic-resize
-recovery remains the digital baseline; build-11 projective probing remains a
-bounded experimental capability.
+The v0.2.0 release line considers the following the stable digital baseline:
 
-Release validation is intentionally separated from research exploration:
+- adaptive Format v3 with `robust`, `balanced`, `capacity` and `auto` profiles;
+- authenticated payloads up to 64 bytes;
+- deterministic keyed whitening, Hamming(7,4), CRC32 and truncated HMAC-SHA256;
+- PNG/JPEG input and PNG output;
+- JPEG, pure resize and crop recovery used by `deep-test`;
+- reusable Go core with Linux/Windows/Android/iOS compile checks.
 
-- **Release baseline:** `go vet`, unit/image round trips, JPEG/resize/crop
-  `deep-test`, and reusable-core portability.
-- **Research suites:** progressive limits, arbitrary/combined geometry, affine,
-  lattice composition and mild projective perspective. These remain visible and
-  strict in `make all-test`, but corpus-specific failures are documented research
-  limits rather than silent release promises.
+The decoder also contains **experimental** bounded recovery for:
 
-Use `make release-check` for the release baseline, or `make all-test
-ALL_TEST_REPORT=report.txt` for the complete comparative report. The final
-`v0.2.0` release will remove the `-rc1` suffix after RC validation.
+- exact 90/180/270-degree rotations;
+- arbitrary digital rotation;
+- selected axis-aligned affine transforms;
+- a fixed direct lattice-basis bank for selected anisotropic-scale + rotation cases;
+- two mild vertical-keystone projective hypotheses.
 
-The physical print-camera channel is **not** a v0.2.0 capability. It is a
-research target for the next development line; the current mild perspective
-path only demonstrates bounded synthetic projective recovery.
+These research paths are intentionally not universal recovery promises. The
+physical print → paper → smartphone channel and general homography inference are
+outside the v0.2.0 release contract.
 
 ## Build
 
-The core and CLI are implemented in pure Go with no external runtime
-dependencies. The `watermark` package is deliberately independent from terminal
-I/O and platform-specific APIs so the same codec can later be reused by graphical
-frontends. The planned application direction is a desktop GUI for Windows/Linux
-and, especially, an Android-capable frontend; no GUI toolkit is selected or added
-in v0.2.0-rc1. iOS remains a possible wrapper target as well. ImageMagick and GNU
-`timeout` are required only by the shell test suites.
-
+The core and CLI use only the Go standard library at runtime.
 
 ```sh
 go build -o pixseal ./cmd/pixseal
 ```
 
-Or build the native executable in `dist/`:
+or:
 
 ```sh
 make
 ```
 
-`make` only builds; it does not run tests.
+`make` builds only. ImageMagick and GNU `timeout` are required by the shell test
+suites, not by PixSeal itself.
 
-## Basic usage
+Cross-platform helper targets are documented under [Testing](#testing).
 
-Automatic profile selection:
+## CLI
+
+### Embed
 
 ```sh
 pixseal embed \
@@ -89,377 +87,272 @@ pixseal embed \
   -profile auto
 ```
 
-A successful embed reports the profile actually selected:
+Profiles:
+
+| Profile | Maximum payload | Protected frame | Hamming-protected bits | Tile redundancy |
+|---|---:|---:|---:|---:|
+| `robust` | 16 B | 32 B | 448 | 2.50× |
+| `balanced` | 32 B | 48 B | 672 | 1.67× |
+| `capacity` | 64 B | 80 B | 1120 | 1.00× |
+| `auto` | automatic | automatic | automatic | most robust compatible |
+
+The default embedding strength is 24. CLI values must be finite and in the
+inclusive range **4..120**. Explicit `-strength 0`, `NaN` and infinities are
+rejected. The Go API retains `Options.Strength == 0` as the internal sentinel
+for the default value.
+
+A successful embed reports the selected profile:
 
 ```text
 embedded 14 bytes using profile robust in sealed.png
 ```
 
-Extraction does not require a profile:
+PixSeal output is always PNG. If the supplied output name has another extension,
+it is normalized to `.png`. A dotfile such as `.sealed` becomes
+`.sealed.png`.
+
+### Output safety and `-force`
+
+Without `-force`, PixSeal uses a no-clobber commit and refuses any existing
+directory entry, including dangling symlinks. With `-force`, only an existing
+**regular file** may be replaced; directories, symlinks, FIFOs and devices are
+rejected.
+
+New output files are created with private temporary-file permissions (normally
+`0600` on Unix), so PixSeal never weakens a restrictive umask. Replacing an
+existing regular file preserves its permission bits.
+
+The encoded temporary file is synced before commit. On POSIX, no-force commit
+uses an atomic hard-link creation so a racing destination is not overwritten.
+On Windows, forced replacement requires a backup/restore rename sequence because
+Go's `os.Rename` cannot replace an existing destination; a process crash in that
+small window can leave the backup name behind. PixSeal therefore does not claim
+full filesystem-durability semantics for forced Windows replacement.
+
+### Extract
 
 ```sh
 pixseal extract -in sealed.png -key "a long secret"
 ```
 
-The decoder determines the v3 profile automatically from the authenticated frame;
-the user never supplies a profile during extraction.
+Normal extraction prints the payload followed by diagnostics such as profile,
+confidence and any geometric correction used.
 
-### Explicit profiles
-
-```sh
-pixseal embed -in photo.png -out sealed.png \
-  -key "a long secret" -message "hello" -profile robust
-```
-
-If a selected profile is too small, PixSeal reports the actual byte length, the
-profile capacity and the smallest compatible profile. For example, a 17-byte
-payload requested with `robust` is rejected and points to `balanced`.
-
-Payload limits are measured in **bytes**, not Unicode characters. A UTF-8 string
-containing non-ASCII characters can therefore consume more than one byte per
-character.
-
-## Analyze before embedding
-
-`analyze` evaluates the requested payload against the carrier without modifying
-the image:
+For scripts or payloads containing newlines, use:
 
 ```sh
-pixseal analyze -in photo.png -message "hidden message"
+pixseal extract -raw -in sealed.png -key "a long secret"
 ```
 
-or, when only the byte size is known:
+`-raw` writes **only the exact recovered payload bytes to stdout**. Diagnostics
+are written to stderr. This avoids the ambiguity of parsing a multiline payload
+from human-readable output.
 
-```sh
-pixseal analyze -in photo.png -bytes 18
-```
+The profile is recovered automatically from the authenticated v3 frame; users do
+not provide a profile to `extract`.
 
-`-message` and `-bytes` are mutually exclusive and exactly one is required.
-
-The command reports:
-
-- decoded input format and dimensions;
-- requested byte count;
-- deterministic recommended profile and profile capacity;
-- deterministic tile redundancy and average observations per coded bit in the
-  untransformed carrier;
-- a lightweight **heuristic** image-detail classification;
-- a **heuristic** recommended embedding strength;
-- suitability warnings and known limits.
-
-The output labels deterministic and heuristic fields explicitly. Robustness
-measurements in `docs/RESULTS.md` are experimental regression results. Neither
-the heuristic nor historical measurements are a guarantee that an arbitrary
-transformed image will be recoverable.
-
-The current image-detail heuristic samples local luminance gradients at a
-bounded number of points. It does not scan every pixel of large images. The current analyzer uses these advisory strength recommendations:
-
-| Detail heuristic | Recommended strength |
-|---|---:|
-| low | 20 |
-| medium | 24 |
-| high | 28 |
-
-The normal embedding default remains 24 unless the user explicitly supplies
-`-strength`.
-
-## Capacity
-
-For compatibility with scripts written for v0.1, the default `capacity` output
-remains minimal:
+### Capacity
 
 ```sh
 pixseal capacity -in photo.png
 ```
 
-```text
-64 bytes
-```
-
-Use `-details` for v3 profile information:
+Detailed output:
 
 ```sh
 pixseal capacity -in photo.png -details
 ```
 
-Example:
+A complete Format v3 tile requires at least **280×256** pixels at the native
+8-pixel DCT grid.
+
+### Analyze
+
+```sh
+pixseal analyze -in photo.png -message "hidden message"
+```
+
+or:
+
+```sh
+pixseal analyze -in photo.png -bytes 18
+```
+
+Exactly one of `-message` or `-bytes` is required. `analyze` reports deterministic
+format facts separately from heuristic image-detail and strength recommendations.
+Its detail estimator uses the same white alpha compositing as the encoder.
+Recommendations are not recovery guarantees.
+
+## Format v3 summary
+
+Format v3 uses a fixed-size frame selected by profile. The logical frame is:
 
 ```text
-Image:       photo.png
-Format:      PNG
-Dimensions:  1920 x 1080
-robust:      16 bytes
-balanced:    32 bytes
-capacity:    64 bytes
-maximum:     64 bytes
++------------------+------------------------+----------+------------------+
+| header (8 bytes) | actual payload (N B)   | tag (8B) | zero padding      |
++------------------+------------------------+----------+------------------+
 ```
 
-If the image cannot contain one complete logical tile, all usable capacities are
-zero.
+The tag is placed **immediately after the actual payload**, at offset
+`8 + payloadLength`; it is not placed at the end of the profile's payload
+capacity region.
 
-## Payload protection and confidentiality
+Header:
 
-The v3 payload is:
+```text
+magic[2] | version/profile[1] | payloadLength[1] | CRC32[4]
+```
 
-1. framed with magic, format/profile identification, byte length and CRC32;
-2. authenticated with HMAC-SHA256 truncated to 64 bits;
-3. whitened with a key-derived SHA-256 stream;
-4. protected with Hamming(7,4);
-5. distributed repeatedly over a periodic DCT tile according to the selected
-   profile.
+The HMAC covers `header + actual payload`. The remainder of the fixed profile
+frame stays zero before whitening. The full fixed frame is whitened, encoded
+with Hamming(7,4), permuted into a 35×32 tile (1120 positions), and repeated
+across the carrier.
 
-**Whitening is not encryption.** It removes obvious bit patterns and keys the
-embedded representation, but it does not provide a reviewed confidentiality
-scheme. Encrypt sensitive messages before embedding them if confidentiality
-matters.
+Whitening is deterministic key-derived masking. **It is not encryption.** If the
+message itself is sensitive, encrypt it before embedding.
 
-The current CLI receives the key as a command-line argument. Depending on the
-operating system and shell, command-line arguments can be exposed through shell
-history or process inspection. Do not treat `-key` as a complete secret-management
-solution for high-security workflows.
+The complete technical specification is in [`docs/ALGORITHM.md`](docs/ALGORITHM.md).
 
-## v3 frame and adaptive redundancy
+## Decoder overview
 
-Every v3 profile uses an 8-byte logical header and an 8-byte authentication tag. The profile controls the fixed frame
-region reserved for payload:
+The v0.2.0 decoder tries established recovery paths before more speculative
+geometry. The current order is:
 
-| Profile | Header | Payload region | Tag | Frame bytes | Hamming-coded bits |
-|---|---:|---:|---:|---:|---:|
-| `robust` | 8 | 16 | 8 | 32 | 448 |
-| `balanced` | 8 | 32 | 8 | 48 | 672 |
-| `capacity` | 8 | 64 | 8 | 80 | 1120 |
+1. direct v3 decoding on 8/6/4-pixel integer grids;
+2. gated lossless 90/180/270-degree quarter turns;
+3. pure isotropic fractional-scale recovery through virtual affine sampling;
+4. at most one targeted physical bilinear resize fallback for a decisive scale;
+5. axis-aligned affine recovery when zero-degree evidence remains;
+6. two mild vertical-keystone projective hypotheses;
+7. fixed direct lattice-basis composition search;
+8. bounded arbitrary-angle rotation search;
+9. final axis-aligned affine fallback when rotation evidence is weak.
 
-The logical tile contains 1120 DCT positions. A protected v3 frame is mapped
-onto those positions with a fixed modular stride. Shorter profiles therefore
-receive repeated observations without increasing the tile dimensions or adding
-new geometric search dimensions.
+A project rule introduced after earlier regressions is preserved:
 
-See [`docs/ALGORITHM.md`](docs/ALGORITHM.md) for the byte layout, profile IDs,
-tile mapping and exact decoder search rules.
+> An unauthenticated advanced geometry heuristic must not suppress an established
+> recovery path unless deterministic or authenticated evidence makes that path
+> inapplicable.
 
-## Geometry and scaling
+All successful payloads must pass Format v3 authentication. Geometry scores are
+ranking evidence only.
 
-Embedding still uses 8x8 source blocks and a 35x32 logical tile. One aligned
-logical tile is therefore **280x256 pixels**.
+## Image size and memory policy
 
-A crop does not need to begin on an 8-pixel boundary. To guarantee enough room
-for a complete tile at every possible pixel offset, slightly larger dimensions
-are required:
+The CLI calls `image.DecodeConfig` before full decode and rejects decoded inputs
+above **300 MP**. The public embed/extract core applies the same source-size guard
+before building PixSeal's RGB working plane. This is a pre-allocation safety
+policy, not the 50 MP geometry-search limit used by some research paths.
 
-| Apparent scale | Aligned tile | Guaranteed for any pixel offset |
-|---:|---:|---:|
-| 100% | 280x256 | 287x263 |
-| 75% | 210x192 | 215x197 |
-| 50% | 140x128 | 143x131 |
+Images around 200 MP remain within the v0.2.0 source policy and have been used in
+round-trip testing. Geometry scripts may independently skip large sources (for
+example at 50 MP) to keep research runtimes bounded.
 
-These are geometric containment bounds, not recovery guarantees.
+A future v0.3 line may replace the full RGB working plane with tiled/sparse
+processing; v0.2.0 does not claim that optimization.
 
-The v3 decoder keeps the bounded geometric search model inherited from the v0.1 development work:
+## Metadata, orientation and color
 
-- direct apparent block sizes of 8, 6 and 4 pixels;
-- all pixel offsets inside each of those block sizes;
-- bounded bicubic inverse-normalization for nominal scales from 95% down to 25%;
-- at most the three strongest scale candidates receive +/-1-pixel dimension
-  correction.
+PixSeal decodes image pixels and writes a new PNG. It does not preserve source
+metadata.
 
-The maximum geometric candidate count before image-size skips is documented and
-bounded; v3 profile detection does not add a new geometric search dimension.
-A reconstructed normalization candidate is skipped if it would exceed
-**50,000,000 pixels**.
+Known consequences:
 
-### Rotation and combined geometry recovery
+- EXIF Orientation is not automatically applied by Go's JPEG decoder; a JPEG that
+  a viewer auto-rotates may be processed in its stored pixel orientation.
+- ICC/color profiles are not preserved. Loss of color management can change
+  appearance, not merely metadata.
+- transparency is flattened against white during embedding; `analyze` uses the
+  same assumption for its detail heuristic.
 
-Exact quarter turns use lossless pixel reorientation. Arbitrary angles use a
-fixed sparse DCT orientation probe followed by at most two full rectification
-candidates. The probe is periodic modulo 90 degrees and authenticated decoding
-of up to four quarter-turn variants resolves the quadrant.
+These are documented v0.2.0 limitations rather than silent guarantees.
 
-Build 4 introduced, and build 9 retains, two apparent DCT lattice sizes during arbitrary-angle estimation:
-8 pixels (native scale) and 6 pixels (75% scale). The search is hierarchical and
-finite: two zero-degree alignment probes, at most 720 non-zero quarter-degree
-angle probes, at most 33 local 0.05-degree refinements, and at most two refined
-candidates passed to full decoding. Candidate contrast is normalized for block
-area before 8-pixel and 6-pixel hypotheses are compared.
+## Testing
 
-After rectification, the decoder uses the detected lattice size and still searches
-all pixel offsets for that size. This is what allows crop phase to combine with
-rotation and what makes 75% resize + rotation practical without introducing an
-open-ended angle x scale Cartesian search.
+Local test images live in `original pics/` and are deliberately excluded from the
+source archive.
 
-The supported experimental combined baseline is therefore centered on native
-scale and 75% scale. Arbitrary-angle + 50% resize is **not** claimed in build 9:
-development tests showed that the double interpolation can erase the signal at
-default strength even with the true angle known. Arbitrary fractional scales
-other than the existing 75% direct lattice are still research work.
-
-A rectification candidate is skipped if its expanded canvas would exceed
-**50,000,000 pixels**.
-
-## Format lineage and compatibility
-
-New `embed` operations create **PixSeal format v3** carriers, and build 10 extracts
-**v3 only**. The extractor identifies `robust`, `balanced` or `capacity`
-automatically from the authenticated v3 header.
-
-Formats v1 and v2 were experimental development formats for which PixSeal has
-no known external carrier population or interoperability commitment. Their
-runtime decoders were removed in v0.2.0 build 2 rather than carrying permanent
-compatibility code for formats that have no known compatibility population. They
-remain documented historically in the changelog, algorithm notes and v0.1
-baseline results.
-
-The version number **3** is intentionally retained: the earlier formats are part
-of the technical history of the project even though they are no longer supported
-for extraction. Format v3 is the first PixSeal format intended to become a
-public interoperability baseline once the v0.2 line is stabilized.
-
-## Image pipeline
-
-Supported input formats:
-
-- PNG (`.png`);
-- JPEG (`.jpg`, `.jpeg`).
-
-New carriers are always written as PNG so the freshly embedded signal is not
-immediately subjected to another lossy encoding step. A generated PNG may later
-be converted to JPEG for robustness testing or normal use.
-
-If the requested output has another extension, PixSeal replaces it with `.png`;
-if it has no extension, `.png` is appended. Existing output files are protected
-unless `-force` is specified. Encoding is performed through a temporary file
-before replacement.
-
-PixSeal works on decoded pixels and currently emits 8-bit NRGBA with alpha
-flattened against white. Consequently:
-
-- 16-bit PNG input is reduced to 8-bit output;
-- EXIF, XMP, PNG comments, ICC/profile metadata and similar container metadata
-  are not preserved by the current decode/re-encode pipeline.
-
-## Tests
-
-The v0.2 development workflow intentionally separates build and local-corpus
-validation:
+Core targets:
 
 ```sh
-make              # build only
-make test         # Go unit tests + profile round trips on original pics
-make deep-test    # baseline JPEG/resize/crop transformations
-make extreme-test # progressive resize/crop limit exploration
-make geometry-test # rotation + bounded combined-geometry matrix
-make affine-test   # bounded anisotropic-scale/shear matrix
-make composition-test # historical build-7 110%x90% -> rotation baseline
-make lattice-test     # build-9 direct lattice bank (110x90, 90x110, 105x95, 95x105)
-make all-test         # run all distinct test/check suites sequentially with a summary
-make all          # build + make test + make deep-test
+make test              # complete Go tests + local image round trips
+make release-unit      # release-gate Go tests only
+make research-unit     # deterministic experimental-geometry Go regressions
+make test-images       # local image round trips only
+make deep-test         # baseline JPEG / resize / crop transformations
+make extreme-test      # progressive limit map; non-strict by design
+make geometry-test     # experimental rotation / combined geometry
+make affine-test       # experimental axis-aligned affine
+make composition-test  # build-7 composition regression
+make lattice-test      # direct lattice-basis bank
+make perspective-test  # two mild vertical-keystone hypotheses
+make core-target-check # linux/windows/android/ios core compile checks
+make version-check     # VERSION and buildinfo consistency
+make release-check     # release baseline gate
+make all-test          # sequential comparative report
 ```
 
-`make test`, `make deep-test`, `make extreme-test`, `make geometry-test` and
-`make affine-test`, `make composition-test`, `make lattice-test` and `make all-test` expect the private local `original pics/` directory. The images are excluded by `.gitignore` and must not
-be included in source archives. Generated carriers and transformed images are
-created in temporary directories and removed automatically.
+`extreme-test` is intentionally a **non-strict limit exploration**: individual
+FAIL entries describe the measured boundary and do not fail the target.
 
-The baseline transformation, geometry and affine suites test `robust`, `balanced` and `capacity` explicitly with profile-appropriate payload lengths. The build-7 `composition-test` and build-9 `lattice-test` deliberately default to `robust` only, because broader-profile composed recovery is not yet a claimed capability. `make all-test ALL_TEST_REPORT=reports/build9.txt` can capture the full sequential run for build-to-build comparison.
+When `STRICT=1` is used, `deep-test`, `geometry-test`, `affine-test`,
+`composition-test`, `lattice-test` and `perspective-test` fail their target on a
+reported FAIL or timeout.
 
-The shell robustness suites require:
+`make all-test` applies `ALL_TEST_STRICT=1` to those strict-capable suites,
+continues after failures and prints separate release-baseline and research-suite
+status. `extreme-test` remains non-strict inside `all-test`.
 
-- Bash 4+ (`mapfile` is used);
-- ImageMagick (`magick` or `convert`);
-- GNU `timeout`.
-
-Run the pure-Go unit tests independently on systems without the private image
-corpus:
+Example report capture:
 
 ```sh
-go test ./...
+make all-test ALL_TEST_REPORT=report.txt
 ```
 
-Cross-platform CLI build check:
+The release baseline is:
 
-```sh
-make build-all
+```text
+version-check
+vet
+release-unit
+test-images
+deep-test
+core-target-check
 ```
 
-This produces Linux amd64, Windows amd64, macOS amd64 and macOS arm64 binaries
-under `dist/`; release archives should not contain those build products unless a
-binary distribution is being prepared deliberately.
+`make test` retains the historical semantics of running the complete Go test
+suite plus local image round trips. For release qualification, `release-unit`
+and `research-unit` split deterministic Go tests so an experimental geometry
+regression cannot make the stable release baseline red. Private-corpus research
+suites are
+reported separately.
 
-Reusable-core portability check (no GUI or mobile binary is produced):
+## Security boundaries
 
-```sh
-make core-target-check
+PixSeal provides authenticated hidden payload recovery, not confidentiality.
+
+- Minimum key length is 8 bytes; this is a project trade-off, not a claim of
+  password strength.
+- The HMAC-SHA256 tag is truncated to 64 bits.
+- Whitening is deterministic and does not encrypt the payload.
+- No claim is made that a carrier is statistically indistinguishable from an
+  unmodified image.
+- No professional cryptographic or steganalytic audit has been performed.
+
+## Portability and future GUI
+
+The `watermark` package is independent of terminal I/O. `make core-target-check`
+compile-checks the reusable core for:
+
+```text
+linux/amd64
+windows/amd64
+android/arm64
+ios/arm64
 ```
 
-This currently compile-checks the pure-Go core for Linux/amd64, Windows/amd64,
-Android/arm64 and iOS/arm64. It is a guard against accidentally coupling the
-codec to the CLI while future GUI work remains deferred.
-
-## Current limitations
-
-- Maximum v3 payload: 64 bytes.
-- Minimum aligned source geometry for embedding: 280x256 pixels.
-- The CLI currently accepts text messages; the core format stores bytes.
-- `auto` is profile-based rather than continuously variable: payloads within the
-  same profile receive the same per-tile redundancy.
-- Fractional resize combined with an off-grid crop is not guaranteed; the
-  normalized-scale fast path assumes a pure resize retained the grid origin.
-- Digital rotation is recovered experimentally, including fractional angles and
-  quarter turns. The measured combined baseline around 75% resize and crop is
-  retained, including both transformation orders.
-- Build 9 retains bounded **axis-aligned affine** recovery for discrete 90-110% X/Y
-  scale hypotheses and X/Y shear at 3/5/8/10 degrees. Its direct lattice-basis
-  bank additionally supports `110%x90%`, `90%x110%`, `105%x95%` and
-  `95%x105%` followed by rotation on the robust profile. Continuous/general affine
-  synchronization is not yet claimed.
-- Arbitrary-angle + 50% resize is not currently recoverable at default strength
-  in development tests; arbitrary perspective correction is not yet supported.
-- Failed extraction remains more expensive than successful extraction because
-  more bounded candidates must be exhausted.
-- The 50-million-pixel inverse-normalization bound can skip candidates for very
-  large images.
-- The image-detail/strength recommendation is heuristic and has not yet been
-  calibrated across a large corpus.
-- No neural model is used in v0.2 build 10.
-- The format and implementation have not received an independent cryptographic
-  or steganalytic audit.
-
-## Development direction: geometric recovery
-
-Build 9 broadens the discrete transformed-lattice bank to two anisotropy
-magnitudes in both orientations while preserving a fixed search budget. The next
-controlled step is **continuous or locally refined basis estimation without a
-large negative-case penalty**: infer the observed vectors `u` and `v` from richer
-geometric evidence rather than permanently adding more table entries.
-
-Once `u` and `v` can be inferred robustly, one 2x2 matrix naturally covers
-rotation, anisotropic scale and shear. Estimating that basis locally in different
-regions of the carrier is then the bridge from affine geometry to projective /
-perspective recovery.
-
-The longer-term experimental goal remains a **print-camera channel**: embed a
-short message, print the carrier on paper, photograph it with a phone and recover
-the authenticated payload. Controlled digital lattice tests are how PixSeal
-separates geometry problems from printer, paper, lens, illumination and sensor
-effects.
-
-## Release status
-
-**v0.2.0-rc1 is a release candidate.** Format v3 and the encoder are frozen for
-release validation; no new algorithmic feature was added after build 11.
-
-The release baseline covers authenticated round trips, JPEG, pure resize, crop,
-random crop, static analysis and core portability. Advanced digital rotation,
-affine/lattice composition and the two-hypothesis projective path remain
-experimental: measured successes are useful regression evidence, not universal
-recovery guarantees.
-
-Formats v1 and v2 remain historical engineering formats only. Runtime support is
-v3-only. Print-camera extraction, arbitrary homography estimation and local
-lattice estimation are explicitly outside the v0.2.0 release scope.
-
-Measured behavior and validation status are recorded in
-[`docs/RESULTS.md`](docs/RESULTS.md).
+A future GUI is planned for Windows/Linux with Android as a first-class target.
+The GUI is not part of v0.2.0.
 
 ## License
 

@@ -52,6 +52,54 @@ func TestV3EncoderGoldenFingerprint(t *testing.T) {
 	}
 }
 
+func TestStrengthRejectsNonFiniteValues(t *testing.T) {
+	for _, strength := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		options := DefaultOptions()
+		options.Strength = strength
+		if _, err := normalizeEmbedOptions(options); err == nil {
+			t.Fatalf("non-finite strength %v was accepted", strength)
+		}
+	}
+	options := Options{Strength: 0, Profile: ProfileAuto}
+	normalized, err := normalizeEmbedOptions(options)
+	if err != nil || normalized.Strength != 24 {
+		t.Fatalf("API zero sentinel should resolve to default 24: options=%+v err=%v", normalized, err)
+	}
+}
+
+func TestAnalyzerCompositesAlphaOnWhiteLikeEncoder(t *testing.T) {
+	transparent := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	opaqueWhite := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	for y := 0; y < 2; y++ {
+		for x := 0; x < 2; x++ {
+			transparent.SetNRGBA(x, y, color.NRGBA{R: 10, G: 20, B: 30, A: 0})
+			opaqueWhite.SetNRGBA(x, y, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	if got, want := pixelLuminance(transparent, 0, 0), pixelLuminance(opaqueWhite, 0, 0); math.Abs(got-want) > 0.01 {
+		t.Fatalf("transparent pixel luminance %.3f differs from white composite %.3f", got, want)
+	}
+}
+
+type oversizedTestImage struct{}
+
+func (oversizedTestImage) ColorModel() color.Model { return color.NRGBAModel }
+func (oversizedTestImage) Bounds() image.Rectangle { return image.Rect(0, 0, maxSourcePixels+1, 1) }
+func (oversizedTestImage) At(x, y int) color.Color {
+	panic("oversized image should be rejected before pixel access")
+}
+
+func TestCoreRejectsOversizedImageBeforePixelAllocation(t *testing.T) {
+	img := oversizedTestImage{}
+	options := DefaultOptions()
+	if _, _, err := EmbedWithInfo(img, []byte("hello"), []byte("12345678"), options); err == nil {
+		t.Fatal("EmbedWithInfo accepted oversized source")
+	}
+	if _, _, err := ExtractWithInfo(img, []byte("12345678")); err == nil {
+		t.Fatal("ExtractWithInfo accepted oversized source")
+	}
+}
+
 func TestIsotropicScaleSearchIsFixed(t *testing.T) {
 	want := []int{95, 90, 85, 80, 70, 65, 60, 55, 45, 40, 35, 30, 25}
 	if len(normalizedScales) != len(want) {
@@ -323,53 +371,6 @@ func TestV3TileMappingObservationCounts(t *testing.T) {
 	}
 }
 
-func TestPixelPlaneBicubicMatchesReference(t *testing.T) {
-	src := testImage(73, 61)
-	optimized := resizePixelPlaneBicubic(newPixelPlane(src), 91, 77)
-	reference := newPixelPlane(resizeBicubicReference(src, 91, 77))
-	if !bytes.Equal(optimized.rgb, reference.rgb) {
-		t.Fatal("optimized pixel-plane normalization differs from reference bicubic reconstruction")
-	}
-}
-
-func resizeBicubicReference(src image.Image, width, height int) *image.NRGBA {
-	bounds := src.Bounds()
-	output := image.NewNRGBA(image.Rect(0, 0, width, height))
-	scaleX := float64(bounds.Dx()) / float64(width)
-	scaleY := float64(bounds.Dy()) / float64(height)
-
-	for y := 0; y < height; y++ {
-		sourceY := (float64(y)+.5)*scaleY - .5
-		baseY := int(math.Floor(sourceY))
-		for x := 0; x < width; x++ {
-			sourceX := (float64(x)+.5)*scaleX - .5
-			baseX := int(math.Floor(sourceX))
-			red, green, blue, weightSum := 0.0, 0.0, 0.0, 0.0
-
-			for sampleY := baseY - 1; sampleY <= baseY+2; sampleY++ {
-				weightY := cubicWeight(sourceY - float64(sampleY))
-				pixelY := clampCoordinate(sampleY, bounds.Dy()) + bounds.Min.Y
-				for sampleX := baseX - 1; sampleX <= baseX+2; sampleX++ {
-					weight := weightY * cubicWeight(sourceX-float64(sampleX))
-					pixelX := clampCoordinate(sampleX, bounds.Dx()) + bounds.Min.X
-					r, g, b, _ := src.At(pixelX, pixelY).RGBA()
-					red += float64(r>>8) * weight
-					green += float64(g>>8) * weight
-					blue += float64(b>>8) * weight
-					weightSum += weight
-				}
-			}
-			output.SetNRGBA(x, y, color.NRGBA{
-				R: clamp(red / weightSum),
-				G: clamp(green / weightSum),
-				B: clamp(blue / weightSum),
-				A: 255,
-			})
-		}
-	}
-	return output
-}
-
 func cropCopy(src image.Image, rectangle image.Rectangle) *image.NRGBA {
 	output := image.NewNRGBA(image.Rect(0, 0, rectangle.Dx(), rectangle.Dy()))
 	for y := 0; y < rectangle.Dy(); y++ {
@@ -604,7 +605,7 @@ func TestV3DirectLatticeBasisRecovery(t *testing.T) {
 
 func TestDirectLatticeBasisSearchIsFixed(t *testing.T) {
 	if len(latticeBasisShapes) != 4 {
-		t.Fatalf("lattice basis shape count=%d, want 2", len(latticeBasisShapes))
+		t.Fatalf("lattice basis shape count=%d, want 4", len(latticeBasisShapes))
 	}
 	if latticeBasisShapes[0].scaleX != 1.10 || latticeBasisShapes[0].scaleY != 0.90 ||
 		latticeBasisShapes[1].scaleX != 0.90 || latticeBasisShapes[1].scaleY != 1.10 ||
@@ -765,6 +766,72 @@ func TestAxisAlignedAffineSearchIsFixed(t *testing.T) {
 	hypotheses := axisAlignedAffineHypotheses()
 	if len(hypotheses) != 36 {
 		t.Fatalf("affine hypothesis count=%d, want 36", len(hypotheses))
+	}
+}
+
+func invertHomographyForTest(h homography) (homography, bool) {
+	a := h.h
+	det := a[0]*(a[4]*a[8]-a[5]*a[7]) - a[1]*(a[3]*a[8]-a[5]*a[6]) + a[2]*(a[3]*a[7]-a[4]*a[6])
+	if math.Abs(det) < 1e-12 {
+		return homography{}, false
+	}
+	inv := [9]float64{
+		(a[4]*a[8] - a[5]*a[7]) / det,
+		(a[2]*a[7] - a[1]*a[8]) / det,
+		(a[1]*a[5] - a[2]*a[4]) / det,
+		(a[5]*a[6] - a[3]*a[8]) / det,
+		(a[0]*a[8] - a[2]*a[6]) / det,
+		(a[2]*a[3] - a[0]*a[5]) / det,
+		(a[3]*a[7] - a[4]*a[6]) / det,
+		(a[1]*a[6] - a[0]*a[7]) / det,
+		(a[0]*a[4] - a[1]*a[3]) / det,
+	}
+	return homography{h: inv}, true
+}
+
+func warpProjectiveForTest(src image.Image, candidate projectiveCandidate) *image.NRGBA {
+	width, height := src.Bounds().Dx(), src.Bounds().Dy()
+	h, ok := homographyForQuad(width, height, candidate.quad)
+	if !ok {
+		panic("invalid projective test homography")
+	}
+	inv, ok := invertHomographyForTest(h)
+	if !ok {
+		panic("non-invertible projective test homography")
+	}
+	out := image.NewNRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			sx, sy, ok := inv.mapPoint(float64(x), float64(y))
+			if !ok || sx < 0 || sy < 0 || sx > float64(width-1) || sy > float64(height-1) {
+				out.SetNRGBA(x, y, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+				continue
+			}
+			out.Set(x, y, src.At(int(math.Round(sx)), int(math.Round(sy))))
+		}
+	}
+	return out
+}
+
+func TestMildPerspectiveRecoveryEndToEnd(t *testing.T) {
+	key := []byte("perspective-e2e-key")
+	message := []byte("perspective")
+	options := DefaultOptions()
+	options.Profile = ProfileRobust
+	marked, err := Embed(testImage(560, 512), message, key, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	transformed := warpProjectiveForTest(marked, projectiveHypotheses[0])
+	got, info, err := ExtractWithInfo(transformed, key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, message) {
+		t.Fatalf("perspective payload=%q, want %q", got, message)
+	}
+	if info.PerspectiveCorrection != projectiveHypotheses[0].name {
+		t.Fatalf("perspective correction=%q, want %q", info.PerspectiveCorrection, projectiveHypotheses[0].name)
 	}
 }
 

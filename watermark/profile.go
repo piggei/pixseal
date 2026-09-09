@@ -239,6 +239,11 @@ func estimateImageDetail(src image.Image) (string, float64, float64) {
 }
 
 func pixelLuminance(src image.Image, x, y int) float64 {
-	r, g, b, _ := src.At(x, y).RGBA()
+	// color.Color.RGBA returns alpha-premultiplied 16-bit channels. Composite
+	// against white exactly as the encoder does before estimating luminance.
+	r, g, b, a := src.At(x, y).RGBA()
+	r += 0xffff - a
+	g += 0xffff - a
+	b += 0xffff - a
 	return .299*float64(r>>8) + .587*float64(g>>8) + .114*float64(b>>8)
 }

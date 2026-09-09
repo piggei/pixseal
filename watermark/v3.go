@@ -29,6 +29,9 @@ type EmbedInfo struct {
 
 // EmbedWithInfo hides a v3 payload and reports the resolved adaptive profile.
 func EmbedWithInfo(src image.Image, payload, key []byte, options Options) (*image.NRGBA, EmbedInfo, error) {
+	if err := validateSourceImageSize(src); err != nil {
+		return nil, EmbedInfo{}, err
+	}
 	options, err := normalizeEmbedOptions(options)
 	if err != nil {
 		return nil, EmbedInfo{}, err

@@ -41,6 +41,9 @@ func ExtractWithInfo(src image.Image, key []byte) ([]byte, ExtractInfo, error) {
 	if len(key) < 8 {
 		return nil, ExtractInfo{}, errors.New("key must contain at least 8 bytes")
 	}
+	if err := validateSourceImageSize(src); err != nil {
+		return nil, ExtractInfo{}, err
+	}
 	return extractV3(src, key)
 }
 

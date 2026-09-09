@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"math"
@@ -17,6 +18,7 @@ const (
 	maxFrameSize    = headerSize + maxPayload + tagSize
 	maxFrameBits    = maxFrameSize * 8
 	maxSearchPixels = 50_000_000
+	maxSourcePixels = 300_000_000 // public core guard; geometry stages use lower search-specific bounds
 
 	// Hamming(7,4) expands the 80-byte capacity-profile frame to 1120 protected bits.
 	eccBits    = maxFrameBits / 4 * 7
@@ -26,6 +28,19 @@ const (
 
 func exceedsPixelLimit(width, height, limit int) bool {
 	return int64(width)*int64(height) > int64(limit)
+}
+
+func validateSourceImageSize(img image.Image) error {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return errors.New("image dimensions must be positive")
+	}
+	if int64(width)*int64(height) > int64(maxSourcePixels) {
+		return fmt.Errorf("image has %.1f MP; maximum supported source size is %.1f MP",
+			float64(int64(width)*int64(height))/1_000_000, float64(maxSourcePixels)/1_000_000)
+	}
+	return nil
 }
 
 var (
@@ -67,6 +82,9 @@ func init() {
 }
 
 func normalizeEmbedOptions(options Options) (Options, error) {
+	if math.IsNaN(options.Strength) || math.IsInf(options.Strength, 0) {
+		return options, errors.New("strength must be a finite number")
+	}
 	if options.Strength == 0 {
 		options.Strength = 24
 	}
@@ -101,11 +119,6 @@ func Extract(src image.Image, key []byte) ([]byte, float64, error) {
 		return nil, 0, err
 	}
 	return payload, info.Confidence, nil
-}
-
-type scaleCandidate struct {
-	percent int
-	score   int
 }
 
 func aggregateGrid(src *pixelPlane, size, offsetX, offsetY int) ([]float64, bool) {
@@ -413,66 +426,4 @@ func resizePixelPlaneBilinear(src *pixelPlane, width, height int) *pixelPlane {
 		}
 	}
 	return output
-}
-
-func resizePixelPlaneBicubic(src *pixelPlane, width, height int) *pixelPlane {
-	sourceWidth := src.bounds.Dx()
-	sourceHeight := src.bounds.Dy()
-	output := &pixelPlane{
-		bounds: image.Rect(0, 0, width, height),
-		rgb:    make([]uint8, width*height*3),
-	}
-	scaleX := float64(sourceWidth) / float64(width)
-	scaleY := float64(sourceHeight) / float64(height)
-
-	for y := 0; y < height; y++ {
-		sourceY := (float64(y)+.5)*scaleY - .5
-		baseY := int(math.Floor(sourceY))
-		for x := 0; x < width; x++ {
-			sourceX := (float64(x)+.5)*scaleX - .5
-			baseX := int(math.Floor(sourceX))
-			red, green, blue, weightSum := 0.0, 0.0, 0.0, 0.0
-
-			for sampleY := baseY - 1; sampleY <= baseY+2; sampleY++ {
-				weightY := cubicWeight(sourceY - float64(sampleY))
-				pixelY := clampCoordinate(sampleY, sourceHeight)
-				row := pixelY * sourceWidth
-				for sampleX := baseX - 1; sampleX <= baseX+2; sampleX++ {
-					weight := weightY * cubicWeight(sourceX-float64(sampleX))
-					pixelX := clampCoordinate(sampleX, sourceWidth)
-					index := (row + pixelX) * 3
-					red += float64(src.rgb[index]) * weight
-					green += float64(src.rgb[index+1]) * weight
-					blue += float64(src.rgb[index+2]) * weight
-					weightSum += weight
-				}
-			}
-			index := (y*width + x) * 3
-			output.rgb[index] = clamp(red / weightSum)
-			output.rgb[index+1] = clamp(green / weightSum)
-			output.rgb[index+2] = clamp(blue / weightSum)
-		}
-	}
-	return output
-}
-
-func cubicWeight(value float64) float64 {
-	value = math.Abs(value)
-	if value <= 1 {
-		return 1.5*value*value*value - 2.5*value*value + 1
-	}
-	if value < 2 {
-		return -.5*value*value*value + 2.5*value*value - 4*value + 2
-	}
-	return 0
-}
-
-func clampCoordinate(value, length int) int {
-	if value < 0 {
-		return 0
-	}
-	if value >= length {
-		return length - 1
-	}
-	return value
 }

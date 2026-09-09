@@ -14,18 +14,19 @@ read_image_dimensions() {
         fi
     fi
 
-    # PNG signature + IHDR: width and height are big-endian uint32 at bytes 16..23.
-    local ext="${image##*.}"
-    if [[ "${ext,,}" == "png" ]]; then
-        local bytes=()
-        read -r -a bytes <<< "$(od -An -v -tx1 -j16 -N8 -- "$image" 2>/dev/null)"
-        if (( ${#bytes[@]} == 8 )); then
-            width=$(( 16#${bytes[0]} * 16777216 + 16#${bytes[1]} * 65536 + 16#${bytes[2]} * 256 + 16#${bytes[3]} ))
-            height=$(( 16#${bytes[4]} * 16777216 + 16#${bytes[5]} * 65536 + 16#${bytes[6]} * 256 + 16#${bytes[7]} ))
-            if (( width > 0 && height > 0 )); then
-                printf '%s %s\n' "$width" "$height"
-                return 0
-            fi
+    # Large PNGs can exceed ImageMagick policy limits. Fall back to the PNG
+    # header only after verifying both the eight-byte signature and the IHDR
+    # chunk type; never trust the filename extension alone.
+    local bytes=()
+    read -r -a bytes <<< "$(od -An -v -tx1 -N24 -- "$image" 2>/dev/null)"
+    if (( ${#bytes[@]} == 24 )) &&
+       [[ "${bytes[0]} ${bytes[1]} ${bytes[2]} ${bytes[3]} ${bytes[4]} ${bytes[5]} ${bytes[6]} ${bytes[7]}" == "89 50 4e 47 0d 0a 1a 0a" ]] &&
+       [[ "${bytes[12]} ${bytes[13]} ${bytes[14]} ${bytes[15]}" == "49 48 44 52" ]]; then
+        width=$(( 16#${bytes[16]} * 16777216 + 16#${bytes[17]} * 65536 + 16#${bytes[18]} * 256 + 16#${bytes[19]} ))
+        height=$(( 16#${bytes[20]} * 16777216 + 16#${bytes[21]} * 65536 + 16#${bytes[22]} * 256 + 16#${bytes[23]} ))
+        if (( width > 0 && height > 0 )); then
+            printf '%s %s\n' "$width" "$height"
+            return 0
         fi
     fi
     return 1

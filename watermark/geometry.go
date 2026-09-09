@@ -837,7 +837,7 @@ type isotropicScaleCandidate struct {
 // The search is bounded:
 //   - 13 fixed isotropic scale hypotheses;
 //   - at most three phase probes per hypothesis;
-//   - at most six full-carrier virtual aggregations.
+//   - at most six shortlisted hypotheses x three phases = 18 full-carrier virtual aggregations.
 //
 // Repetition coherence ranks candidates without the key. Authentication remains
 // the sole success criterion. This path intentionally excludes 100/75/50%,
@@ -1221,7 +1221,8 @@ func quickLatticeCoherence(src *pixelPlane, matrix linearTransform, size int) (f
 //   - 361 angles per shape (-45..+45 at 0.25 degree)
 //   - 1444 sparse lattice probes maximum
 //   - at most 48 candidates per shape (192 total) receive stronger periodicity measurement
-//   - at most 4 candidates x 3 phases reach full-carrier authenticated decoding
+//   - per shape group, at most 4 candidates x 3 phases reach full-carrier authenticated decoding;
+//     the anchor and moderate groups are evaluated sequentially, so the overall worst case is 24 full aggregations
 func searchV3DirectLatticeBasis(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, latticeCandidate, bool) {
 	const (
 		quickFloor           = 0.70
@@ -1381,7 +1382,7 @@ func searchV3DirectLatticeBasis(src *pixelPlane, decoder *decoder) ([]byte, Extr
 }
 
 // projectiveCandidate describes a small, bounded projective warp hypothesis.
-// Build 11 deliberately starts with four mild keystone shapes as a research
+// Build 11 deliberately starts with two mild vertical-keystone shapes as a research
 // bridge toward general homography estimation; Format v3 is unchanged.
 type projectiveCandidate struct {
 	name string
@@ -1498,7 +1499,7 @@ func aggregateProjectiveGrid(src *pixelPlane, h homography, size, offsetX, offse
 }
 
 func searchV3MildPerspective(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, string, bool) {
-	// Fixed four-shape bank, each with a small phase neighbourhood. This is a
+	// Fixed two-shape bank with one aligned phase per shape. This is a
 	// deliberately bounded first print-camera experiment, not general perspective.
 	phases := [...]point{{0, 0}}
 	for _, candidate := range projectiveHypotheses {

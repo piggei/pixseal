@@ -7,14 +7,18 @@ import (
 	"image"
 	_ "image/jpeg"
 	"image/png"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/pj/pixseal/internal/buildinfo"
 	"github.com/pj/pixseal/watermark"
 )
+
+const maxDecodedPixels int64 = 300_000_000
 
 var usageHeader = fmt.Sprintf(`PixSeal %s - robust image steganography
 
@@ -43,6 +47,7 @@ Embed options:
 Extract options:
   -in FILE           Carrier JPEG or PNG (required)
   -key TEXT          Secret key, minimum 8 bytes (required)
+  -raw               Write only exact payload bytes to stdout; diagnostics go to stderr
 
 Capacity options:
   -in FILE           Input JPEG or PNG (required)
@@ -111,14 +116,42 @@ func newFlagSet(command, summary string) *flag.FlagSet {
 	return fs
 }
 
+func validateDecodedDimensions(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid image dimensions %dx%d", width, height)
+	}
+	pixels := int64(width) * int64(height)
+	if pixels > maxDecodedPixels {
+		return fmt.Errorf("image has %.1f MP; maximum decoded input is %.1f MP", float64(pixels)/1_000_000, float64(maxDecodedPixels)/1_000_000)
+	}
+	return nil
+}
+
 func openImageWithFormat(path string) (image.Image, string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, "", err
 	}
 	defer f.Close()
+
+	config, configFormat, err := image.DecodeConfig(f)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := validateDecodedDimensions(config.Width, config.Height); err != nil {
+		return nil, "", err
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		return nil, "", err
+	}
 	img, format, err := image.Decode(f)
-	return img, format, err
+	if err != nil {
+		return nil, "", err
+	}
+	if format == "" {
+		format = configFormat
+	}
+	return img, format, nil
 }
 
 func openImage(path string) (image.Image, error) {
@@ -131,39 +164,74 @@ func pngOutputPath(path string) string {
 	if strings.EqualFold(ext, ".png") {
 		return path
 	}
-	if ext == "" {
+	// filepath.Ext(".sealed") returns ".sealed". A basename consisting only
+	// of a leading-dot name has no user-visible extension and should become
+	// ".sealed.png", not ".png".
+	if ext == "" || ext == filepath.Base(path) {
 		return path + ".png"
 	}
 	return strings.TrimSuffix(path, ext) + ".png"
 }
 
-func writePNGAtomic(path string, img image.Image, force bool) error {
+func validateOutputTarget(path string, force bool) (os.FileInfo, error) {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
 	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("output file %s already exists; use -force to replace it", path)
-		} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("output path %s already exists; use -force to replace a regular file", path)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("refusing to replace non-regular output path %s", path)
+	}
+	return info, nil
+}
+
+func commitNoClobber(temporaryPath, path string) error {
+	if runtime.GOOS == "windows" {
+		// Windows os.Rename does not replace an existing destination. After the
+		// Lstat preflight this is therefore an atomic no-clobber commit: a target
+		// created by a racing process causes Rename to fail.
+		if err := os.Rename(temporaryPath, path); err != nil {
+			if _, existsErr := os.Lstat(path); existsErr == nil {
+				return fmt.Errorf("output path %s already exists; use -force to replace a regular file", path)
+			}
 			return err
 		}
+		return nil
+	}
+
+	// On POSIX, rename(2) would replace a racing destination. link(2) instead
+	// creates the destination only if no directory entry already exists, while
+	// keeping the fully encoded temporary inode intact until commit succeeds.
+	if err := os.Link(temporaryPath, path); err != nil {
+		if _, existsErr := os.Lstat(path); existsErr == nil {
+			return fmt.Errorf("output path %s already exists; use -force to replace a regular file", path)
+		}
+		return fmt.Errorf("atomic no-clobber output commit failed: %w", err)
+	}
+	if err := os.Remove(temporaryPath); err != nil {
+		return fmt.Errorf("remove committed temporary link: %w", err)
+	}
+	return nil
+}
+
+func writePNGAtomic(path string, img image.Image, force bool) error {
+	initialInfo, err := validateOutputTarget(path, force)
+	if err != nil {
+		return err
 	}
 
 	dir := filepath.Dir(path)
 	base := filepath.Base(path)
-	mode := os.FileMode(0o644)
-	if info, err := os.Stat(path); err == nil {
-		mode = info.Mode().Perm()
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
 	temporary, err := os.CreateTemp(dir, "."+base+".pixseal-*")
 	if err != nil {
 		return err
 	}
 	temporaryPath := temporary.Name()
-	if err := temporary.Chmod(mode); err != nil {
-		_ = temporary.Close()
-		_ = os.Remove(temporaryPath)
-		return err
-	}
 	committed := false
 	defer func() {
 		if !committed {
@@ -171,7 +239,20 @@ func writePNGAtomic(path string, img image.Image, force bool) error {
 		}
 	}()
 
+	// New files intentionally keep CreateTemp's private 0600-style mode, which
+	// never weakens the caller's umask. Replacements preserve the permissions of
+	// the regular file being replaced.
+	if initialInfo != nil {
+		if err := temporary.Chmod(initialInfo.Mode().Perm()); err != nil {
+			_ = temporary.Close()
+			return err
+		}
+	}
 	if err := png.Encode(temporary, img); err != nil {
+		_ = temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
 		_ = temporary.Close()
 		return err
 	}
@@ -179,27 +260,41 @@ func writePNGAtomic(path string, img image.Image, force bool) error {
 		return err
 	}
 
-	if !force {
-		if _, err := os.Stat(path); err == nil {
-			return fmt.Errorf("output file %s already exists; use -force to replace it", path)
-		} else if !errors.Is(err, os.ErrNotExist) {
+	if initialInfo == nil {
+		if err := commitNoClobber(temporaryPath, path); err != nil {
 			return err
 		}
+		committed = true
+		return nil
+	}
+
+	// Re-check immediately before a forced replacement. This cannot make a
+	// forced replace fully race-free on every OS using only portable stdlib
+	// primitives, but it prevents PixSeal from intentionally replacing a
+	// directory, symlink, FIFO or device.
+	current, err := os.Lstat(path)
+	if err != nil {
+		return fmt.Errorf("re-check output before replacement: %w", err)
+	}
+	if current.Mode()&os.ModeSymlink != 0 || !current.Mode().IsRegular() {
+		return fmt.Errorf("refusing to replace non-regular output path %s", path)
+	}
+	if err := os.Chmod(temporaryPath, current.Mode().Perm()); err != nil {
+		return err
 	}
 
 	if err := os.Rename(temporaryPath, path); err == nil {
 		committed = true
 		return nil
-	} else if !force {
+	} else if runtime.GOOS != "windows" {
 		return err
 	}
 
-	// Windows does not replace an existing destination with os.Rename. Preserve
-	// the old file until the new one has been encoded successfully, then use a
-	// backup-and-restore fallback if direct replacement is unavailable.
-	if _, err := os.Stat(path); err != nil {
-		return fmt.Errorf("replace output file: %w", err)
-	}
+	// Windows does not replace an existing file with os.Rename. Keep this
+	// backup-and-restore fallback Windows-only. The encoded temporary file has
+	// already been fsync'd; a crash between the two renames can still leave the
+	// backup path behind, so this is atomic replacement in the logical/no-partial
+	// sense, not a filesystem durability guarantee.
 	backup, err := os.CreateTemp(dir, "."+base+".backup-*")
 	if err != nil {
 		return err
@@ -245,6 +340,23 @@ func embed(args []string) error {
 		fs.Usage()
 		return fmt.Errorf("-in, -out, -key and -message are required")
 	}
+	strengthExplicit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "strength" {
+			strengthExplicit = true
+		}
+	})
+	if math.IsNaN(*strength) || math.IsInf(*strength, 0) {
+		return fmt.Errorf("-strength must be a finite number between 4 and 120")
+	}
+	if strengthExplicit && *strength == 0 {
+		return fmt.Errorf("-strength 0 is invalid; omit -strength to use the default value 24")
+	}
+
+	outputPath := pngOutputPath(*out)
+	if _, err := validateOutputTarget(outputPath, *force); err != nil {
+		return err
+	}
 
 	profile, err := watermark.ParseProfile(*profileName)
 	if err != nil {
@@ -262,7 +374,6 @@ func embed(args []string) error {
 		return err
 	}
 
-	outputPath := pngOutputPath(*out)
 	if err := writePNGAtomic(outputPath, marked, *force); err != nil {
 		return err
 	}
@@ -277,6 +388,7 @@ func extract(args []string) error {
 	fs := newFlagSet("extract", "Recover and authenticate a hidden PixSeal message; bounded rotation and supported combined geometry correction are automatic.")
 	in := fs.String("in", "", "carrier JPEG or PNG file (required)")
 	key := fs.String("key", "", "secret key (required, minimum 8 bytes)")
+	raw := fs.Bool("raw", false, "write only the exact recovered payload bytes to stdout")
 
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -298,23 +410,35 @@ func extract(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\nconfidence-margin: %.2f\nprofile: %s\n", payload, info.Confidence, info.Profile)
+	if *raw {
+		if _, err := os.Stdout.Write(payload); err != nil {
+			return err
+		}
+		printExtractDiagnostics(os.Stderr, info)
+		return nil
+	}
+	fmt.Printf("%s\n", payload)
+	printExtractDiagnostics(os.Stdout, info)
+	return nil
+}
+
+func printExtractDiagnostics(w io.Writer, info watermark.ExtractInfo) {
+	fmt.Fprintf(w, "confidence-margin: %.2f\nprofile: %s\n", info.Confidence, info.Profile)
 	if info.RotationCorrectionDegrees != 0 {
-		fmt.Printf("rotation-correction: %.2f degrees\n", info.RotationCorrectionDegrees)
+		fmt.Fprintf(w, "rotation-correction: %.2f degrees\n", info.RotationCorrectionDegrees)
 	}
 	if info.ScaleXCorrection != 0 || info.ScaleYCorrection != 0 {
-		fmt.Printf("scale-correction: x=%.4f y=%.4f\n", info.ScaleXCorrection, info.ScaleYCorrection)
+		fmt.Fprintf(w, "scale-correction: x=%.4f y=%.4f\n", info.ScaleXCorrection, info.ScaleYCorrection)
 	}
 	if info.ShearXCorrection != 0 {
-		fmt.Printf("shear-x-correction: %.2f degrees\n", math.Atan(info.ShearXCorrection)*180/math.Pi)
+		fmt.Fprintf(w, "shear-x-correction: %.2f degrees\n", math.Atan(info.ShearXCorrection)*180/math.Pi)
 	}
 	if info.ShearYCorrection != 0 {
-		fmt.Printf("shear-y-correction: %.2f degrees\n", math.Atan(info.ShearYCorrection)*180/math.Pi)
+		fmt.Fprintf(w, "shear-y-correction: %.2f degrees\n", math.Atan(info.ShearYCorrection)*180/math.Pi)
 	}
 	if info.PerspectiveCorrection != "" {
-		fmt.Printf("perspective-correction: %s\n", info.PerspectiveCorrection)
+		fmt.Fprintf(w, "perspective-correction: %s\n", info.PerspectiveCorrection)
 	}
-	return nil
 }
 
 func capacity(args []string) error {
