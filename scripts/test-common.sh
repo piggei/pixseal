@@ -14,16 +14,16 @@ read_image_dimensions() {
         fi
     fi
 
-    # Large PNGs can exceed ImageMagick policy limits. Fall back to the PNG
-    # header only after verifying both the eight-byte signature and the IHDR
-    # chunk type; never trust the filename extension alone.
-    local bytes=()
-    read -r -a bytes <<< "$(od -An -v -tx1 -N24 -- "$image" 2>/dev/null)"
-    if (( ${#bytes[@]} == 24 )) &&
-       [[ "${bytes[0]} ${bytes[1]} ${bytes[2]} ${bytes[3]} ${bytes[4]} ${bytes[5]} ${bytes[6]} ${bytes[7]}" == "89 50 4e 47 0d 0a 1a 0a" ]] &&
-       [[ "${bytes[12]} ${bytes[13]} ${bytes[14]} ${bytes[15]}" == "49 48 44 52" ]]; then
-        width=$(( 16#${bytes[16]} * 16777216 + 16#${bytes[17]} * 65536 + 16#${bytes[18]} * 256 + 16#${bytes[19]} ))
-        height=$(( 16#${bytes[20]} * 16777216 + 16#${bytes[21]} * 65536 + 16#${bytes[22]} * 256 + 16#${bytes[23]} ))
+    # PNG signature + first IHDR chunk. Never trust the extension alone: camera
+    # files can be misnamed, and interpreting arbitrary JPEG bytes as IHDR yields
+    # nonsense dimensions.
+    local header=()
+    read -r -a header <<< "$(od -An -v -tx1 -N24 -- "$image" 2>/dev/null)"
+    if (( ${#header[@]} == 24 )) &&
+       [[ "${header[*]:0:8}" == "89 50 4e 47 0d 0a 1a 0a" ]] &&
+       [[ "${header[12]} ${header[13]} ${header[14]} ${header[15]}" == "49 48 44 52" ]]; then
+        width=$(( 16#${header[16]} * 16777216 + 16#${header[17]} * 65536 + 16#${header[18]} * 256 + 16#${header[19]} ))
+        height=$(( 16#${header[20]} * 16777216 + 16#${header[21]} * 65536 + 16#${header[22]} * 256 + 16#${header[23]} ))
         if (( width > 0 && height > 0 )); then
             printf '%s %s\n' "$width" "$height"
             return 0

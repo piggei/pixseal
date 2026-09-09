@@ -1,174 +1,117 @@
-# PixSeal engineering history
+# PixSeal history
 
-This file records the technical evolution of PixSeal, including experiments
-that were not promoted. It is chronological. Current behavior is specified by
-`README.md` and `docs/ALGORITHM.md`.
+This file records technical evolution, including experiments that were later
+superseded or deliberately not promoted.
 
-## v0.1.0 — first public baseline
+## v0.1.0
 
-The first stable line established the classical DCT steganography core, keyed
-whitening/authentication, Hamming protection, crop/resize recovery and the local
-robustness test workflow. Capacity was fixed at 64 bytes.
+First stable public-development baseline: classical DCT embedding for short
+messages, bounded extraction, JPEG/resize/crop robustness harnesses and pure-Go
+CLI/core architecture.
 
 ## v0.2.0 build 1 — adaptive Format v3
 
-Introduced Format v3 and adaptive profiles:
+Introduced `robust`, `balanced`, `capacity` and `auto`, fixed 35x32 tile,
+authenticated v3 headers, adaptive redundancy and the `analyze` command.
 
-- `robust` 16 B;
-- `balanced` 32 B;
-- `capacity` 64 B;
-- `auto` selects the most redundant compatible profile.
+## build 2 — v3-only runtime
 
-Shorter fixed frames reuse spare tile positions as repeated observations.
+Removed runtime v1/v2 decoding because those experimental formats had no known
+external compatibility population. Their history remained documented.
 
-## v0.2.0 build 2 — v3-only runtime
+## build 3 — arbitrary digital rotation
 
-Removed runtime fallback to the unreleased v1/v2 engineering formats. They had
-no external installed base, so compatibility was retained only as project
-history rather than production complexity.
+Added bounded quarter-turn and arbitrary-angle recovery without changing the
+v3 on-image format.
 
-## v0.2.0 build 3 — arbitrary digital rotation
+## build 4 — combined digital geometry
 
-Added bounded rotation estimation plus lossless 90/180/270-degree paths. The
-Format v3 carrier remained unchanged.
+Extended rotation to selected resize/crop combinations and added
+`geometry-test`. Aggressive rotation+50% resize remained a documented signal
+limit rather than a claimed feature.
 
-## v0.2.0 build 4 — rotation with resize/crop
+## build 5 — axis-aligned affine recovery
 
-Extended geometry experiments to selected rotation+resize/crop combinations.
-The work exposed scale/phase coupling and established explicit search budgets as
-a project requirement.
+Added a fixed 36-hypothesis anisotropic-scale/shear bank with virtual affine
+sampling and bounded full-grid promotion. Added `affine-test`.
 
-## v0.2.0 build 5 — bounded axis-aligned affine recovery
+## build 6 — first composed affine experiment
 
-Added virtual affine sampling for anisotropic scale and single-axis shear. A
-periodic-tile coherence signal was used to rank hypotheses before HMAC.
+Demonstrated one bounded anisotropic-scale+rotation composition on a synthetic
+case, but the rotation-first heuristic did not generalize to PJ's real corpus.
+The failure was retained as a research result.
 
-## v0.2.0 build 6 — first composed affine experiment
+## build 7 — direct composed-lattice recovery
 
-Demonstrated a bounded anisotropic-scale + rotation composition on synthetic
-cases without a full angle×affine Cartesian product. Real-corpus testing later
-showed the rotation-first heuristic did not generalize reliably.
+Reworked the composed case so geometry was scored directly rather than inherited
+from a global rotation peak. The two real regression carriers that had produced
+FAIL/TIMEOUT in build 6 both authenticated successfully.
 
-## v0.2.0 build 7 — direct lattice scoring after real-corpus failure
+## build 8 — explicit lattice basis bank
 
-Two real images that produced FAIL/TIMEOUT in build 6 became private regression
-cases. Direct transformed-lattice scoring replaced the rotation-first
-composition heuristic for the promoted path and recovered both cases.
+Generalized the direct bank to both 110x90 and 90x110 anisotropies under
+rotation.
 
-## v0.2.0 build 8 — symmetric direct lattice-basis bank
+## build 9 — broader fixed lattice bank and unified reports
 
-Generalized the direct basis representation to both 110×90 and 90×110
-anisotropies before rotation. This shifted the design from edit names toward
-explicit transformed lattice bases.
+Added 105x95 and 95x105 shapes, giving four fixed direct lattice bases. Added
+`make all-test` for sequential comparative reporting. A more continuous local
+`u`,`v` refinement prototype improved positive cases but made negative extraction
+too expensive and was deliberately not promoted.
 
-## v0.2.0 build 9 — broader lattice bank and comparative test reporting
+## build 10 — resize regression recovery
 
-Added the 105×95 and 95×105 basis shapes and introduced `make all-test` for a
-single sequential comparative report.
+The build-9 report exposed fractional-resize regressions caused by speculative
+geometry suppressing the mature resize path. Build 10 restored ordering with
+virtual isotropic-scale recovery and a targeted bilinear fallback. It also fixed
+large-PNG dimension probing in shell suites.
 
-A more continuous/local `u`,`v` refinement prototype recovered positive cases
-but made negative extraction too expensive. It was deliberately **not promoted**.
-This is an important negative result: more hypotheses are not a substitute for a
-better estimator.
+## build 11 — first projective step
 
-## v0.2.0 build 10 — resize-regression recovery
+Added exactly two fixed 4% vertical-keystone homographies using virtual
+projective sampling. ImageMagick-generated regression cases authenticated on the
+private LQ/MQ corpus. This was recorded as a stepping stone, not general
+perspective support.
 
-The first `all-test` reports exposed a regression where false advanced-geometry
-candidates could suppress fractional pure-resize recovery. Build 10 restored
-pure-resize priority with virtual isotropic sampling and a single targeted
-bilinear normalization fallback.
+## build 12 — local-consensus experiment not promoted
 
-It also added deterministic Format-v3 encoder fingerprints and robust large-PNG
-dimension probing in shell tests.
+A reconstructed local orientation-consensus fallback failed to improve the
+private geometry matrix and increased runtime. Build 11 therefore remained the
+algorithmic basis for release consolidation.
 
-## v0.2.0 build 11 — first bounded projective step
+## v0.2.0-rc1 — release qualification candidate
 
-Added a virtual homography sampler with exactly two vertical-keystone
-hypotheses: `top-narrow-4` and `bottom-narrow-4`. This was intentionally a small
-projective experiment, not general perspective inference.
+Consolidated build 11, froze the Format v3 encoder and separated stable release
+gates from research-suite reporting. PJ's qualification run reported release
+baseline PASS, deep-test 72/72, composition 2/2, lattice 8/8 and perspective
+4/4; arbitrary geometry and affine suites retained documented experimental
+limits.
 
-`perspective-test` was added and passed the initial private digital corpus.
+## External pre-release audit
 
-## v0.2.0 build 12 — local-consensus experiment, not promoted
+An independent source/package audit found no reason to change Format v3, but it
+identified several release-hardening issues: non-finite strength acceptance,
+output-path safety and umask handling, perspective harness false-green/error
+accounting, missing projective end-to-end coverage, large-image preflight gaps,
+dead code and substantial documentation drift from intermediate builds.
 
-A local orientation-consensus fallback was prototyped after build 11. The
-materialized build did not improve the real rotation matrix and increased total
-runtime. It was therefore rejected as a production baseline.
+## v0.2.0-rc3 — audit hardening candidate
 
-This result reinforced the v0.3 direction: geometry estimation should be tested
-as a separate measurable component before another heuristic is inserted into
-`Extract()`.
+RC3 keeps the on-image Format v3 and encoder fingerprints unchanged while
+hardening the release surface:
 
-## v0.2.0-rc1 — release consolidation
+- finite CLI/API strength validation and explicit CLI range contract;
+- safe regular-file-only replacement, symlink/directory rejection and
+  race-resistant no-clobber publication;
+- umask-respecting new outputs, synced temporary files and Windows-only backup
+  replacement fallback;
+- Unix dotfile output naming;
+- `extract -raw` for exact/multiline payload scripting;
+- pre-decode/working-image safety limit at 250 million pixels;
+- alpha-consistent analysis;
+- robust perspective shell harness and deterministic projective Go E2E test;
+- VERSION/buildinfo gate;
+- removal of obsolete bicubic/dead structures;
+- current-code rewrite of README/ALGORITHM/RESULTS/TODO.
 
-The release candidate returned to the qualified build-11 algorithm and separated
-release-baseline status from experimental research-suite status.
-
-RC1 qualification on the private Linux corpus recorded:
-
-```text
-Release baseline: PASS
-deep-test:         72/72
-geometry-test:     65/120 experimental
- affine-test:      22/24 experimental
-composition-test:   2/2
-lattice-test:       8/8
-perspective-test:   4/4
-```
-
-Format v3 and the encoder were frozen.
-
-## Pre-release v0.2.0 package audit
-
-Before publishing the nominal final archive, an independent audit was performed
-and then re-verified against the actual source package. The algorithmic base was
-sound, but the audit found release-hardening issues unrelated to the on-image
-format, including:
-
-- `NaN` strength false-success;
-- ambiguous explicit `-strength 0` CLI behavior;
-- unsafe output replacement edge cases involving directories/symlinks and
-  no-force TOCTOU;
-- forced 0644 output permissions;
-- perspective harness false greens/errors;
-- missing projective end-to-end Go regression;
-- large-image pre-allocation policy gap;
-- alpha mismatch in `analyze`;
-- Windows amd64 build naming mismatch;
-- substantial current-documentation drift from the real decoder.
-
-Additional verification found that the PNG header fallback trusted a `.png`
-extension without validating the PNG signature and that the documented lattice
-strong-evaluation budget was too high relative to the actual code.
-
-Because the package had not yet been publicly released, the correct response was
-an RC2 rather than a v0.2.1.
-
-## v0.2.0-rc2 — release hardening
-
-RC2 keeps Format v3 and the encoder mapping unchanged while hardening the
-surrounding product:
-
-- rejects non-finite CLI/API strengths and explicit CLI zero;
-- adds pre-decode/source size guards;
-- makes new output files private and no-force commit no-clobber;
-- refuses forced replacement of non-regular targets;
-- fixes dotfile output naming;
-- adds `extract -raw` for exact multiline-safe payload output;
-- aligns analyzer alpha compositing with embedding;
-- forces Windows amd64 in the Windows helper;
-- repairs and strengthens the perspective harness;
-- adds a true Go end-to-end projective regression;
-- adds VERSION/buildinfo consistency checking;
-- removes dead bicubic normalization code;
-- rewrites current documentation around the actual v0.2 decoder and search
-  bounds.
-
-RC2 must be qualified on the private corpus before the final v0.2.0 tag is
-created.
-
-## Direction after v0.2.0
-
-The planned v0.3 research line focuses on continuous/local lattice inference,
-general bounded homography estimation, print-camera recovery, and sparse/tiled
-large-image processing. Those are research goals, not v0.2 promises.
+The final `v0.2.0` promotion depends on PJ's RC3 release qualification report.

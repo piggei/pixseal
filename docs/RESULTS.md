@@ -1,81 +1,12 @@
-# PixSeal results
+# PixSeal v0.2.0 — qualification and measured results
 
-## v0.2.0-rc2 hardening status
+This document separates the **stable release baseline** from experimental
+geometry measurements. Results are corpus-specific observations, not universal
+recovery guarantees.
 
-`v0.2.0-rc2` is a hardening candidate derived from the qualified v0.2.0 RC1
-algorithm. Format v3 and the encoder mapping are unchanged; the deterministic
-encoder fingerprints remain the compatibility gate.
+## v0.2.0 release qualification reference
 
-RC2 addresses issues found by an independent pre-release audit:
-
-- finite/explicit strength validation;
-- output-path and no-clobber safety;
-- private permissions for new outputs;
-- dotfile output naming;
-- raw multiline-safe extraction output;
-- pre-decode/source-size guards;
-- alpha-consistent analyzer sampling;
-- Windows amd64 build metadata;
-- perspective harness correctness and a real Go end-to-end perspective test;
-- VERSION/buildinfo consistency checking;
-- removal of dead bicubic normalization code;
-- complete documentation realignment.
-
-RC2 still requires a full private-corpus qualification run before the `-rc2`
-suffix can be removed.
-
-### Local RC2 verification performed during packaging
-
-The release package is expected to pass at least:
-
-```text
-gofmt
-go vet ./...
-make release-unit
-make research-unit
-go test ./cmd/pixseal
-targeted watermark hardening/perspective tests
-bash -n scripts/*.sh
-native build
-core-target-check
-version-check
-```
-
-The full uncached `go test ./...` remains available through `make test`, but
-RC2 release qualification uses `release-unit` and keeps deterministic
-experimental-geometry Go regressions in `research-unit`. Private-corpus
-`release-check`/`all-test` are distinguished from local packaging checks because
-the private images are not part of the source archive.
-
-## v0.2.0 RC1 qualification — reference baseline
-
-The v0.2.0 RC1 qualification run on PJ's Linux/WSL2 corpus is the algorithmic
-baseline from which RC2 was hardened.
-
-Environment recorded by the run:
-
-```text
-Linux 6.18.33.2-microsoft-standard-WSL2 x86_64
-Go 1.25.1 linux/amd64
-ImageMagick 6.9.11-60 Q16
-```
-
-Summary:
-
-| Target | RC1 result | Notes |
-|---|---:|---|
-| `vet` | PASS | static analysis |
-| `test` | PASS | unit tests + 2 images × 3 profiles round trip |
-| `deep-test` | PASS | **72/72** JPEG/resize/crop cases |
-| `extreme-test` | PASS | non-strict progressive boundary map |
-| `geometry-test` | ATTENTION | **65/120** experimental cases |
-| `affine-test` | ATTENTION | **22/24** experimental cases |
-| `composition-test` | PASS | **2/2** |
-| `lattice-test` | PASS | **8/8** |
-| `perspective-test` | PASS | **4/4** mild vertical-keystone cases |
-| `core-target-check` | PASS | linux/windows/android/ios core builds |
-
-The all-test summary was:
+The qualified `v0.2.0-rc1` run on PJ's Linux/WSL2 corpus reported:
 
 ```text
 Release baseline: PASS
@@ -83,132 +14,154 @@ Research suites: ATTENTION (2 experimental targets failed)
 Overall: FAIL (2 targets failed)
 ```
 
-The overall strict failure is deliberate: research limits remain visible rather
-than being hidden behind the release-baseline classification.
-
-### Baseline transformation qualification
-
-On both private qualification images and all three profiles, RC1 passed:
+Release baseline:
 
 ```text
-JPEG quality 82
-resize 95%
-resize 85%
-resize 75%
-resize 65%
-resize 55%
-resize 50%
-center crop 90%
-center crop 75%
-center crop 50%
-random crop 75%
-random crop 50%
+vet                  PASS
+test                 PASS
+deep-test             72/72 PASS
+core-target-check     PASS
 ```
 
-Total: **72/72 PASS**.
-
-This is the v0.2 stable digital recovery baseline.
-
-### Progressive limits
-
-`extreme-test` is a boundary exploration rather than a strict success matrix.
-Individual FAIL entries below the recoverable boundary are expected data.
-
-On the RC1 qualification corpus, larger/more redundant carriers generally
-survived more aggressive resize/crop than smaller carriers. The precise boundary
-is image- and profile-dependent and is not an API guarantee.
-
-### Experimental arbitrary/combined geometry
-
-RC1 recorded **65/120** passes in `geometry-test`. One private carrier handled
-arbitrary rotations very well while another was strongly texture-dependent and
-mostly retained only exact quarter turns. This is why arbitrary rotation remains
-an experimental capability rather than part of the release guarantee.
-
-Combined edit ordering also matters. Some rotate→resize/crop cases pass where
-the reverse order does not.
-
-### Experimental axis-aligned affine
-
-RC1 recorded **22/24** passes. The two failures were corpus/profile-specific
-shear cases. Anisotropic scale cases were generally strong on the qualification
-corpus.
-
-### Fixed lattice-basis composition
-
-RC1 passed **8/8** cases for the fixed direct lattice bank:
+Research measurements:
 
 ```text
-110%x90% + rotation
-90%x110% + rotation
-105%x95% + rotation
-95%x105% + rotation
+extreme-test          completed progressive limit mapping
+geometry-test         65/120 PASS, 55 FAIL
+affine-test           22/24 PASS, 2 FAIL
+composition-test      2/2 PASS
+lattice-test          8/8 PASS
+perspective-test      4/4 PASS
 ```
 
-These are discrete supported research hypotheses, not continuous affine-basis
-inference.
+The research FAIL rows are intentionally visible. They do not imply corruption
+or authentication failures on the stable JPEG/resize/crop baseline; they expose
+image-dependent limits in experimental geometry recovery.
 
-### Mild projective recovery
+## Baseline digital robustness
 
-RC1 passed **4/4** ImageMagick-generated cases for:
+On the release qualification corpus, `deep-test` recovered all 72 tested cases
+across two real images and all three profiles. The suite covered:
+
+- JPEG quality 82;
+- resize 95, 85, 75, 65, 55 and 50%;
+- center crop 90, 75 and 50%;
+- deterministic random crop 75 and 50%.
+
+`extreme-test` is intentionally non-strict. It searches progressively for the
+failure envelope and reports individual FAIL rows as measurements.
+
+## Adaptive profiles
+
+Deterministic properties:
+
+| Profile | Max payload | Protected bits | Tile redundancy |
+|---|---:|---:|---:|
+| robust | 16 B | 448 | 2.50x |
+| balanced | 32 B | 672 | 1.67x |
+| capacity | 64 B | 1120 | 1.00x |
+
+The same 1120-position tile is used for every profile. Shorter protected frames
+receive more repeated observations.
+
+## Resize recovery
+
+The v0.2.0 decoder's stable fractional-resize path is virtual and bounded:
+
+```text
+13 fixed non-direct scale hypotheses
+<= 3 phases per scale
+<= 6 full-grid shortlisted scales
+<= 18 full-carrier virtual aggregations
+```
+
+A decisive scale may receive one physical bilinear fallback over the expected
+inverse size and its eight ±1-pixel neighbours. This architecture restored the
+fractional-resize regression found during build 9 without changing Format v3.
+
+## Experimental affine measurements
+
+The fixed axis-aligned affine bank contains 36 hypotheses. In the RC1 private
+corpus run, 22 of 24 configured cases authenticated successfully. The two
+failures were corpus/profile-specific shear cases. This remains research
+behavior rather than a release guarantee.
+
+## Experimental lattice composition
+
+The frozen bank contains:
+
+```text
+110%x90%
+90%x110%
+105%x95%
+95%x105%
+```
+
+at -45..+45 degrees in quarter-degree steps.
+
+Implemented bounds:
+
+```text
+1444 sparse probes maximum
+192 stronger coherence evaluations maximum
+12 full authenticated grids maximum
+```
+
+The RC1 qualification run recovered 8/8 configured robust-profile lattice cases.
+
+## Experimental perspective
+
+The frozen v0.2.0 perspective bank contains only:
 
 ```text
 top-narrow-4
 bottom-narrow-4
 ```
 
-The v0.2 decoder contains exactly those two vertical-keystone hypotheses. The
-result demonstrates bounded projective sampling, not general perspective
-estimation.
+Each is one full projective grid at phase `(0,0)`, for two maximum projective
+aggregations. The RC1 private-corpus shell run recovered 4/4 configured cases.
 
-## Encoder compatibility fingerprints
+RC3 adds a deterministic Go end-to-end perspective regression that also asserts
+that the reported `PerspectiveCorrection` matches the expected projective path.
+This closes the earlier gap where only the hypothesis count was unit-tested.
 
-The v0.2 line freezes deterministic pixel fingerprints for a known image/key/
-payload input:
+General homography inference and physical print-camera recovery are not claimed.
 
-```text
-robust
-f78b3f97824780cbbd2a303d25b0d36c94f845cdd8213291fc76b263f14a08bb
+## v0.2.0-rc3 hardening verification
 
-balanced
-9b548bd4da9befab4d4ab97fb0d2fe758d79cd0c7ef30c0c32079f8c03874029
+RC3 keeps the v3 encoder layout and golden fingerprints unchanged. It adds
+pre-release hardening verified locally in the packaging environment:
 
-capacity
-cdf7007a900c05247b532e327b549607cdb7e8c2d677c71b46481b835edfc577
-```
+- non-finite and out-of-contract CLI strength rejection;
+- directory/symlink output rejection and no-clobber race regression;
+- Unix umask regression for newly-created outputs;
+- `.sealed -> .sealed.png` naming regression;
+- exact multiline extraction via `extract -raw`;
+- 250,000,000-pixel working-image preflight regression;
+- alpha-detail estimator consistency regression;
+- real projective end-to-end Go regression with path assertion;
+- JPEG perspective shell test and zero-corpus failure behavior;
+- VERSION/buildinfo consistency gate;
+- `gofmt`, `go vet`, native build and shell syntax checks.
 
-A change to one of these values is treated as an encoder/Format-v3 regression
-unless deliberately accompanied by a new format decision.
+A full private-corpus `make all-test` remains the final external qualification
+step before promoting RC3 to `v0.2.0` final. Do not infer that unexecuted corpus
+suites passed merely from the local hardening checks.
 
-## Large-image observations
+## Large images
 
-A private 16320×12288 image (~200.5 MP) has been used successfully for basic
-round-trip testing. Research geometry scripts intentionally use lower megapixel
-limits to control runtime.
+The v0.2 line has previously round-tripped a private ~200 MP carrier. RC3 keeps
+that class within the new 250,000,000-pixel working-image safety limit. Geometry
+suites may independently skip transforms above their configured 50/100 MP
+research limits.
 
-RC2 adds a 300 MP pre-decode/source guard so absurdly large images fail before
-PixSeal builds its complete RGB working plane. This does not make the v0.2
-implementation memory-sparse; it simply prevents unbounded pre-allocation.
+## Interpretation
 
-## Print-camera research status
+- **Deterministic:** format sizes, profile capacities, search-space caps and
+  authentication rules.
+- **Experimental:** success rates on particular images/transforms.
+- **Heuristic:** `analyze` detail score and recommended strength.
 
-Two ~200 MP original smartphone captures of a printed v3 carrier have been kept
-as private research inputs. The v0.2 decoder has **not** authenticated the hidden
-payload from those photographs.
-
-This result is outside the v0.2 release baseline. The next research line is
-expected to study local lattice-basis and general homography inference before
-considering any encoder change.
-
-## Interpreting results
-
-Three kinds of statement must remain separate:
-
-1. **Deterministic format facts** — capacities, frame sizes, search bounds.
-2. **Heuristics** — texture/detail scores, geometric ranking and confidence.
-3. **Experimental measurements** — PASS/FAIL on a specific image,
-   transformation and software environment.
-
-A PASS on one corpus is not a universal recovery guarantee; a heuristic score is
-not proof that a PixSeal payload is present. Only a valid authenticated Format v3
-frame is a successful extraction.
+No experimental PASS guarantees recovery on an arbitrary future image, and no
+failed experimental geometry case invalidates the authenticated digital
+baseline.

@@ -101,10 +101,10 @@ check_extract() {
 
 	((cases += 1))
 	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" \
-		"$PIXSEAL" extract -raw -in "$transformed" -key "$TEST_KEY" 2>/dev/null)"
+		"$PIXSEAL" extract -in "$transformed" -key "$TEST_KEY" 2>&1)"
 	status=$?
 	if (( status == 0 )); then
-		extracted="$output"
+		extracted="${output%%$'\n'*}"
 		if [[ "$extracted" == "$expected" ]]; then
 			printf '    PASS  %-16s message recovered\n' "$label"
 			((passes += 1))

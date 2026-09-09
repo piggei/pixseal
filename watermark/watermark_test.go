@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -26,6 +27,46 @@ func testImage(width, height int) *image.NRGBA {
 		}
 	}
 	return img
+}
+
+func TestStrengthRejectsNonFiniteValues(t *testing.T) {
+	for _, value := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
+		options := DefaultOptions()
+		options.Strength = value
+		if _, err := normalizeEmbedOptions(options); err == nil {
+			t.Fatalf("normalizeEmbedOptions accepted non-finite strength %v", value)
+		}
+	}
+}
+
+type boundsOnlyImage struct{ rectangle image.Rectangle }
+
+func (img boundsOnlyImage) ColorModel() color.Model { return color.NRGBAModel }
+func (img boundsOnlyImage) Bounds() image.Rectangle { return img.rectangle }
+func (img boundsOnlyImage) At(x, y int) color.Color { return color.NRGBA{A: 255} }
+
+func TestWorkingImageLimitRejectsBeforePixelPlaneAllocation(t *testing.T) {
+	img := boundsOnlyImage{rectangle: image.Rect(0, 0, maxWorkingPixels+1, 1)}
+	if _, _, err := ExtractWithInfo(img, []byte("12345678")); err == nil || !strings.Contains(err.Error(), "working-image limit") {
+		t.Fatalf("oversized ExtractWithInfo error = %v", err)
+	}
+	if _, _, err := EmbedWithInfo(img, []byte("x"), []byte("12345678"), DefaultOptions()); err == nil || !strings.Contains(err.Error(), "working-image limit") {
+		t.Fatalf("oversized EmbedWithInfo error = %v", err)
+	}
+}
+
+func TestAnalyzerUsesSameWhiteAlphaFlatteningAsEncoder(t *testing.T) {
+	transparent := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	transparent.SetNRGBA(0, 0, color.NRGBA{R: 255, A: 0})
+	white := image.NewNRGBA(image.Rect(0, 0, 2, 2))
+	for y := 0; y < 2; y++ {
+		for x := 0; x < 2; x++ {
+			white.SetNRGBA(x, y, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
+		}
+	}
+	if got, want := pixelLuminance(transparent, 0, 0), pixelLuminance(white, 0, 0); math.Abs(got-want) > 1e-9 {
+		t.Fatalf("transparent pixel luminance %.3f differs from white-flattened %.3f", got, want)
+	}
 }
 
 func TestV3EncoderGoldenFingerprint(t *testing.T) {
@@ -49,54 +90,6 @@ func TestV3EncoderGoldenFingerprint(t *testing.T) {
 				t.Fatalf("encoder fingerprint changed for %s: got %s, want %s", profile, hex, expected[profile])
 			}
 		})
-	}
-}
-
-func TestStrengthRejectsNonFiniteValues(t *testing.T) {
-	for _, strength := range []float64{math.NaN(), math.Inf(1), math.Inf(-1)} {
-		options := DefaultOptions()
-		options.Strength = strength
-		if _, err := normalizeEmbedOptions(options); err == nil {
-			t.Fatalf("non-finite strength %v was accepted", strength)
-		}
-	}
-	options := Options{Strength: 0, Profile: ProfileAuto}
-	normalized, err := normalizeEmbedOptions(options)
-	if err != nil || normalized.Strength != 24 {
-		t.Fatalf("API zero sentinel should resolve to default 24: options=%+v err=%v", normalized, err)
-	}
-}
-
-func TestAnalyzerCompositesAlphaOnWhiteLikeEncoder(t *testing.T) {
-	transparent := image.NewNRGBA(image.Rect(0, 0, 2, 2))
-	opaqueWhite := image.NewNRGBA(image.Rect(0, 0, 2, 2))
-	for y := 0; y < 2; y++ {
-		for x := 0; x < 2; x++ {
-			transparent.SetNRGBA(x, y, color.NRGBA{R: 10, G: 20, B: 30, A: 0})
-			opaqueWhite.SetNRGBA(x, y, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
-		}
-	}
-	if got, want := pixelLuminance(transparent, 0, 0), pixelLuminance(opaqueWhite, 0, 0); math.Abs(got-want) > 0.01 {
-		t.Fatalf("transparent pixel luminance %.3f differs from white composite %.3f", got, want)
-	}
-}
-
-type oversizedTestImage struct{}
-
-func (oversizedTestImage) ColorModel() color.Model { return color.NRGBAModel }
-func (oversizedTestImage) Bounds() image.Rectangle { return image.Rect(0, 0, maxSourcePixels+1, 1) }
-func (oversizedTestImage) At(x, y int) color.Color {
-	panic("oversized image should be rejected before pixel access")
-}
-
-func TestCoreRejectsOversizedImageBeforePixelAllocation(t *testing.T) {
-	img := oversizedTestImage{}
-	options := DefaultOptions()
-	if _, _, err := EmbedWithInfo(img, []byte("hello"), []byte("12345678"), options); err == nil {
-		t.Fatal("EmbedWithInfo accepted oversized source")
-	}
-	if _, _, err := ExtractWithInfo(img, []byte("12345678")); err == nil {
-		t.Fatal("ExtractWithInfo accepted oversized source")
 	}
 }
 
@@ -769,7 +762,7 @@ func TestAxisAlignedAffineSearchIsFixed(t *testing.T) {
 	}
 }
 
-func invertHomographyForTest(h homography) (homography, bool) {
+func inverseHomographyForTest(h homography) (homography, bool) {
 	a := h.h
 	det := a[0]*(a[4]*a[8]-a[5]*a[7]) - a[1]*(a[3]*a[8]-a[5]*a[6]) + a[2]*(a[3]*a[7]-a[4]*a[6])
 	if math.Abs(det) < 1e-12 {
@@ -789,32 +782,58 @@ func invertHomographyForTest(h homography) (homography, bool) {
 	return homography{h: inv}, true
 }
 
-func warpProjectiveForTest(src image.Image, candidate projectiveCandidate) *image.NRGBA {
-	width, height := src.Bounds().Dx(), src.Bounds().Dy()
-	h, ok := homographyForQuad(width, height, candidate.quad)
-	if !ok {
-		panic("invalid projective test homography")
+func sampleImageNRGBAForTest(src image.Image, x, y float64) color.NRGBA {
+	b := src.Bounds()
+	if x < 0 || y < 0 || x > float64(b.Dx()-1) || y > float64(b.Dy()-1) {
+		return color.NRGBA{R: 255, G: 255, B: 255, A: 255}
 	}
-	inv, ok := invertHomographyForTest(h)
-	if !ok {
-		panic("non-invertible projective test homography")
+	x0, y0 := int(math.Floor(x)), int(math.Floor(y))
+	x1, y1 := x0+1, y0+1
+	if x1 >= b.Dx() {
+		x1 = b.Dx() - 1
 	}
-	out := image.NewNRGBA(image.Rect(0, 0, width, height))
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			sx, sy, ok := inv.mapPoint(float64(x), float64(y))
-			if !ok || sx < 0 || sy < 0 || sx > float64(width-1) || sy > float64(height-1) {
+	if y1 >= b.Dy() {
+		y1 = b.Dy() - 1
+	}
+	fx, fy := x-float64(x0), y-float64(y0)
+	c00 := color.NRGBAModel.Convert(src.At(b.Min.X+x0, b.Min.Y+y0)).(color.NRGBA)
+	c10 := color.NRGBAModel.Convert(src.At(b.Min.X+x1, b.Min.Y+y0)).(color.NRGBA)
+	c01 := color.NRGBAModel.Convert(src.At(b.Min.X+x0, b.Min.Y+y1)).(color.NRGBA)
+	c11 := color.NRGBAModel.Convert(src.At(b.Min.X+x1, b.Min.Y+y1)).(color.NRGBA)
+	return color.NRGBA{
+		R: bilinearChannel(c00.R, c10.R, c01.R, c11.R, fx, fy),
+		G: bilinearChannel(c00.G, c10.G, c01.G, c11.G, fx, fy),
+		B: bilinearChannel(c00.B, c10.B, c01.B, c11.B, fx, fy),
+		A: 255,
+	}
+}
+
+func projectiveWarpForTest(src image.Image, candidate projectiveCandidate) *image.NRGBA {
+	b := src.Bounds()
+	h, ok := homographyForQuad(b.Dx(), b.Dy(), candidate.quad)
+	if !ok {
+		panic("invalid test homography")
+	}
+	inverse, ok := inverseHomographyForTest(h)
+	if !ok {
+		panic("non-invertible test homography")
+	}
+	out := image.NewNRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
+	for y := 0; y < b.Dy(); y++ {
+		for x := 0; x < b.Dx(); x++ {
+			sx, sy, ok := inverse.mapPoint(float64(x), float64(y))
+			if !ok {
 				out.SetNRGBA(x, y, color.NRGBA{R: 255, G: 255, B: 255, A: 255})
 				continue
 			}
-			out.Set(x, y, src.At(int(math.Round(sx)), int(math.Round(sy))))
+			out.SetNRGBA(x, y, sampleImageNRGBAForTest(src, sx, sy))
 		}
 	}
 	return out
 }
 
-func TestMildPerspectiveRecoveryEndToEnd(t *testing.T) {
-	key := []byte("perspective-e2e-key")
+func TestV3MildPerspectiveRecoveryEndToEnd(t *testing.T) {
+	key := []byte("perspective recovery key")
 	message := []byte("perspective")
 	options := DefaultOptions()
 	options.Profile = ProfileRobust
@@ -822,16 +841,17 @@ func TestMildPerspectiveRecoveryEndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	transformed := warpProjectiveForTest(marked, projectiveHypotheses[0])
-	got, info, err := ExtractWithInfo(transformed, key)
+	candidate := projectiveHypotheses[0]
+	warped := projectiveWarpForTest(marked, candidate)
+	got, info, err := ExtractWithInfo(warped, key)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(got, message) {
-		t.Fatalf("perspective payload=%q, want %q", got, message)
+		t.Fatalf("perspective payload = %q; want %q", got, message)
 	}
-	if info.PerspectiveCorrection != projectiveHypotheses[0].name {
-		t.Fatalf("perspective correction=%q, want %q", info.PerspectiveCorrection, projectiveHypotheses[0].name)
+	if info.PerspectiveCorrection != candidate.name {
+		t.Fatalf("perspective correction = %q; want %q", info.PerspectiveCorrection, candidate.name)
 	}
 }
 

@@ -112,13 +112,12 @@ run_extract_case() {
 	local transformed="$1" message="$2" label="$3"
 	local output status extracted correction
 	((cases += 1))
-	local diag_file="$tmp_dir/diag-geometry-$cases.txt"
-	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" "$PIXSEAL" extract -raw -in "$transformed" -key "$TEST_KEY" 2>"$diag_file")"
+	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" "$PIXSEAL" extract -in "$transformed" -key "$TEST_KEY" 2>&1)"
 	status=$?
 	if (( status == 0 )); then
-		extracted="$output"
+		extracted="${output%%$'\n'*}"
 		if [[ "$extracted" == "$message" ]]; then
-			correction="$(sed -n 's/^rotation-correction: //p' "$diag_file" | head -n 1)"
+			correction="$(printf '%s\n' "$output" | sed -n 's/^rotation-correction: //p' | head -n 1)"
 			if [[ -n "$correction" ]]; then
 				printf '    PASS  %-30s message recovered (%s)\n' "$label" "$correction"
 			else

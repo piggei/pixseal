@@ -11,7 +11,7 @@ fi
 # Keep the default list explicit: all-test is intended to be a stable, readable
 # report rather than an accidental traversal of every Make target. The optional
 # ALL_TEST_TARGETS override is useful for smoke-testing the orchestrator itself.
-default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
+default_targets="version-check vet test deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
 read -r -a targets <<< "${ALL_TEST_TARGETS:-$default_targets}"
 if (( ${#targets[@]} == 0 )); then
     echo "error: ALL_TEST_TARGETS resolved to an empty list" >&2
@@ -20,11 +20,9 @@ fi
 
 label_for() {
     case "$1" in
-        version-check) echo "version consistency" ;;
+        version-check) echo "version metadata" ;;
         vet) echo "go vet" ;;
-        release-unit) echo "release-gate Go tests" ;;
-        test-images) echo "local image round-trip" ;;
-        research-unit) echo "experimental geometry Go regressions" ;;
+        test) echo "unit + image round-trip" ;;
         deep-test) echo "baseline transformations" ;;
         extreme-test) echo "progressive limits" ;;
         geometry-test) echo "rotation/combined geometry" ;;
@@ -39,7 +37,7 @@ label_for() {
 
 statuses=()
 durations=()
-release_targets=(version-check vet release-unit test-images deep-test core-target-check)
+release_targets=(version-check vet test deep-test core-target-check)
 
 is_release_target() {
     local needle="$1"
@@ -64,7 +62,7 @@ if command -v magick >/dev/null 2>&1; then
 elif command -v convert >/dev/null 2>&1; then
     printf 'ImageMagick: %s\n' "$(convert -version 2>/dev/null | head -n 1)"
 fi
-printf 'STRICT=%s is used for deep/geometry/affine/composition/lattice/perspective; extreme-test remains non-strict.\n' "${ALL_TEST_STRICT:-1}"
+printf 'STRICT=%s is used for deep/geometry/affine/composition/lattice/perspective suites; extreme-test remains non-strict.\n' "${ALL_TEST_STRICT:-1}"
 if [[ -n "$REPORT" ]]; then
     printf 'Report: %s\n' "$REPORT"
 fi

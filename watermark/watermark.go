@@ -11,14 +11,14 @@ import (
 )
 
 const (
-	blockSize       = 8
-	maxPayload      = 64
-	headerSize      = 8 // magic(2), version(1), length(1), crc32(4)
-	tagSize         = 8
-	maxFrameSize    = headerSize + maxPayload + tagSize
-	maxFrameBits    = maxFrameSize * 8
-	maxSearchPixels = 50_000_000
-	maxSourcePixels = 300_000_000 // public core guard; geometry stages use lower search-specific bounds
+	blockSize        = 8
+	maxPayload       = 64
+	headerSize       = 8 // magic(2), version(1), length(1), crc32(4)
+	tagSize          = 8
+	maxFrameSize     = headerSize + maxPayload + tagSize
+	maxFrameBits     = maxFrameSize * 8
+	maxSearchPixels  = 50_000_000
+	maxWorkingPixels = 250_000_000
 
 	// Hamming(7,4) expands the 80-byte capacity-profile frame to 1120 protected bits.
 	eccBits    = maxFrameBits / 4 * 7
@@ -27,20 +27,10 @@ const (
 )
 
 func exceedsPixelLimit(width, height, limit int) bool {
-	return int64(width)*int64(height) > int64(limit)
-}
-
-func validateSourceImageSize(img image.Image) error {
-	bounds := img.Bounds()
-	width, height := bounds.Dx(), bounds.Dy()
-	if width <= 0 || height <= 0 {
-		return errors.New("image dimensions must be positive")
+	if width <= 0 || height <= 0 || limit < 0 {
+		return false
 	}
-	if int64(width)*int64(height) > int64(maxSourcePixels) {
-		return fmt.Errorf("image has %.1f MP; maximum supported source size is %.1f MP",
-			float64(int64(width)*int64(height))/1_000_000, float64(maxSourcePixels)/1_000_000)
-	}
-	return nil
+	return int64(width) > int64(limit)/int64(height)
 }
 
 var (
@@ -82,16 +72,36 @@ func init() {
 }
 
 func normalizeEmbedOptions(options Options) (Options, error) {
-	if math.IsNaN(options.Strength) || math.IsInf(options.Strength, 0) {
-		return options, errors.New("strength must be a finite number")
-	}
 	if options.Strength == 0 {
 		options.Strength = 24
+	}
+	if math.IsNaN(options.Strength) || math.IsInf(options.Strength, 0) {
+		return options, errors.New("strength must be a finite number")
 	}
 	if options.Strength < 4 || options.Strength > 120 {
 		return options, errors.New("strength must be between 4 and 120")
 	}
 	return options, nil
+}
+
+func validateWorkingImageSize(img image.Image) error {
+	bounds := img.Bounds()
+	width, height := bounds.Dx(), bounds.Dy()
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid image dimensions %dx%d", width, height)
+	}
+	if int64(width) > (1<<63-1)/int64(height) {
+		return errors.New("image dimensions overflow the PixSeal pixel-count calculation")
+	}
+	pixels := int64(width) * int64(height)
+	if pixels > maxWorkingPixels {
+		return fmt.Errorf("image has %d pixels; PixSeal working-image limit is %d pixels", pixels, maxWorkingPixels)
+	}
+	maxInt := int64(^uint(0) >> 1)
+	if pixels > maxInt/3 {
+		return errors.New("image is too large for PixSeal pixel-plane allocation on this architecture")
+	}
+	return nil
 }
 
 // Capacity reports the maximum v3 payload capacity. A complete periodic tile is
@@ -360,20 +370,24 @@ func clamp(value float64) uint8 {
 	return uint8(math.Round(value))
 }
 
+func flattenedNRGBA(value color.Color) color.NRGBA {
+	pixel := color.NRGBAModel.Convert(value).(color.NRGBA)
+	if pixel.A < 255 {
+		alpha := float64(pixel.A) / 255
+		pixel.R = uint8(float64(pixel.R)*alpha + 255*(1-alpha))
+		pixel.G = uint8(float64(pixel.G)*alpha + 255*(1-alpha))
+		pixel.B = uint8(float64(pixel.B)*alpha + 255*(1-alpha))
+		pixel.A = 255
+	}
+	return pixel
+}
+
 func toNRGBA(src image.Image) *image.NRGBA {
 	bounds := src.Bounds()
 	output := image.NewNRGBA(image.Rect(0, 0, bounds.Dx(), bounds.Dy()))
 	for y := 0; y < bounds.Dy(); y++ {
 		for x := 0; x < bounds.Dx(); x++ {
-			pixel := color.NRGBAModel.Convert(src.At(bounds.Min.X+x, bounds.Min.Y+y)).(color.NRGBA)
-			if pixel.A < 255 {
-				alpha := float64(pixel.A) / 255
-				pixel.R = uint8(float64(pixel.R)*alpha + 255*(1-alpha))
-				pixel.G = uint8(float64(pixel.G)*alpha + 255*(1-alpha))
-				pixel.B = uint8(float64(pixel.B)*alpha + 255*(1-alpha))
-				pixel.A = 255
-			}
-			output.SetNRGBA(x, y, pixel)
+			output.SetNRGBA(x, y, flattenedNRGBA(src.At(bounds.Min.X+x, bounds.Min.Y+y)))
 		}
 	}
 	return output

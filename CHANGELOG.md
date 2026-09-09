@@ -1,142 +1,71 @@
 # Changelog
 
-All notable PixSeal changes are documented here. Historical build entries are
-summaries; current behavior is defined by README and ALGORITHM.
+## v0.2.0-rc3 — 2026-09-09
 
-## v0.2.0-rc2 - 2026-09-09
+Pre-release hardening candidate. **Format v3 and the deterministic encoder remain
+unchanged.**
 
-Release-hardening candidate produced after an independent audit and a second
-verification pass.
+### Fixed
 
-### Correctness and safety
+- Reject non-finite embedding strengths; the CLI now also rejects explicit
+  strength 0 and all values outside 4..120.
+- Harden output publication: `-force` replaces regular files only; directories,
+  symlinks and other special files are rejected.
+- Protect no-force output against late target creation with a no-clobber commit.
+- Respect Unix umask for new output files and preserve regular-file permissions
+  on replacement.
+- Sync encoded temporary files before publication and restrict the
+  backup-and-restore replacement fallback to Windows.
+- Treat extensionless Unix dotfiles correctly (`.sealed -> .sealed.png`).
+- Add `extract -raw` for exact payload-only scripting and multiline payloads;
+  normal diagnostics are emitted to stderr.
+- Add `image.DecodeConfig` preflight and a 250,000,000-pixel working-image safety
+  limit before heavy allocations.
+- Make `analyze` flatten alpha against white exactly like embedding.
+- Fix perspective test tool initialization, JPEG handling, zero-corpus false
+  PASS, error accounting and unsupported left/right positive modes.
+- Require the perspective shell regression to report the expected projective
+  correction path.
+- Validate PNG signature and IHDR before using the large-PNG dimension fallback.
+- Force Windows batch builds to `GOOS=windows GOARCH=amd64 CGO_ENABLED=0`.
+- Correct stale geometry comments and the lattice-basis test diagnostic.
+- Remove unused `scaleCandidate` and obsolete bicubic normalization code.
+- Add VERSION/buildinfo consistency checking.
 
-- Reject non-finite embedding strengths (`NaN`, `+Inf`, `-Inf`).
-- Reject explicit CLI `-strength 0`; omitting the flag still selects default 24.
-  The Go API retains zero as its internal default sentinel.
-- Add a 300 MP DecodeConfig/core source guard before PixSeal's heavy RGB working
-  allocations.
-- Preflight output existence before image decode/embed work.
-- Use `Lstat` semantics so dangling symlinks count as existing targets.
-- Without `-force`, use a no-clobber commit that cannot silently replace a
-  racing destination.
-- With `-force`, replace regular files only; refuse directories, symlinks, FIFOs
-  and devices.
-- Stop forcing new output files to 0644; new files keep private temporary-file
-  permissions, while forced replacement preserves existing regular-file mode.
-- Sync encoded temporary output before commit.
-- Restrict the backup/restore rename fallback to Windows and document its
-  crash-durability limitation.
-- Fix dotfile output naming (`.sealed` -> `.sealed.png`).
-- Add `extract -raw`: exact payload bytes on stdout, diagnostics on stderr.
-- Align `analyze` alpha handling with the encoder's white compositing.
-- Force `GOOS=windows`, `GOARCH=amd64`, `CGO_ENABLED=0` in `build-windows.bat`.
+### Added tests
 
-### Tests and tooling
+- CLI strength rejection for 0, NaN and infinities.
+- Directory, dangling-symlink and late-created-output safety regressions.
+- Unix umask regression.
+- Exact multiline `extract -raw` regression.
+- Oversized working-image rejection before pixel-plane allocation.
+- Alpha-analysis consistency regression.
+- Deterministic end-to-end mild-perspective recovery with path assertion.
+- Perspective JPEG and empty-corpus harness verification during RC3 closeout.
 
-- Repair `test-perspective.sh` ImageMagick identify setup and validation.
-- Fail on an empty perspective corpus instead of reporting a false green.
-- Make perspective error/case accounting coherent.
-- Restrict positive perspective modes to the two decoder hypotheses actually
-  shipped in v0.2.
-- Require the perspective shell test to observe the matching
-  `perspective-correction` path.
-- Add a deterministic Go end-to-end mild-perspective recovery regression.
-- Validate the PNG signature and IHDR chunk before using the large-PNG header
-  fallback.
-- Add file-safety, explicit-strength, raw multiline-payload, large-source and
-  analyzer-alpha regressions.
-- Add `make version-check` and include it in the release baseline/all-test report.
-- Split deterministic Go tests into `release-unit` and `research-unit` for release qualification while preserving historical `make test` semantics.
-- Correct all-test documentation: `extreme-test` is a non-strict boundary map;
-  strict semantics apply only to suites that implement them.
+### Documentation
 
-### Cleanup and documentation
+- Rewrote the current decoder description from the implementation rather than
+  intermediate-build prose.
+- Corrected v3 frame/tag placement (`header + actual payload + tag + padding`).
+- Corrected resize, lattice and perspective search budgets.
+- Clarified strict vs non-strict suite semantics.
+- Documented EXIF Orientation, ICC/color-management and Windows crash-durability
+  limitations.
+- Reduced TODO to open release/v0.3 work; historical milestones remain in
+  HISTORY.
 
-- Remove unused `scaleCandidate` and obsolete bicubic normalization code/tests.
-- Correct stale two/four-shape comments and test diagnostics.
-- Rewrite README around v0.2.0 current behavior rather than build-9/build-10
-  historical descriptions.
-- Rewrite ALGORITHM as the current Format-v3/decoder specification, including
-  exact frame-tag placement and current bounded search budgets.
-- Reorganize RESULTS so release qualification is the first status presented.
-- Reorder HISTORY chronologically and record rejected experiments explicitly.
-- Reduce TODO to open work only.
-- Clarify EXIF Orientation, ICC/color-management, Windows replacement durability
-  and print-camera limitations.
+## v0.2.0-rc1 — 2026-09-08
 
-### Compatibility
+- Consolidated the qualified build-11 algorithmic line.
+- Froze Format v3 encoder fingerprints.
+- Added `release-check` and split release-baseline vs research-suite reporting.
+- Qualification: release baseline PASS; deep-test 72/72; composition 2/2;
+  lattice 8/8; perspective 4/4; known experimental geometry/affine limits
+  remained visible.
 
-- Format v3 is unchanged.
-- Profile IDs, capacities, whitening, Hamming protection, tile mapping, DCT
-  embedding and encoder fingerprints remain the v0.2 compatibility contract.
+## Development builds 1–11
 
-## v0.2.0-rc1 - 2026-09-08
-
-- Consolidated the build-11 algorithm as the v0.2 release candidate.
-- Added `make release-check` and split release-baseline versus research-suite
-  reporting in `make all-test`.
-- Froze Format v3 and deterministic encoder fingerprints.
-- Qualified the release baseline on the private Linux corpus: `deep-test` 72/72,
-  composition 2/2, lattice 8/8, mild perspective 4/4; arbitrary geometry and
-  affine retained documented research limits.
-
-## v0.2.0 build 11 - 2026-09-08
-
-- Added virtual homography sampling with two bounded vertical-keystone
-  hypotheses (`top-narrow-4`, `bottom-narrow-4`).
-- Added `perspective-test` and `perspective-correction` diagnostics.
-- Kept general perspective/print-camera recovery explicitly out of scope.
-
-## v0.2.0 build 10 - 2026-09-08
-
-- Restored fractional pure-resize recovery before speculative geometry.
-- Added virtual isotropic-scale search plus a single targeted bilinear
-  normalization fallback.
-- Added deterministic v3 encoder pixel fingerprints.
-- Added large-PNG IHDR dimension probing to geometry scripts.
-
-## v0.2.0 build 9 - 2026-09-08
-
-- Expanded the fixed direct lattice-basis bank to 110×90, 90×110, 105×95 and
-  95×105 before rotation.
-- Added `make all-test` comparative reporting.
-- Rejected a more continuous local-basis prototype because negative-case runtime
-  was unacceptable.
-
-## v0.2.0 build 8 - 2026-09-08
-
-- Generalized direct lattice composition to symmetric 110×90 / 90×110 bases.
-
-## v0.2.0 build 7 - 2026-09-08
-
-- Replaced a rotation-first composed-geometry heuristic with direct lattice
-  scoring after real-corpus FAIL/TIMEOUT results.
-
-## v0.2.0 build 6 - 2026-09-07
-
-- Demonstrated the first bounded anisotropic-scale + rotation composition.
-
-## v0.2.0 build 5 - 2026-09-07
-
-- Added bounded axis-aligned affine recovery via virtual sampling.
-
-## v0.2.0 build 4 - 2026-09-07
-
-- Added selected rotation + resize/crop recovery experiments.
-
-## v0.2.0 build 3 - 2026-09-07
-
-- Added exact quarter-turn and arbitrary digital rotation recovery.
-
-## v0.2.0 build 2 - 2026-09-07
-
-- Made runtime extraction Format-v3-only; unreleased v1/v2 retained as history.
-
-## v0.2.0 build 1 - 2026-09-07
-
-- Introduced adaptive Format v3 profiles and automatic profile selection.
-
-## v0.1.0 - 2026-09-07
-
-- First stable PixSeal line with DCT embedding, authentication/ECC and digital
-  crop/resize robustness experiments.
+See [`HISTORY.md`](HISTORY.md) for the complete technical progression from
+adaptive Format v3 through rotation, affine/lattice recovery, resize regression
+recovery and the first bounded projective experiment.

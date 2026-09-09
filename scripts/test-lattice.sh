@@ -115,11 +115,10 @@ for image in "${images[@]}"; do
             fi
 
             ((cases += 1))
-            diag_file="$tmp_dir/diag-${cases:-0}.txt"
-	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" "$PIXSEAL" extract -raw -in "$transformed" -key "$TEST_KEY" 2>"$diag_file")"
+            output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" "$PIXSEAL" extract -in "$transformed" -key "$TEST_KEY" 2>&1)"
             status=$?
-            if (( status == 0 )) && [[ "$output" == "$message" ]]; then
-                correction="$(cat "$diag_file" | sed -n '/-correction:/p' | paste -sd ';' -)"
+            if (( status == 0 )) && [[ "${output%%$'\n'*}" == "$message" ]]; then
+                correction="$(printf '%s\n' "$output" | sed -n '/-correction:/p' | paste -sd ';' -)"
                 printf '    PASS  %-24s message recovered (%s)\n' "$mode@$angle" "$correction"
                 ((passes += 1))
             elif (( status == 124 )); then

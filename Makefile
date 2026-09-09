@@ -41,7 +41,7 @@ ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit release-unit research-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
+.PHONY: build test test-unit test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -57,21 +57,8 @@ test: build test-unit test-images
 	@echo "Local test suite completed."
 
 test-unit:
-	@echo "Running complete Go unit/regression suite..."
+	@echo "Running Go unit tests..."
 	@go test ./...
-
-# Release-gate Go tests deliberately exclude the expensive experimental geometry
-# regression group. make test still runs every Go test for compatibility.
-release-unit:
-	@echo "Running release-gate Go tests..."
-	@go test ./cmd/pixseal ./internal/buildinfo -count=1
-	@go test ./watermark -run 'Test(V3EncoderGoldenFingerprint|StrengthRejectsNonFiniteValues|AnalyzerCompositesAlphaOnWhiteLikeEncoder|CoreRejectsOversizedImageBeforePixelAllocation|IsotropicScaleSearchIsFixed|HammingCorrectsSingleBit|ProfileSelectionThresholds|ExplicitProfileCapacityErrors|V3ProfileRoundTrips|V3TransformsByProfile|V3AutoProfileExtraction|WrongKeyAndUnmarkedImageAreBounded|AnalyzeImageMatchesProfileMath|V3FrameIgnoresTrailingPaddingButAuthenticatesHeader|V3SyncPatternObservationCounts|V3TileMappingObservationCounts)$$' -count=1
-
-# Deterministic Go regressions for experimental geometry. all-test runs this
-# separately so research failures cannot make the release baseline red.
-research-unit:
-	@echo "Running experimental geometry Go regressions..."
-	@go test ./watermark -run 'Test(V3QuarterTurnRecovery|V3ArbitraryRotationRecovery|V3CombinedGeometryRecovery|V3DirectLatticeBasisRecovery|DirectLatticeBasisSearchIsFixed|RotationProbeRejectsUnmarkedSyntheticImage|WrongKeyOnRotatedCarrierIsBounded|V3AxisAlignedAffineScaleRecovery|AxisAlignedAffineSearchIsFixed|MildPerspectiveRecoveryEndToEnd|Build11PerspectiveHypothesisBound)$$' -count=1
 
 test-images: build
 	@set -euo pipefail; \
@@ -105,7 +92,7 @@ test-images: build
 			marked="$$tmp_dir/$$name-$$profile.png"; \
 			"$(PIXSEAL)" embed -in "$$image" -out "$$marked" \
 				-key "$(TEST_KEY)" -message "$$message" -profile "$$profile" >/dev/null; \
-			extracted="$$($(PIXSEAL) extract -raw -in "$$marked" -key "$(TEST_KEY)" 2>/dev/null)"; \
+			extracted="$$($(PIXSEAL) extract -in "$$marked" -key "$(TEST_KEY)" -raw)"; \
 			if [[ "$$extracted" != "$$message" ]]; then \
 				echo "error: extracted message differs for $$image ($$profile)" >&2; \
 				exit 1; \
@@ -226,9 +213,9 @@ perspective-test: build
 	EXTRACT_TIMEOUT="$(EXTRACT_TIMEOUT)" STRICT="$(STRICT)" bash ./scripts/test-perspective.sh
 
 # Run every test/check target sequentially, continue after individual failures,
-# and print one comparable summary at the end. STRICT=1 is applied to the
-# baseline-transform and geometric research suites that support it; extreme-test
-# intentionally remains a non-strict progressive limit map.
+# and print one comparable summary at the end. Strict mode is applied to the
+# pass/fail transformation and geometry suites; extreme-test remains a non-strict
+# progressive limit map whose individual FAIL rows are measurements, not target failure.
 # Set ALL_TEST_REPORT=path/to/report.txt to tee the complete run to a file.
 all-test:
 	@ALL_TEST_REPORT="$(ALL_TEST_REPORT)" \
@@ -237,17 +224,18 @@ all-test:
 	bash ./scripts/test-all.sh
 
 version-check:
-	@echo "Checking VERSION/buildinfo consistency..."
-	@go test ./internal/buildinfo -run TestVersionFileMatchesBuildInfo -count=1
+	@expected="PixSeal v$$(sed -n 's/^[[:space:]]*Version[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' internal/buildinfo/buildinfo.go)$$(sed -n 's/^[[:space:]]*Prerelease[[:space:]]*=[[:space:]]*"\([^"]*\)".*/-\1/p' internal/buildinfo/buildinfo.go | sed 's/-$$//')"; \
+	actual="$$(head -n 1 VERSION)"; \
+	if [[ "$$actual" != "$$expected" ]]; then echo "error: VERSION '$$actual' != buildinfo '$$expected'" >&2; exit 1; fi; \
+	echo "Version metadata consistent: $$actual"
 
 vet:
 	@echo "Running go vet..."
 	@go vet ./...
 
-# Release-candidate gate: static analysis, release-scoped unit tests, local
-# round trips, baseline transforms and reusable-core portability. Research Go
-# regressions remain visible through research-unit / all-test. Requires original pics/.
-release-check: version-check vet release-unit test-images deep-test core-target-check
+# Release-candidate gate: static analysis, unit/round-trip tests, baseline
+# transformations and reusable-core portability. Requires original pics/.
+release-check: version-check vet test deep-test core-target-check
 	@echo "Release baseline checks passed."
 
 # Run build + local round-trip tests + baseline transformation tests.

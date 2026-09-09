@@ -1,479 +1,322 @@
 # PixSeal v0.2.0 — Format v3 and decoder specification
 
-This document describes the **current v0.2.0 implementation** used by
-`v0.2.0-rc2`. Historical build strategies belong in `HISTORY.md` and are not
-part of this normative description.
+This document describes the implementation shipped in **v0.2.0-rc3**. Historical
+strategies from intermediate builds belong in `HISTORY.md` and are not normative
+for the current decoder.
 
-PixSeal is an experimental robust-steganography system for short messages. The
-on-image Format v3 and encoder are frozen for the v0.2.0 line.
+PixSeal is an experimental robust-steganography system for short authenticated
+messages. DCT watermarking is the carrier mechanism; it is not an ownership
+protocol and is not claimed to be statistically undetectable.
 
-## 1. Carrier geometry
-
-PixSeal operates on luminance DCT blocks.
-
-Constants:
+## 1. Constants
 
 ```text
-native block size:        8 x 8 pixels
-logical tile:             35 x 32 blocks
-positions per tile:       1120
-native minimum carrier:   280 x 256 pixels
-maximum payload:          64 bytes
+DCT source block                 8 x 8 pixels
+logical tile                    35 x 32 blocks
+logical tile positions          1120
+minimum aligned embed geometry  280 x 256 pixels
+maximum payload                 64 bytes
+header                          8 bytes
+authentication tag              8 bytes (HMAC-SHA256 truncated)
+ECC                             Hamming(7,4)
 ```
 
-Only two DCT coefficients are used for one embedded bit:
-
-```text
-C(2,3)
-C(3,2)
-```
-
-The sign of the coefficients is preserved. PixSeal controls the difference
-between their absolute magnitudes.
+The two luminance DCT coefficients used for each embedded bit are `(u=3,v=2)`
+and `(u=2,v=3)` in the implementation's coefficient indexing. Embedding forces a
+minimum absolute-magnitude separation according to the desired bit and selected
+strength.
 
 ## 2. Adaptive profiles
 
-Format v3 has three concrete profiles:
-
-| Profile | ID | Max payload | Fixed frame | Hamming-protected bits | Tile redundancy |
+| Profile | ID | Max payload | Frame bytes | Protected bits | Tile redundancy |
 |---|---:|---:|---:|---:|---:|
-| `robust` | 1 | 16 B | 32 B | 448 | 2.50× |
-| `balanced` | 2 | 32 B | 48 B | 672 | 1120/672 ≈ 1.67× |
-| `capacity` | 3 | 64 B | 80 B | 1120 | 1.00× |
+| robust | 1 | 16 | 32 | 448 | 2.50x |
+| balanced | 2 | 32 | 48 | 672 | 1.67x |
+| capacity | 3 | 64 | 80 | 1120 | 1.00x |
 
-`auto` is not an on-image profile. It selects the most redundant concrete
-profile that can contain the requested payload.
+`auto` is not encoded as a profile. The encoder resolves it to the smallest
+capacity class that can hold the actual payload.
 
-## 3. Exact Format v3 frame layout
+## 3. Frame layout
 
-Every profile has a fixed frame size. The meaningful fields are serialized as:
+The v3 frame has a fixed size per profile but the tag immediately follows the
+**actual payload**:
 
 ```text
-+------------------+------------------------+------------------+------------------+
-| header (8 bytes) | actual payload (N B)   | HMAC tag (8 B)   | zero padding      |
-+------------------+------------------------+------------------+------------------+
+offset  size  field
+0       2     magic "PS"
+2       1     version/profile byte (0x30 | profile ID)
+3       1     actual payload length in bytes
+4       4     CRC32(payload), big endian
+8       N     actual payload
+8+N     8     HMAC-SHA256(header || payload), truncated to 8 bytes
+after   ...   zero padding to the profile frame size
 ```
 
-The tag offset is:
+Thus:
 
 ```text
 tagOffset = headerSize + payloadLength
 ```
 
-It is **not** fixed at the end of the profile's maximum payload region.
+The tag authenticates the header and actual payload, including format/profile
+identity and payload length. Padding is not included in the MAC input.
 
-The remaining bytes of the fixed profile frame remain zero before whitening.
+CRC32 is an error-detection aid. HMAC is the authentication mechanism. The
+64-bit truncated tag provides at most approximately 64 bits of forgery
+resistance.
 
-### 3.1 Header
+## 4. Whitening and ECC
 
-```text
-offset  size  field
-0       2     magic: 'P', 'S'
-2       1     version/profile byte
-3       1     actual payload length
-4       4     CRC32(payload), big endian
-```
+The complete fixed-size profile frame is converted to bits and XOR-whitened with
+a deterministic SHA-256-derived stream labeled `pixseal-whiten-v3` and keyed by
+the supplied key. Whitening is not encryption.
 
-The version/profile byte is:
-
-```text
-0x30 | profileID
-```
-
-where the high nibble identifies v3 and the low bits identify the concrete
-profile.
-
-### 3.2 Authentication
-
-The authentication tag is the first 8 bytes of HMAC-SHA256:
+The whitened bits are encoded with Hamming(7,4):
 
 ```text
-HMAC-SHA256(key, header || actualPayload)[0:8]
+32-byte robust frame    -> 448 coded bits
+48-byte balanced frame  -> 672 coded bits
+80-byte capacity frame  -> 1120 coded bits
 ```
 
-The HMAC therefore covers the header and the actual payload only. The zero
-padding after the tag is not part of the HMAC input, although it is part of the
-fixed frame that is subsequently whitened and ECC protected.
+## 5. Tile mapping
 
-CRC32 is used as damage detection inside the authenticated frame. It is not a
-security primitive.
-
-## 4. Whitening
-
-The complete fixed frame is converted to bits and XORed with a deterministic
-key-derived bit stream before ECC.
-
-The bit stream is generated from repeated SHA-256 blocks over:
-
-```text
-label || key || counter_be64
-```
-
-using the v3 label:
-
-```text
-pixseal-whiten-v3
-```
-
-Whitening reduces obvious fixed-bit structure. It is **not encryption** and does
-not provide confidentiality.
-
-## 5. Hamming(7,4)
-
-Whitened frame bits are encoded with Hamming(7,4).
-
-Frame sizes therefore become:
-
-```text
-robust:    32 bytes = 256 bits -> 448 protected bits
-balanced:  48 bytes = 384 bits -> 672 protected bits
-capacity:  80 bytes = 640 bits -> 1120 protected bits
-```
-
-The decoder corrects one bit error per seven-bit Hamming codeword.
-
-## 6. Mapping into the 1120-position tile
-
-Protected bits are mapped into the logical 35×32 tile with:
+The logical tile always contains 1120 DCT positions. A tile position maps to a
+protected-bit index using:
 
 ```text
 codeIndex = (tilePosition * 251) mod codedBits
 ```
 
-251 is coprime with all current protected-frame sizes (448, 672 and 1120).
+251 is coprime with all three coded-bit counts. Profiles shorter than 1120 bits
+therefore receive repeated observations distributed across the same fixed tile.
 
-When `codedBits < 1120`, multiple tile positions map to the same protected bit.
-That is the source of profile redundancy.
+The tile itself repeats spatially across the carrier. Extraction aggregates
+observations at equal logical tile positions before ECC/frame validation.
 
-The tile repeats across the whole usable carrier. Crop robustness comes from
-this periodic repetition rather than from storing one unique frame at one fixed
-location.
+## 6. Embedding
 
-## 7. DCT embedding
+1. Validate key length (minimum 8 bytes), profile and payload size.
+2. Normalize embedding options; API strength 0 means the default 24.
+3. Build and authenticate the v3 frame.
+4. Whiten and Hamming-encode it.
+5. Flatten source alpha against white and convert to 8-bit NRGBA.
+6. For every complete 8x8 block, map its repeated tile position to the protected
+   bit and modify the selected DCT coefficient pair.
+7. Output remains a lossless in-memory NRGBA image; the CLI writes PNG.
 
-For each complete native 8×8 block, PixSeal computes luminance and the DCT.
-Let:
+The public CLI accepts only finite strengths from 4 through 120. `NaN`,
+infinities and explicit 0 are rejected.
 
-```text
-a = abs(C(2,3))
-b = abs(C(3,2))
-```
+## 7. Image-size safety
 
-For bit 1, PixSeal ensures approximately:
+The CLI uses `image.DecodeConfig` before decoding and rejects sources above
+250,000,000 decoded pixels. The Go core applies the same working-image bound
+before creating the compact extraction pixel plane or an embed copy.
 
-```text
-a - b >= strength
-```
+The extraction plane stores 3 bytes per pixel in addition to the decoded Go
+image. The explicit limit prevents unbounded extra allocation and integer-size
+overflow. v0.3 may replace this full plane with sparse/tiled access.
 
-For bit 0:
+Generated inverse-normalization and rotation candidates additionally obey the
+50,000,000-pixel geometric-search bound.
 
-```text
-b - a >= strength
-```
+## 8. Direct extraction
 
-Coefficient sign is retained with `math.Copysign`. The image is inverse-DCT
-reconstructed and converted back to RGB.
-
-The CLI default strength is 24 and accepts only finite values in 4..120. The Go
-API treats `Strength == 0` as its internal request for the default value.
-
-Alpha is composited onto white before embedding.
-
-## 8. Automatic profile recognition
-
-The decoder knows, for each profile, the whitened/Hamming-protected bits that
-correspond to the fixed magic/version/profile header prefix. These known bits
-form a key-derived sync pattern.
-
-Candidate grids are scored against all concrete profile sync patterns. Only a
-frame that subsequently passes frame parsing, CRC and HMAC is accepted.
-Geometry scores and sync scores are therefore ranking evidence, not success
-criteria.
-
-## 9. Pixel working plane and source-size guard
-
-The v0.2 decoder converts the decoded image into a compact 8-bit RGB
-`pixelPlane` for repeated geometric probes.
-
-Before that allocation:
-
-- the CLI calls `image.DecodeConfig` and rejects decoded inputs above 300 MP;
-- the public embed/extract core checks the same 300 MP source bound before
-  creating PixSeal working images/planes.
-
-The 300 MP source guard is separate from lower geometry-search limits such as
-`maxSearchPixels = 50,000,000` used when a particular inverse transform would
-materialize a large corrected plane.
-
-The v0.2 implementation is not tiled/lazy; that is future work.
-
-## 10. Decoder order
-
-The implementation order in `watermark/decoder.go` is:
-
-1. direct 8/6/4-pixel integer-grid search;
-2. gated exact quarter turns;
-3. pure isotropic fractional-scale search;
-4. optional one-scale physical normalization fallback;
-5. early axis-aligned affine search when zero-degree evidence remains;
-6. two-hypothesis mild projective search;
-7. fixed direct lattice-basis composition search;
-8. arbitrary-angle rotation search;
-9. final axis-aligned affine fallback if rotation evidence is weak.
-
-This ordering is deliberate. After earlier development regressions, the project
-adopted the rule:
-
-> An unauthenticated advanced geometry heuristic must not suppress an established
-> recovery path unless deterministic or authenticated evidence makes that path
-> inapplicable.
-
-## 11. Direct integer-grid recovery
-
-The first search evaluates block sizes:
+The decoder first tests apparent integer DCT block sizes:
 
 ```text
-8 pixels  -> native 100% scale
-6 pixels  -> exact 75% lattice
-4 pixels  -> exact 50% lattice
+8 px -> native / 100%
+6 px -> 75%
+4 px -> 50%
 ```
 
-These are cheap paths because no continuous transform needs to be estimated.
+For each size it searches all pixel phases inside one block. Every candidate is
+processed through v3 sync/profile probing, Hamming decode, unwhitening, CRC and
+HMAC. The profile is inferred from the authenticated v3 header; the user never
+provides it during extraction.
 
-## 12. Exact quarter turns
+## 9. Exact quarter turns
 
-90/180/270-degree rotations preserve an integer lattice and can be corrected
-without interpolation.
+90/180/270-degree rotations preserve the integer pixel lattice and are corrected
+with lossless pixel-plane reorientation. Key-independent repeated-tile
+coherence gates the expensive quarter-turn attempts on sufficiently large
+carriers; small one-tile carriers remain eligible when coherence cannot be
+measured.
 
-Tile-period coherence is used as a key-independent gate. The native period is
-35×32 blocks; a 90/270-degree carrier exposes the swapped 32×35 period.
+## 10. Pure fractional resize recovery
 
-Small one-tile carriers for which repetition cannot be measured remain eligible
-rather than being interpreted as negative evidence.
-
-## 13. Pure isotropic fractional scale
-
-The fixed hypotheses are:
+The fixed non-direct scale list is:
 
 ```text
-95, 90, 85, 80, 70, 65, 60, 55, 45, 40, 35, 30, 25 percent
+95 90 85 80 70 65 60 55 45 40 35 30 25 percent
 ```
 
-100/75/50% are omitted because direct 8/6/4-pixel paths already cover them.
+For each scale PixSeal uses a virtual affine sampler rather than reconstructing a
+full inverse-resized bitmap. `bestAffineCoherence` retains at most three pixel
+phases.
 
-Each scale is evaluated through a **virtual affine sampler**; PixSeal does not
-materialize thirteen full normalized images.
+Bounded stages:
 
-Bounded behavior:
+```text
+13 scale hypotheses
+<= 3 single-tile authenticated probes per scale
+<= 6 shortlisted scale hypotheses
+<= 3 full-grid phases per shortlisted scale
+=> <= 18 full-carrier virtual aggregations
+```
 
-- 13 fixed scale hypotheses;
-- up to 3 candidate phases per hypothesis for coherence/single-tile probing;
-- full-carrier virtual decoding is limited to the best 6 scale hypotheses;
-- therefore at most **18 full-carrier virtual aggregations** in that stage;
-- if virtual sampling produces decisive sync evidence but no authenticated frame,
-  at most one scale can enter physical normalization.
+If virtual evidence is decisive but HMAC still fails, exactly one scale may use
+a physical **bilinear** normalization fallback. The expected inverse size plus
+its eight ±1-pixel neighbours are tried, and any normalization exceeding the
+50-million-pixel geometry bound is skipped.
 
-The physical fallback uses bilinear normalization for the selected scale and
-tries the rounded target dimensions plus the eight ±1-pixel neighbours. It is a
-single targeted fallback, not the old multi-image bicubic sweep.
+This pure-resize stage precedes speculative arbitrary rotation/lattice recovery.
+That ordering is a deliberate regression rule: an unauthenticated advanced
+geometry heuristic must not suppress an established recovery path unless there
+is deterministic or authenticated evidence that the established path cannot
+apply.
 
-## 14. Axis-aligned affine recovery
+## 11. Axis-aligned affine recovery
 
 The fixed affine bank contains 36 hypotheses:
 
-- 20 anisotropic X/Y scale pairs built from 90, 95, 100, 105 and 110 percent,
-  excluding equal X/Y pairs;
-- 16 single-axis shear hypotheses: X or Y at ±3°, ±5°, ±8° and ±10°.
+- anisotropic X/Y scale pairs from `{0.90, 0.95, 1.00, 1.05, 1.10}`, excluding
+  equal X/Y pairs: 20 matrices;
+- X or Y shear at ±3, ±5, ±8 and ±10 degrees: 16 matrices.
 
-The decoder samples these transforms virtually.
+The decoder measures key-independent periodic coherence, keeps at most six
+matrices for authenticated single-tile probing, retains at most three phases per
+matrix and promotes at most four matrix/phase pairs to full-carrier aggregation.
 
-After coherence ranking:
+This is a discrete research bank, not general affine inference.
 
-- at most 6 matrices survive the first full candidate stage;
-- up to 3 phases per surviving matrix may receive single-tile authenticated
-  probes;
-- only the best 4 matrix/phase combinations reach full-carrier aggregation.
+## 12. Mild projective recovery
 
-HMAC remains the final acceptance criterion.
-
-## 15. Mild projective recovery
-
-v0.2 contains exactly two projective hypotheses:
+The v0.2.0 decoder contains exactly two fixed vertical-keystone hypotheses:
 
 ```text
 top-narrow-4
 bottom-narrow-4
 ```
 
-They model a 4% vertical keystone with either the top or bottom edge narrowed.
-Each uses one aligned phase, so this stage performs at most **2 projective
-full-grid aggregations**.
+Each corresponds to a 4% narrowing of one horizontal edge. A homography maps
+coordinates in a rectified 8-pixel DCT lattice directly into the observed image;
+luminance is sampled bilinearly. No full rectified image is created.
 
-The projective sampler evaluates a homography virtually; no corrected full-size
-bitmap is produced.
-
-This is experimental bounded projective recovery. It is **not** general
-perspective estimation, arbitrary four-corner homography inference, lens
-correction or print-camera support.
-
-## 16. Direct lattice-basis composition bank
-
-The fixed bank describes four anisotropic lattice bases:
+Only phase `(0,0)` is attempted for each hypothesis:
 
 ```text
-110% x 90%
- 90% x 110%
-105% x 95%
- 95% x 105%
+2 homographies x 1 phase = 2 full projective grid aggregations maximum
 ```
 
-Each basis is rotated as a unit from -45° to +45° in 0.25° increments.
+A deterministic Go end-to-end regression verifies that a warped v3 carrier is
+recovered **through the projective path** and reports the expected
+`PerspectiveCorrection` value. The shell suite additionally verifies the same
+path on ImageMagick-generated JPEG/PNG corpus cases.
 
-Deterministic bounds:
+This is not general perspective support. Horizontal keystone, arbitrary corner
+motion, perspective+rotation composition, lens distortion and camera-pose
+inference remain future work.
+
+## 13. Direct lattice-basis composition
+
+The fixed bank contains four anisotropic basis shapes:
+
+```text
+110%x90%
+90%x110%
+105%x95%
+95%x105%
+```
+
+Each is rotated over -45..+45 degrees at 0.25-degree spacing.
+
+Bounded search:
 
 ```text
 4 shapes x 361 angles = 1444 sparse lattice probes
-48 shortlisted candidates per shape = 192 stronger coherence evaluations max
+<= 48 candidates per shape = <= 192 stronger coherence evaluations
+<= 4 matrices x <= 3 phases = <= 12 full authenticated grids
 ```
 
-The two ±10% shapes are evaluated as the anchor group first. If they do not
-authenticate, the ±5% group is evaluated.
+The ±10% anchor pair is evaluated before the ±5% pair to preserve the fast path
+for the earlier validated cases. HMAC remains the sole acceptance criterion.
 
-Per group, at most 4 candidates × 3 phases reach full-carrier authenticated
-decoding. Therefore:
+## 14. Arbitrary rotation
+
+The orientation detector probes 8- and 6-pixel apparent lattices:
 
 ```text
-positive anchor path:  <= 12 full aggregations
-overall worst case:    <= 24 full aggregations across both groups
+2 zero-degree checks
+<= 720 non-zero 0.25-degree coarse probes
+<= 3 coarse peaks
+<= 33 local 0.05-degree fine probes
+<= 2 refined candidates reach rectification
 ```
 
-The bank is discrete. v0.2 does not claim continuous/local inference of arbitrary
-basis vectors `u` and `v`.
+Each refined candidate may be tested in four quarter-turn quadrants and all
+pixel phases for its selected apparent block size. Rectified canvases exceeding
+50,000,000 pixels are skipped.
 
-## 17. Arbitrary digital rotation
+The arbitrary-rotation path is experimental and remains image-content dependent
+on the qualification corpus.
 
-The standalone rotation detector searches two useful lattice sizes:
+## 15. Decoder ordering
 
-```text
-8 pixels
-6 pixels
-```
+The implemented v3 ordering is:
 
-The coarse search covers -45°..+45° at 0.25° while excluding the near-zero band,
-for at most 720 non-zero coarse probes across both sizes.
+1. direct 8/6/4 grids;
+2. gated lossless quarter turns;
+3. virtual isotropic fractional scales;
+4. optional single-scale physical bilinear fallback;
+5. early axis-aligned affine when applicable;
+6. two-hypothesis mild perspective;
+7. direct lattice-basis bank;
+8. arbitrary rotation;
+9. final affine fallback when rotation evidence is weak.
 
-It keeps at most 3 distinct coarse candidates, refines each over ±0.25° at 0.05°
-steps, and returns at most 2 distinct decode candidates.
+The ordering is part of the v0.2.0 performance/regression contract, not part of
+the on-image Format v3 interoperability format.
 
-A selected candidate is rectified into an expanded white-canvas plane with
-bilinear interpolation, then tested across the four quarter-turn quadrants.
-Large corrected planes are rejected by the geometry search pixel bound.
+## 16. CLI output and files
 
-Arbitrary rotation is experimental and remains texture-dependent on some real
-carriers.
+Normal extraction writes the payload to stdout and diagnostics to stderr.
+`extract -raw` writes only the authenticated payload bytes to stdout without an
+added newline.
 
-## 18. Crop and phase
+Output publication rules protect existing directory entries. `-force` applies
+to regular files only. New files use mode 0666 subject to the process umask;
+replacement preserves existing regular-file permissions. The temporary image is
+synced before publication. No-clobber publication uses a hard-link commit when
+possible and exclusive-create fallback otherwise.
 
-Because the 35×32 tile repeats, cropping mainly changes which logical tile phase
-is visible. Grid decoding searches profile sync phases and aggregates repeated
-observations by logical tile position.
+## 17. Alpha, metadata, EXIF and ICC
 
-This is why crop can remain robust even when a substantial part of the original
-image is removed, provided enough complete block/tile information remains.
+Both embedding and `analyze` flatten transparency against white. Output is 8-bit
+NRGBA PNG and container metadata is not preserved.
 
-## 19. `analyze`
+Go's JPEG decoder does not automatically apply EXIF Orientation, and ICC
+profiles are not carried into the output. EXIF orientation normalization and
+color-management preservation are deliberately deferred to v0.3.
 
-`AnalyzeImage` combines:
+## 18. Security properties and non-properties
 
-- deterministic payload/profile/capacity facts;
-- deterministic average observations per protected bit on an untransformed
-  carrier;
-- a bounded local-gradient detail heuristic;
-- a heuristic strength recommendation.
+PixSeal provides:
 
-The detail estimator sparsely samples at most roughly 256×256 anchor locations.
-Transparent pixels are composited onto white exactly as embedding does before
-luminance is measured.
+- keyed frame whitening;
+- CRC32 damage detection;
+- HMAC authentication with a 64-bit truncated tag;
+- ECC against bounded bit errors.
 
-The result is advisory and must not be presented as a recovery guarantee.
+PixSeal does not provide reviewed encryption, strong key management, statistical
+undetectability or resistance to a determined steganalyst. Sensitive messages
+should be encrypted before embedding.
 
-## 20. Output-file semantics
+## 19. Format history
 
-CLI embedding writes to a temporary file first, encodes the PNG completely,
-`Sync()`s it, then commits it.
-
-Without `-force`:
-
-- any existing directory entry is treated as occupied, including symlinks;
-- POSIX uses hard-link creation for atomic no-clobber commit;
-- Windows relies on `os.Rename` to a non-existing target, which does not replace
-  an existing destination.
-
-With `-force`:
-
-- only a regular file may be replaced;
-- symlinks, directories, FIFOs and devices are refused;
-- permissions of the regular file are preserved;
-- the Windows replacement fallback uses backup + rename + restore-on-error.
-
-New files keep the private mode produced by `os.CreateTemp` (normally 0600 on
-Unix), rather than being forced to 0644.
-
-The Windows backup sequence is not claimed to be fully crash-durable: a crash
-between renames can leave the backup path behind. Directory fsync durability is
-also outside the v0.2 contract.
-
-## 21. Raw extraction output
-
-Human-readable `extract` output remains payload followed by diagnostics.
-
-`extract -raw` writes exact payload bytes to stdout and diagnostics to stderr.
-Test harnesses use this mode when comparing payloads so embedded newlines do not
-become ambiguous with diagnostic lines.
-
-## 22. Metadata and color limitations
-
-Go decodes stored JPEG pixels; EXIF Orientation is not automatically applied.
-PixSeal therefore processes stored orientation rather than the orientation a
-viewer may display after EXIF interpretation.
-
-Output is a newly encoded PNG and source metadata is not preserved. ICC/color
-profiles are not carried through, so losing color management can change visual
-appearance as well as metadata.
-
-## 23. Security boundaries
-
-Format v3 provides authenticated recovery, not secrecy.
-
-- HMAC-SHA256 is truncated to 64 bits.
-- Whitening is deterministic and is not encryption.
-- The minimum accepted key length is 8 bytes, which is a project policy rather
-  than a claim that all eight-byte passwords are secure.
-- No claim is made of statistical steganographic indistinguishability.
-- No professional cryptographic or steganalytic audit has been performed.
-
-Sensitive payloads should be encrypted before embedding.
-
-## 24. Historical formats
-
-Early unreleased engineering versions used formats referred to as v1 and v2.
-The v0.2 runtime is intentionally v3-only because those formats had no external
-installed base. Their history is retained in `HISTORY.md`; they are not runtime
-compatibility formats.
-
-## 25. Release boundary and future research
-
-The v0.2.0 release baseline is digital JPEG/resize/crop recovery plus the Format
-v3 core. Rotation, affine, lattice composition and mild projective recovery are
-reported research capabilities with corpus-dependent limits.
-
-The planned v0.3 research line focuses on:
-
-- continuous/local lattice-basis inference;
-- general bounded homography estimation;
-- print → paper → smartphone recovery;
-- sparse/tiled processing for very large images;
-- explicit EXIF/color-management decisions.
-
-Format v3 remains frozen unless experimental evidence shows that the print-camera
-channel cannot be solved decoder-side with the existing signal.
+Formats v1 and v2 were internal experimental formats. Runtime extraction is
+v3-only because no external v1/v2 compatibility population existed when the
+v0.2 line was consolidated. Historical details belong in `HISTORY.md` and
+`CHANGELOG.md`.
