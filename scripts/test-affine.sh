@@ -112,12 +112,13 @@ run_extract_case() {
 	local transformed="$1" message="$2" label="$3"
 	local output status extracted correction
 	((cases += 1))
-	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" "$PIXSEAL" extract -in "$transformed" -key "$TEST_KEY" 2>&1)"
+	diag_file="$tmp_dir/diag-${cases:-0}.txt"
+	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" "$PIXSEAL" extract -raw -in "$transformed" -key "$TEST_KEY" 2>"$diag_file")"
 	status=$?
 	if (( status == 0 )); then
-		extracted="${output%%$'\n'*}"
+		extracted="$output"
 		if [[ "$extracted" == "$message" ]]; then
-			correction="$(printf '%s\n' "$output" | sed -n '/-correction:/p' | paste -sd ';' -)"
+			correction="$(cat "$diag_file" | sed -n '/-correction:/p' | paste -sd ';' -)"
 			if [[ -n "$correction" ]]; then
 				printf '    PASS  %-20s message recovered (%s)\n' "$label" "$correction"
 			else

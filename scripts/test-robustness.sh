@@ -101,10 +101,10 @@ check_extract() {
 
 	((cases += 1))
 	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" \
-		"$PIXSEAL" extract -in "$transformed" -key "$TEST_KEY" 2>&1)"
+		"$PIXSEAL" extract -raw -in "$transformed" -key "$TEST_KEY" 2>/dev/null)"
 	status=$?
 	if (( status == 0 )); then
-		extracted="${output%%$'\n'*}"
+		extracted="$output"
 		if [[ "$extracted" == "$expected" ]]; then
 			printf '    PASS  %-16s message recovered\n' "$label"
 			((passes += 1))
@@ -222,6 +222,11 @@ printf 'Robustness summary: %d passed, %d failed, %d timeouts, %d skipped, %d er
 	"$passes" "$failures" "$timeouts" "$skipped" "$errors" "$total"
 
 if (( errors > 0 )); then
+	exit 2
+fi
+
+if [[ "$STRICT" == "1" ]] && (( cases == 0 )); then
+	echo "error: strict robustness qualification executed zero baseline transformations" >&2
 	exit 2
 fi
 

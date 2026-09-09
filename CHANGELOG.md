@@ -1,71 +1,69 @@
 # Changelog
 
-## v0.2.0-rc3 — 2026-09-09
+## v0.2.0-rc4 — 2026-09-09
 
-Pre-release hardening candidate. **Format v3 and the deterministic encoder remain
-unchanged.**
+Release-engineering reconciliation candidate. **Format v3, deterministic encoder
+fingerprints and decoder search banks are unchanged.**
 
 ### Fixed
 
-- Reject non-finite embedding strengths; the CLI now also rejects explicit
-  strength 0 and all values outside 4..120.
-- Harden output publication: `-force` replaces regular files only; directories,
-  symlinks and other special files are rejected.
-- Protect no-force output against late target creation with a no-clobber commit.
-- Respect Unix umask for new output files and preserve regular-file permissions
-  on replacement.
-- Sync encoded temporary files before publication and restrict the
-  backup-and-restore replacement fallback to Windows.
-- Treat extensionless Unix dotfiles correctly (`.sealed -> .sealed.png`).
-- Add `extract -raw` for exact payload-only scripting and multiline payloads;
-  normal diagnostics are emitted to stderr.
-- Add `image.DecodeConfig` preflight and a 250,000,000-pixel working-image safety
-  limit before heavy allocations.
-- Make `analyze` flatten alpha against white exactly like embedding.
-- Fix perspective test tool initialization, JPEG handling, zero-corpus false
-  PASS, error accounting and unsupported left/right positive modes.
-- Require the perspective shell regression to report the expected projective
-  correction path.
-- Validate PNG signature and IHDR before using the large-PNG dimension fallback.
-- Force Windows batch builds to `GOOS=windows GOARCH=amd64 CGO_ENABLED=0`.
-- Correct stale geometry comments and the lattice-basis test diagnostic.
-- Remove unused `scaleCandidate` and obsolete bicubic normalization code.
-- Add VERSION/buildinfo consistency checking.
+- Restored the RC2 `release-unit` / `research-unit` split so experimental Go
+  geometry regressions cannot make the stable release baseline red.
+- Made `make release-check` self-contained with target-specific `STRICT=1`.
+- Made strict baseline qualification fail when every configured transformation
+  is skipped and zero baseline transformations are executed.
+- Made partial `ALL_TEST_TARGETS` runs report `PARTIAL` / `NOT RUN` instead of a
+  misleading full qualification PASS.
+- Handle subcommand `flag.ErrHelp` as successful CLI help (exit 0).
+- Make `capacity` use `image.DecodeConfig` only; it no longer decodes the full
+  bitmap merely to calculate geometry capacity.
+- Restored `extract -raw` contract: exact payload bytes on stdout, diagnostics on
+  stderr; geometric shell harnesses again capture the two streams separately.
+- Restored numeric validation of `PERSPECTIVE_MAX_MPIX`.
+- Restored RC2 CLI oversized-config and forced-permission regression coverage and
+  added a true 64-bit pixel-count overflow regression.
+- Treat post-publication temporary-file removal as best-effort cleanup rather
+  than converting a successful no-clobber commit into a false write failure.
+- Restore the v0.2 public/core source-size policy to 300,000,000 pixels while
+  retaining RC3 overflow-safe arithmetic.
+- Correct direct-lattice documentation to a 24 full-grid overall worst case
+  (12 per sequential shape group), not 12 globally.
+- Restore accurate RC1 → RC2 → RC3 chronology and attribute the qualification
+  report to RC2.
 
-### Added tests
+### Preserved from RC3
 
-- CLI strength rejection for 0, NaN and infinities.
-- Directory, dangling-symlink and late-created-output safety regressions.
-- Unix umask regression.
-- Exact multiline `extract -raw` regression.
-- Oversized working-image rejection before pixel-plane allocation.
-- Alpha-analysis consistency regression.
-- Deterministic end-to-end mild-perspective recovery with path assertion.
-- Perspective JPEG and empty-corpus harness verification during RC3 closeout.
+- Cross-platform no-clobber publication with hard-link first and exclusive-create
+  copy fallback when hard links are unavailable.
+- Regular-file-only forced replacement, umask-safe new files and permission
+  preservation on replacement.
+- Shared alpha-on-white flattening between encoder and analyzer.
+- Overflow-safe source-size checks and strengthened projective E2E regression.
 
-### Documentation
+## v0.2.0-rc3 — 2026-09-09
 
-- Rewrote the current decoder description from the implementation rather than
-  intermediate-build prose.
-- Corrected v3 frame/tag placement (`header + actual payload + tag + padding`).
-- Corrected resize, lattice and perspective search budgets.
-- Clarified strict vs non-strict suite semantics.
-- Documented EXIF Orientation, ICC/color-management and Windows crash-durability
-  limitations.
-- Reduced TODO to open release/v0.3 work; historical milestones remain in
-  HISTORY.
+Second hardening candidate. RC3 improved cross-platform output publication,
+overflow checking, alpha flattening and the synthetic perspective regression.
+A subsequent audit found that assembly of RC3 had also reverted several valid
+RC2 release-engineering and shell-harness changes; RC4 reconciles those changes.
+
+## v0.2.0-rc2 — 2026-09-09
+
+Implemented the first independent audit findings without changing Format v3:
+finite strength validation, explicit CLI strength contract, dotfile handling,
+`extract -raw`, large-image preflight, safer output permissions/no-clobber logic,
+perspective harness fixes, an end-to-end projective regression, release/research
+Go-test separation and major documentation cleanup.
+
+PJ's RC2 qualification run reported release baseline PASS, `deep-test` 72/72,
+composition 2/2, lattice 8/8 and perspective 4/4. Experimental geometry and
+affine limits remained visible at 65/120 and 22/24 respectively.
 
 ## v0.2.0-rc1 — 2026-09-08
 
-- Consolidated the qualified build-11 algorithmic line.
-- Froze Format v3 encoder fingerprints.
-- Added `release-check` and split release-baseline vs research-suite reporting.
-- Qualification: release baseline PASS; deep-test 72/72; composition 2/2;
-  lattice 8/8; perspective 4/4; known experimental geometry/affine limits
-  remained visible.
+Consolidated the qualified build-11 algorithmic line and froze Format v3 encoder
+fingerprints for release hardening.
 
-## Development builds 1–11
+## Development builds 1–12
 
-See [`HISTORY.md`](HISTORY.md) for the complete technical progression from
-adaptive Format v3 through rotation, affine/lattice recovery, resize regression
-recovery and the first bounded projective experiment.
+See [`HISTORY.md`](HISTORY.md) for the complete technical progression.

@@ -18,7 +18,7 @@ const (
 	maxFrameSize     = headerSize + maxPayload + tagSize
 	maxFrameBits     = maxFrameSize * 8
 	maxSearchPixels  = 50_000_000
-	maxWorkingPixels = 250_000_000
+	maxWorkingPixels = 300_000_000
 
 	// Hamming(7,4) expands the 80-byte capacity-profile frame to 1120 protected bits.
 	eccBits    = maxFrameBits / 4 * 7

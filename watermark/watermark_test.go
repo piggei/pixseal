@@ -8,6 +8,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"math"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,6 +53,19 @@ func TestWorkingImageLimitRejectsBeforePixelPlaneAllocation(t *testing.T) {
 	}
 	if _, _, err := EmbedWithInfo(img, []byte("x"), []byte("12345678"), DefaultOptions()); err == nil || !strings.Contains(err.Error(), "working-image limit") {
 		t.Fatalf("oversized EmbedWithInfo error = %v", err)
+	}
+}
+
+func TestWorkingImageLimitRejectsIntegerOverflow(t *testing.T) {
+	// On 64-bit platforms these dimensions are representable as ints but their
+	// product exceeds MaxInt64. No pixel storage is allocated by boundsOnlyImage.
+	if strconv.IntSize < 64 {
+		t.Skip("requires 64-bit int dimensions")
+	}
+	const side = 4_000_000_000
+	img := boundsOnlyImage{rectangle: image.Rect(0, 0, side, side)}
+	if _, _, err := ExtractWithInfo(img, []byte("12345678")); err == nil || !strings.Contains(err.Error(), "overflow") {
+		t.Fatalf("overflowing ExtractWithInfo error = %v", err)
 	}
 }
 

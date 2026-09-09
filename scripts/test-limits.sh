@@ -88,11 +88,11 @@ extract_ok() {
 	local expected="$2"
 	local output extracted status
 	output="$(timeout --foreground "${EXTRACT_TIMEOUT}s" \
-		"$PIXSEAL" extract -in "$transformed" -key "$TEST_KEY" -raw 2>/dev/null)"
+		"$PIXSEAL" extract -raw -in "$transformed" -key "$TEST_KEY" 2>/dev/null)"
 	status=$?
 	if (( status == 124 )); then return 124; fi
 	if (( status != 0 )); then return 1; fi
-	extracted="${output%%$'\n'*}"
+	extracted="$output"
 	[[ "$extracted" == "$expected" ]]
 }
 

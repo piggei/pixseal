@@ -8,10 +8,7 @@ if [[ -n "$REPORT" ]]; then
     exec > >(tee "$REPORT") 2>&1
 fi
 
-# Keep the default list explicit: all-test is intended to be a stable, readable
-# report rather than an accidental traversal of every Make target. The optional
-# ALL_TEST_TARGETS override is useful for smoke-testing the orchestrator itself.
-default_targets="version-check vet test deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
+default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
 read -r -a targets <<< "${ALL_TEST_TARGETS:-$default_targets}"
 if (( ${#targets[@]} == 0 )); then
     echo "error: ALL_TEST_TARGETS resolved to an empty list" >&2
@@ -20,11 +17,13 @@ fi
 
 label_for() {
     case "$1" in
-        version-check) echo "version metadata" ;;
+        version-check) echo "version consistency" ;;
         vet) echo "go vet" ;;
-        test) echo "unit + image round-trip" ;;
+        release-unit) echo "release-gate Go tests" ;;
+        test-images) echo "local image round-trip" ;;
         deep-test) echo "baseline transformations" ;;
         extreme-test) echo "progressive limits" ;;
+        research-unit) echo "experimental geometry Go regressions" ;;
         geometry-test) echo "rotation/combined geometry" ;;
         affine-test) echo "axis-aligned affine" ;;
         composition-test) echo "build-7 composition regression" ;;
@@ -35,25 +34,25 @@ label_for() {
     esac
 }
 
-statuses=()
-durations=()
-release_targets=(version-check vet test deep-test core-target-check)
+release_targets=(version-check vet release-unit test-images deep-test core-target-check)
+research_targets=(extreme-test research-unit geometry-test affine-test composition-test lattice-test perspective-test)
 
-is_release_target() {
-    local needle="$1"
+in_list() {
+    local needle="$1"; shift
     local item
-    for item in "${release_targets[@]}"; do
+    for item in "$@"; do
         [[ "$item" == "$needle" ]] && return 0
     done
     return 1
 }
+
+statuses=()
+durations=()
 started="$(date '+%Y-%m-%d %H:%M:%S %z')"
 start_epoch="$(date +%s)"
 
 printf 'PixSeal all-test\n'
-if [[ -f VERSION ]]; then
-    printf 'Version: %s\n' "$(head -n 1 VERSION)"
-fi
+if [[ -f VERSION ]]; then printf 'Version: %s\n' "$(head -n 1 VERSION)"; fi
 printf 'Started: %s\n' "$started"
 printf 'Host: %s\n' "$(uname -srm 2>/dev/null || echo unknown)"
 printf 'Go: %s\n' "$(go version 2>/dev/null || echo unavailable)"
@@ -62,10 +61,8 @@ if command -v magick >/dev/null 2>&1; then
 elif command -v convert >/dev/null 2>&1; then
     printf 'ImageMagick: %s\n' "$(convert -version 2>/dev/null | head -n 1)"
 fi
-printf 'STRICT=%s is used for deep/geometry/affine/composition/lattice/perspective suites; extreme-test remains non-strict.\n' "${ALL_TEST_STRICT:-1}"
-if [[ -n "$REPORT" ]]; then
-    printf 'Report: %s\n' "$REPORT"
-fi
+printf 'STRICT=%s is used for deep/geometry/affine/composition/lattice/perspective; extreme-test remains non-strict.\n' "${ALL_TEST_STRICT:-1}"
+if [[ -n "$REPORT" ]]; then printf 'Report: %s\n' "$REPORT"; fi
 printf '\n'
 
 for i in "${!targets[@]}"; do
@@ -89,11 +86,7 @@ for i in "${!targets[@]}"; do
 
     elapsed=$(( $(date +%s) - section_start ))
     durations[$i]="$elapsed"
-    if (( status == 0 )); then
-        statuses[$i]="PASS"
-    else
-        statuses[$i]="FAIL($status)"
-    fi
+    if (( status == 0 )); then statuses[$i]="PASS"; else statuses[$i]="FAIL($status)"; fi
     printf '\n[%s] %s — %ss\n\n' "${statuses[$i]}" "$target" "$elapsed"
 done
 
@@ -103,34 +96,62 @@ printf 'ALL-TEST SUMMARY\n'
 printf '%s\n' '========================================================================'
 printf '%-22s %-12s %10s\n' 'Target' 'Result' 'Seconds'
 printf '%-22s %-12s %10s\n' '----------------------' '------------' '----------'
+
 failed=0
 release_failed=0
 research_failed=0
+release_selected=0
+research_selected=0
 for i in "${!targets[@]}"; do
-    printf '%-22s %-12s %10s\n' "${targets[$i]}" "${statuses[$i]}" "${durations[$i]}"
-    if [[ "${statuses[$i]}" != "PASS" ]]; then
-        ((failed += 1))
-        if is_release_target "${targets[$i]}"; then
-            ((release_failed += 1))
-        else
-            ((research_failed += 1))
-        fi
+    target="${targets[$i]}"
+    status="${statuses[$i]}"
+    printf '%-22s %-12s %10s\n' "$target" "$status" "${durations[$i]}"
+    if in_list "$target" "${release_targets[@]}"; then
+        ((release_selected += 1))
+        [[ "$status" == PASS ]] || ((release_failed += 1))
+    elif in_list "$target" "${research_targets[@]}"; then
+        ((research_selected += 1))
+        [[ "$status" == PASS ]] || ((research_failed += 1))
     fi
+    [[ "$status" == PASS ]] || ((failed += 1))
 done
+
 printf '\nTotal elapsed: %ss\n' "$total_elapsed"
-if (( release_failed == 0 )); then
+
+if (( release_selected == 0 )); then
+    echo 'Release baseline: NOT RUN'
+elif (( release_selected < ${#release_targets[@]} )); then
+    if (( release_failed > 0 )); then
+        printf 'Release baseline: PARTIAL (%d/%d targets run; %d failed)\n' "$release_selected" "${#release_targets[@]}" "$release_failed"
+    else
+        printf 'Release baseline: PARTIAL (%d/%d targets run)\n' "$release_selected" "${#release_targets[@]}"
+    fi
+elif (( release_failed == 0 )); then
     echo 'Release baseline: PASS'
 else
     printf 'Release baseline: FAIL (%d release-gate target%s failed)\n' "$release_failed" "$([[ $release_failed -eq 1 ]] && echo '' || echo 's')"
 fi
-if (( research_failed == 0 )); then
+
+if (( research_selected == 0 )); then
+    echo 'Research suites: NOT RUN'
+elif (( research_selected < ${#research_targets[@]} )); then
+    if (( research_failed > 0 )); then
+        printf 'Research suites: PARTIAL/ATTENTION (%d/%d targets run; %d failed)\n' "$research_selected" "${#research_targets[@]}" "$research_failed"
+    else
+        printf 'Research suites: PARTIAL (%d/%d targets run)\n' "$research_selected" "${#research_targets[@]}"
+    fi
+elif (( research_failed == 0 )); then
     echo 'Research suites: PASS'
 else
     printf 'Research suites: ATTENTION (%d experimental target%s failed)\n' "$research_failed" "$([[ $research_failed -eq 1 ]] && echo '' || echo 's')"
 fi
-if (( failed == 0 )); then
-    echo 'Overall: PASS'
+
+if (( failed > 0 )); then
+    printf 'Overall: FAIL (%d target%s failed)\n' "$failed" "$([[ $failed -eq 1 ]] && echo '' || echo 's')"
+    exit 1
+fi
+if (( release_selected < ${#release_targets[@]} || research_selected < ${#research_targets[@]} )); then
+    echo 'Overall: PARTIAL (requested target set did not run the complete qualification matrix)'
     exit 0
 fi
-printf 'Overall: FAIL (%d target%s failed)\n' "$failed" "$([[ $failed -eq 1 ]] && echo '' || echo 's')"
-exit 1
+echo 'Overall: PASS'

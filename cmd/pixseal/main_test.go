@@ -2,6 +2,10 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
+	"errors"
+	"flag"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"io"
@@ -12,6 +16,18 @@ import (
 
 	"github.com/pj/pixseal/internal/buildinfo"
 )
+
+func TestSubcommandHelpReturnsFlagErrHelp(t *testing.T) {
+	for name, fn := range map[string]func([]string) error{
+		"embed": embed, "extract": extract, "capacity": capacity, "analyze": analyze,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := fn([]string{"-help"}); !errors.Is(err, flag.ErrHelp) {
+				t.Fatalf("%s -help error = %v; want flag.ErrHelp", name, err)
+			}
+		})
+	}
+}
 
 func TestPNGOutputPath(t *testing.T) {
 	tests := map[string]string{
@@ -26,6 +42,51 @@ func TestPNGOutputPath(t *testing.T) {
 		if got := pngOutputPath(input); got != want {
 			t.Errorf("pngOutputPath(%q) = %q; want %q", input, got, want)
 		}
+	}
+}
+
+func TestOpenImageRejectsOversizedPNGFromConfig(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "huge.png")
+	var ihdr [13]byte
+	binary.BigEndian.PutUint32(ihdr[0:4], 20_000)
+	binary.BigEndian.PutUint32(ihdr[4:8], 20_000) // 400 MP > 300 MP policy
+	ihdr[8], ihdr[9], ihdr[10], ihdr[11], ihdr[12] = 8, 2, 0, 0, 0
+	data := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 13)
+	data = append(data, []byte("IHDR")...)
+	data = append(data, ihdr[:]...)
+	crc := crc32.ChecksumIEEE(append([]byte("IHDR"), ihdr[:]...))
+	var crcBytes [4]byte
+	binary.BigEndian.PutUint32(crcBytes[:], crc)
+	data = append(data, crcBytes[:]...)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := openImageWithFormat(path); err == nil || !strings.Contains(err.Error(), "CLI safety limit") {
+		t.Fatalf("oversized DecodeConfig guard error=%v", err)
+	}
+}
+
+func TestCapacityUsesDecodeConfigOnly(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config-only.png")
+	var ihdr [13]byte
+	binary.BigEndian.PutUint32(ihdr[0:4], 560)
+	binary.BigEndian.PutUint32(ihdr[4:8], 512)
+	ihdr[8], ihdr[9], ihdr[10], ihdr[11], ihdr[12] = 8, 2, 0, 0, 0
+	data := append([]byte("\x89PNG\r\n\x1a\n"), 0, 0, 0, 13)
+	data = append(data, []byte("IHDR")...)
+	data = append(data, ihdr[:]...)
+	crc := crc32.ChecksumIEEE(append([]byte("IHDR"), ihdr[:]...))
+	var crcBytes [4]byte
+	binary.BigEndian.PutUint32(crcBytes[:], crc)
+	data = append(data, crcBytes[:]...)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := captureStdout(t, func() error { return capacity([]string{"-in", path}) })
+	if got != "64 bytes\n" {
+		t.Fatalf("capacity config-only output = %q; want %q", got, "64 bytes\n")
 	}
 }
 
@@ -173,6 +234,9 @@ func TestWritePNGAtomicProtectsExistingOutput(t *testing.T) {
 	defer f.Close()
 	if _, _, err := image.Decode(f); err != nil {
 		t.Fatalf("forced output is not a valid image: %v", err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("forced replacement permissions=%v err=%v; want 0600", info, err)
 	}
 }
 

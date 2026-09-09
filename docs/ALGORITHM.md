@@ -1,6 +1,6 @@
 # PixSeal v0.2.0 — Format v3 and decoder specification
 
-This document describes the implementation shipped in **v0.2.0-rc3**. Historical
+This document describes the implementation shipped in **v0.2.0-rc4**. Historical
 strategies from intermediate builds belong in `HISTORY.md` and are not normative
 for the current decoder.
 
@@ -112,7 +112,7 @@ infinities and explicit 0 are rejected.
 ## 7. Image-size safety
 
 The CLI uses `image.DecodeConfig` before decoding and rejects sources above
-250,000,000 decoded pixels. The Go core applies the same working-image bound
+300,000,000 decoded pixels. The Go core applies the same working-image bound
 before creating the compact extraction pixel plane or an embed copy.
 
 The extraction plane stores 3 bytes per pixel in addition to the decoded Go
@@ -238,7 +238,8 @@ Bounded search:
 ```text
 4 shapes x 361 angles = 1444 sparse lattice probes
 <= 48 candidates per shape = <= 192 stronger coherence evaluations
-<= 4 matrices x <= 3 phases = <= 12 full authenticated grids
+<= 4 matrices x <= 3 phases = <= 12 full authenticated grids per group
+2 sequential shape groups = <= 24 full authenticated grids overall
 ```
 
 The ±10% anchor pair is evaluated before the ±5% pair to preserve the fast path
@@ -284,7 +285,7 @@ the on-image Format v3 interoperability format.
 
 Normal extraction writes the payload to stdout and diagnostics to stderr.
 `extract -raw` writes only the authenticated payload bytes to stdout without an
-added newline.
+added newline; decoder diagnostics remain on stderr.
 
 Output publication rules protect existing directory entries. `-force` applies
 to regular files only. New files use mode 0666 subject to the process umask;

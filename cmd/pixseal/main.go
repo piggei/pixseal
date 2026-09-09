@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"image"
+	"image/color"
 	_ "image/jpeg"
 	"image/png"
 	"io"
@@ -20,7 +21,7 @@ import (
 	"github.com/pj/pixseal/watermark"
 )
 
-const maxCLISourcePixels int64 = 250_000_000
+const maxCLISourcePixels int64 = 300_000_000
 
 var usageHeader = fmt.Sprintf(`PixSeal %s - robust image steganography
 
@@ -99,6 +100,9 @@ func main() {
 	}
 
 	if err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
@@ -118,30 +122,46 @@ func newFlagSet(command, summary string) *flag.FlagSet {
 	return fs
 }
 
+func validateSourceDimensions(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("invalid image dimensions %dx%d", width, height)
+	}
+	if int64(width) > (1<<63-1)/int64(height) {
+		return errors.New("image dimensions overflow the PixSeal pixel-count calculation")
+	}
+	pixels := int64(width) * int64(height)
+	if pixels > maxCLISourcePixels {
+		return fmt.Errorf("image has %d pixels; PixSeal CLI safety limit is %d pixels", pixels, maxCLISourcePixels)
+	}
+	return nil
+}
+
+func openImageConfig(path string) (image.Config, string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return image.Config{}, "", err
+	}
+	defer f.Close()
+	config, format, err := image.DecodeConfig(f)
+	if err != nil {
+		return image.Config{}, "", err
+	}
+	if err := validateSourceDimensions(config.Width, config.Height); err != nil {
+		return image.Config{}, "", err
+	}
+	return config, format, nil
+}
+
 func openImageWithFormat(path string) (image.Image, string, error) {
+	config, format, err := openImageConfig(path)
+	if err != nil {
+		return nil, "", err
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, "", err
 	}
 	defer f.Close()
-
-	config, format, err := image.DecodeConfig(f)
-	if err != nil {
-		return nil, "", err
-	}
-	if config.Width <= 0 || config.Height <= 0 {
-		return nil, "", fmt.Errorf("invalid image dimensions %dx%d", config.Width, config.Height)
-	}
-	if int64(config.Width) > (1<<63-1)/int64(config.Height) {
-		return nil, "", errors.New("image dimensions overflow the PixSeal pixel-count calculation")
-	}
-	pixels := int64(config.Width) * int64(config.Height)
-	if pixels > maxCLISourcePixels {
-		return nil, "", fmt.Errorf("image has %d pixels; PixSeal CLI safety limit is %d pixels", pixels, maxCLISourcePixels)
-	}
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return nil, "", err
-	}
 	img, decodedFormat, err := image.Decode(f)
 	if err != nil {
 		return nil, "", err
@@ -149,8 +169,17 @@ func openImageWithFormat(path string) (image.Image, string, error) {
 	if decodedFormat != "" {
 		format = decodedFormat
 	}
+	if got := img.Bounds(); got.Dx() != config.Width || got.Dy() != config.Height {
+		return nil, "", fmt.Errorf("decoded dimensions %dx%d differ from image config %dx%d", got.Dx(), got.Dy(), config.Width, config.Height)
+	}
 	return img, format, nil
 }
+
+type boundsOnlyImage struct{ rectangle image.Rectangle }
+
+func (img boundsOnlyImage) ColorModel() color.Model { return color.NRGBAModel }
+func (img boundsOnlyImage) Bounds() image.Rectangle { return img.rectangle }
+func (img boundsOnlyImage) At(x, y int) color.Color { return color.NRGBA{A: 255} }
 
 func openImage(path string) (image.Image, error) {
 	img, _, err := openImageWithFormat(path)
@@ -215,7 +244,8 @@ func commitNoClobber(temporaryPath, path string) error {
 	// A hard link publishes the already-synced temporary inode atomically and
 	// fails if any directory entry already exists at the destination.
 	if err := os.Link(temporaryPath, path); err == nil {
-		return os.Remove(temporaryPath)
+		_ = os.Remove(temporaryPath)
+		return nil
 	}
 	if _, err := os.Lstat(path); err == nil {
 		return fmt.Errorf("output file %s appeared while writing; refusing to overwrite it", path)
@@ -255,7 +285,8 @@ func commitNoClobber(temporaryPath, path string) error {
 		return err
 	}
 	ok = true
-	return os.Remove(temporaryPath)
+	_ = os.Remove(temporaryPath)
+	return nil
 }
 
 func commitForcedRegular(temporaryPath, path string, mode os.FileMode) error {
@@ -432,27 +463,34 @@ func extract(args []string) error {
 		return err
 	}
 	if *raw {
-		_, err := os.Stdout.Write(payload)
-		return err
+		if _, err := os.Stdout.Write(payload); err != nil {
+			return err
+		}
+		printExtractDiagnostics(os.Stderr, info)
+		return nil
 	}
 	fmt.Printf("%s\n", payload)
-	fmt.Fprintf(os.Stderr, "confidence-margin: %.2f\nprofile: %s\n", info.Confidence, info.Profile)
+	printExtractDiagnostics(os.Stderr, info)
+	return nil
+}
+
+func printExtractDiagnostics(w io.Writer, info watermark.ExtractInfo) {
+	fmt.Fprintf(w, "confidence-margin: %.2f\nprofile: %s\n", info.Confidence, info.Profile)
 	if info.RotationCorrectionDegrees != 0 {
-		fmt.Fprintf(os.Stderr, "rotation-correction: %.2f degrees\n", info.RotationCorrectionDegrees)
+		fmt.Fprintf(w, "rotation-correction: %.2f degrees\n", info.RotationCorrectionDegrees)
 	}
 	if info.ScaleXCorrection != 0 || info.ScaleYCorrection != 0 {
-		fmt.Fprintf(os.Stderr, "scale-correction: x=%.4f y=%.4f\n", info.ScaleXCorrection, info.ScaleYCorrection)
+		fmt.Fprintf(w, "scale-correction: x=%.4f y=%.4f\n", info.ScaleXCorrection, info.ScaleYCorrection)
 	}
 	if info.ShearXCorrection != 0 {
-		fmt.Fprintf(os.Stderr, "shear-x-correction: %.2f degrees\n", math.Atan(info.ShearXCorrection)*180/math.Pi)
+		fmt.Fprintf(w, "shear-x-correction: %.2f degrees\n", math.Atan(info.ShearXCorrection)*180/math.Pi)
 	}
 	if info.ShearYCorrection != 0 {
-		fmt.Fprintf(os.Stderr, "shear-y-correction: %.2f degrees\n", math.Atan(info.ShearYCorrection)*180/math.Pi)
+		fmt.Fprintf(w, "shear-y-correction: %.2f degrees\n", math.Atan(info.ShearYCorrection)*180/math.Pi)
 	}
 	if info.PerspectiveCorrection != "" {
-		fmt.Fprintf(os.Stderr, "perspective-correction: %s\n", info.PerspectiveCorrection)
+		fmt.Fprintf(w, "perspective-correction: %s\n", info.PerspectiveCorrection)
 	}
-	return nil
 }
 
 func capacity(args []string) error {
@@ -472,11 +510,12 @@ func capacity(args []string) error {
 		return fmt.Errorf("-in is required")
 	}
 
-	img, format, err := openImageWithFormat(*in)
+	config, format, err := openImageConfig(*in)
 	if err != nil {
 		return err
 	}
-	maximum := watermark.Capacity(img)
+	geometry := boundsOnlyImage{rectangle: image.Rect(0, 0, config.Width, config.Height)}
+	maximum := watermark.Capacity(geometry)
 	if !*details {
 		fmt.Printf("%d bytes\n", maximum)
 		return nil
@@ -484,7 +523,7 @@ func capacity(args []string) error {
 
 	fmt.Printf("Image:       %s\n", *in)
 	fmt.Printf("Format:      %s\n", strings.ToUpper(format))
-	fmt.Printf("Dimensions:  %d x %d\n", img.Bounds().Dx(), img.Bounds().Dy())
+	fmt.Printf("Dimensions:  %d x %d\n", config.Width, config.Height)
 	for _, profile := range watermark.Profiles() {
 		value := profile.MaximumPayload
 		if maximum == 0 {

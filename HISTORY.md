@@ -79,39 +79,60 @@ A reconstructed local orientation-consensus fallback failed to improve the
 private geometry matrix and increased runtime. Build 11 therefore remained the
 algorithmic basis for release consolidation.
 
-## v0.2.0-rc1 — release qualification candidate
+## v0.2.0-rc1 — first release candidate
 
-Consolidated build 11, froze the Format v3 encoder and separated stable release
-gates from research-suite reporting. PJ's qualification run reported release
-baseline PASS, deep-test 72/72, composition 2/2, lattice 8/8 and perspective
-4/4; arbitrary geometry and affine suites retained documented experimental
-limits.
+Consolidated build 11, froze the Format v3 deterministic encoder and prepared
+the v0.2 line for release hardening.
 
-## External pre-release audit
+## External audit 1
 
-An independent source/package audit found no reason to change Format v3, but it
-identified several release-hardening issues: non-finite strength acceptance,
-output-path safety and umask handling, perspective harness false-green/error
-accounting, missing projective end-to-end coverage, large-image preflight gaps,
-dead code and substantial documentation drift from intermediate builds.
+An independent source/package audit found no reason to change Format v3 but
+identified CLI validation, output-path safety/umask, perspective-harness,
+large-image-preflight, regression-coverage and documentation issues.
 
-## v0.2.0-rc3 — audit hardening candidate
+## v0.2.0-rc2 — first audit reconciliation
 
-RC3 keeps the on-image Format v3 and encoder fingerprints unchanged while
-hardening the release surface:
+RC2 implemented those fixes while keeping the on-image format and encoder
+fingerprints unchanged. It also separated stable `release-unit` tests from
+experimental `research-unit` regressions.
 
-- finite CLI/API strength validation and explicit CLI range contract;
-- safe regular-file-only replacement, symlink/directory rejection and
-  race-resistant no-clobber publication;
-- umask-respecting new outputs, synced temporary files and Windows-only backup
-  replacement fallback;
-- Unix dotfile output naming;
-- `extract -raw` for exact/multiline payload scripting;
-- pre-decode/working-image safety limit at 250 million pixels;
-- alpha-consistent analysis;
-- robust perspective shell harness and deterministic projective Go E2E test;
-- VERSION/buildinfo gate;
-- removal of obsolete bicubic/dead structures;
-- current-code rewrite of README/ALGORITHM/RESULTS/TODO.
+PJ's 2026-09-09 Linux/WSL2 qualification report recorded:
 
-The final `v0.2.0` promotion depends on PJ's RC3 release qualification report.
+```text
+Release baseline: PASS
+deep-test:        72/72 PASS
+geometry-test:    65/120 PASS, 55 FAIL (experimental)
+affine-test:      22/24 PASS, 2 FAIL (experimental)
+composition-test: 2/2 PASS
+lattice-test:     8/8 PASS
+perspective-test: 4/4 PASS
+```
+
+## External audit 2
+
+The RC2 audit confirmed the core and most first-round fixes, then identified a
+Windows no-clobber assumption, non-strict release-gate semantics, zero-case
+qualification, help exit status, capacity full decoding and additional hardening
+items.
+
+## v0.2.0-rc3 — second hardening candidate
+
+RC3 introduced a stronger cross-platform no-clobber design using hard links with
+an exclusive-create copy fallback, overflow-safe image-size arithmetic, shared
+alpha flattening and a stronger projective synthetic regression. During package
+assembly, however, several valid RC2 release-engineering/script changes were
+reverted and the RC2 qualification history was misattributed.
+
+## External audit 3
+
+The RC3 audit found no Format v3, encoder or decoder regression. It identified
+the release-engineering reversions, unresolved strict/zero-case/help/capacity
+items, the raw stdout/stderr regression and an incorrect direct-lattice budget.
+
+## v0.2.0-rc4 — reconciliation candidate
+
+RC4 is deliberately non-algorithmic: it keeps RC3 filesystem/overflow/alpha
+hardening, restores the valid RC2 release/test-harness changes, fixes the
+remaining CLI/release-gate issues, restores the 300 MP v0.2 source policy and
+repairs release chronology/documentation. Format v3 and the frozen search banks
+remain unchanged.

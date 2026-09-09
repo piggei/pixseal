@@ -7,7 +7,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits in luminance DCT coefficients while trying to keep the visual change small
 under normal viewing conditions.
 
-Current release candidate: **v0.2.0-rc3**.
+Current release candidate: **v0.2.0-rc4**.
 
 PixSeal is a hidden-data channel, not an ownership-marking product. Digital
 watermarking is the robustness mechanism; the project goal is robust
@@ -90,7 +90,7 @@ pixseal extract -in sealed.png -key "a long secret" -raw
 ```
 
 `-raw` writes **only** the authenticated payload bytes to stdout, without an
-added newline or diagnostics.
+added newline; decoder diagnostics remain available separately on stderr.
 
 ### Strength
 
@@ -181,7 +181,7 @@ risk but is not claimed to provide filesystem-level crash durability; directory
 ### Image-size policy
 
 Before decoding pixel data, the CLI uses `image.DecodeConfig` and rejects inputs
-above **250,000,000 decoded pixels**. The core applies the same working-image
+above **300,000,000 decoded pixels**. The core applies the same working-image
 limit before allocating its compact extraction pixel plane. This keeps the
 verified ~200 MP class usable while avoiding obviously unbounded allocations.
 
@@ -238,7 +238,8 @@ Fixed direct lattice bank:
 - **1444 sparse probes** maximum;
 - at most **48 candidates per shape / 192 total** receive stronger coherence
   evaluation;
-- at most 4 matrices x 3 phases = **12 full authenticated grids**.
+- at most 4 matrices x 3 phases per shape group = **12 full authenticated grids per group**,
+  with two sequential groups (±10% then ±5%) for a **24-grid overall worst case**.
 
 Mild perspective:
 
@@ -270,7 +271,9 @@ v0.3 because they require an explicit image-pipeline policy.
 
 ```sh
 make                 # build only
-make test            # Go tests + local image round trips
+make test            # complete Go tests + local image round trips
+make release-unit    # release-gate Go regressions only
+make research-unit   # experimental geometry Go regressions
 make deep-test       # stable JPEG/resize/crop baseline
 make extreme-test    # non-strict progressive resize/crop limit map
 make geometry-test   # experimental rotation/combined geometry
@@ -289,12 +292,18 @@ measured limits and do not make the target fail. `deep-test`, `geometry-test`,
 `affine-test`, `composition-test`, `lattice-test` and `perspective-test` support
 strict mode, and `make all-test` invokes those suites with strict mode by default.
 
-`make release-check` includes deterministic Go regressions, private-corpus round
-trips, the stable deep-test baseline and core portability. `make all-test` keeps
-research failures visible separately from the release baseline.
+`make release-check` is self-contained and forces strict semantics for the stable
+`deep-test` baseline. It includes `release-unit`, private-corpus round trips and
+core portability while excluding `research-unit`. `make all-test` keeps research
+failures visible separately from the release baseline and reports partial target
+sets as `PARTIAL`/`NOT RUN` rather than as a full qualification PASS.
 
 The local shell suites use `original pics/`, which is private and excluded from
 source archives. An empty test corpus is an error rather than a false PASS.
+
+The full shell qualification harness is intended for **Linux/WSL with Bash >= 4,
+GNU-compatible userland (including `timeout` and `sort -z`) and ImageMagick**.
+This harness requirement is separate from reusable-core portability.
 
 ## Current limitations
 
@@ -311,10 +320,10 @@ source archives. An empty test corpus is an error rather than a false PASS.
 
 ## Release status
 
-**v0.2.0-rc3** is a hardening candidate for the v0.2.0 final release. It keeps the
-Format v3 encoder unchanged while addressing pre-release audit findings in CLI
-validation, file replacement safety, large-image preflight, test-harness
-reliability and documentation consistency.
+**v0.2.0-rc4** is a reconciliation/hardening candidate for the v0.2.0 final
+release. It preserves the Format v3 encoder and RC3 filesystem hardening while
+restoring RC2 release/research separation, strict release qualification, raw
+stdout/stderr scripting semantics and accurate RC1→RC2→RC3 history.
 
 Qualification results are recorded in [`docs/RESULTS.md`](docs/RESULTS.md).
 

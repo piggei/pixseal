@@ -1221,7 +1221,8 @@ func quickLatticeCoherence(src *pixelPlane, matrix linearTransform, size int) (f
 //   - 361 angles per shape (-45..+45 at 0.25 degree)
 //   - 1444 sparse lattice probes maximum
 //   - at most 48 candidates per shape (192 total) receive stronger periodicity measurement
-//   - at most 4 candidates x 3 phases reach full-carrier authenticated decoding
+//   - at most 4 candidates x 3 phases reach full-carrier authenticated decoding per shape group
+//   - the +/-10% and +/-5% groups are sequential, so the overall worst case is 24 full grids
 func searchV3DirectLatticeBasis(src *pixelPlane, decoder *decoder) ([]byte, ExtractInfo, latticeCandidate, bool) {
 	const (
 		quickFloor           = 0.70
