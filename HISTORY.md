@@ -147,7 +147,7 @@ targeted 120-second rerun recovered both and reproduced the RC2 experimental
 reference of 65/120 with zero timeouts. The remaining geometry/affine failures
 are retained as measured research limits rather than release-baseline failures.
 
-## v0.3.0-dev1 — local lattice diagnostic
+## v0.3.0-build1 — local lattice diagnostic
 
 Started the v0.3 line from the final v0.2.0 baseline without changing Format v3,
 the deterministic encoder or the production extraction search order. Added a
@@ -161,4 +161,32 @@ Canonical marked/unmarked discrimination is covered by new regressions, while
 arbitrary-angle automatic estimation remains a measured limitation. A private
 print-camera harness was added with HMAC-only PASS semantics and clean SKIP when
 the undistributed real corpus is unavailable.
+## v0.3.0-build2 — bounded projective diagnostic
 
+Extended the separate v0.3 diagnostic path with a coarse print-boundary prior,
+boundary-normalized local lattice consensus, multiscale native-period support, a
+bounded projective scale shortlist and explicit homographies. Added a virtual
+projective DCT sampler so large smartphone captures can reach the existing v3
+frame/HMAC decoder without creating a full rectified image.
+
+A synthetic translated/projective diagnostic regression authenticates through
+the new virtual path and rejects a wrong key. On PJ's two original ~200 MP
+print-camera captures, both photographs now produce coherent lattice evidence
+and bounded projective candidates; neither yet produces a valid HMAC. The
+hidden message therefore remains unknown, as required.
+
+
+## v0.3.0-build3 — spatial phase refinement
+
+Added a second geometric discriminator after the build2 lattice/scale stage:
+Format-v3 sync phase is measured independently in spatially separated complete
+tiles. Correct geometry should keep profile and lattice phase coherent across
+the print; isolated aggregate header peaks are therefore no longer sufficient
+to rank a candidate.
+
+The strongest bounded phase seeds receive ±1%/±2% scale refinement and, when
+four phase observations are available, a deterministic DLT homography fit from
+phase correspondences. Canonical phase corrections are capped and only four
+full virtual v3 decodes may reach HMAC. On the two private smartphone captures
+this materially sharpens geometric evidence but still does not authenticate the
+unknown payload.

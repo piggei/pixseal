@@ -52,7 +52,7 @@ for name in "${files[@]}"; do
         continue
     fi
 
-    grep -E '"(width|height|global_consistency|consensus_fraction|lattice_evidence|authentication_status|authenticated_payload|total_ms)"' "$output" \
+    grep -E '"(width|height|global_consistency|consensus_fraction|lattice_evidence|authentication_status|authenticated_payload|full_decode_attempts|best_sync_profile|best_sync_fraction|best_sync_z_score|best_phase_profile|best_phase_consistency|best_phase_x_coherence|best_phase_y_coherence|best_phase_canonical_width_px|best_phase_canonical_height_px|phase_refinement_attempts|phase_homography_fits|total_ms)"' "$output" \
         | sed 's/^/  /'
 
     if grep -Eq '"authenticated_payload"[[:space:]]*:[[:space:]]*true' "$output"; then

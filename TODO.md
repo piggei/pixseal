@@ -6,30 +6,45 @@ and `CHANGELOG.md`.
 ## v0.3.0 — geometry research
 
 - [x] Build a bounded diagnostic direct/local lattice estimator separated from
-      `ExtractWithInfo`; dev1 has synthetic and digital marked/unmarked regressions.
-- [ ] **IN PROGRESS:** Estimate transformed local lattice vectors `u` and `v` rather than adding
-      open-ended angle/scale/shear Cartesian searches. Dev1 exposes `u/v`, phase
-      and local consensus; arbitrary-angle promotion still needs improvement.
-- [ ] Fit affine/projective geometry from multiple local lattice measurements.
-- [ ] Reduce the negative-case cost of arbitrary geometry; `geometry-test`
-      currently dominates `all-test` runtime.
-- [ ] Generalize projective recovery beyond the two fixed vertical-keystone
-      hypotheses.
-- [x] Preserve explicit maximum probe/candidate/phase/sample budgets for the dev1
-      diagnostic stages and expose them in JSON. Keep this rule for every later
-      homography/full-decode stage.
+      `ExtractWithInfo`.
+- [x] Estimate local transformed lattice vectors `u` and `v` and combine multiple
+      regions without allowing one region to set the global geometry.
+- [x] Add a coarse print-boundary initializer that is never treated as watermark
+      evidence.
+- [x] Produce a bounded projective scale shortlist and explicit homographies.
+- [x] Add a virtual projective DCT sampler and synthetic authenticated end-to-end
+      regression, capped at four complete v3 decode attempts.
+- [x] Add bounded spatial phase-consensus ranking and ±1%/±2% scale refinement
+      without photo-specific target dimensions.
+- [ ] **IN PROGRESS:** Strengthen fundamental-period/scale disambiguation against
+      residual phase-consistent aliases/harmonics.
+- [x] Fit a bounded deterministic DLT homography from four local sync-phase
+      correspondences when available.
+- [ ] **IN PROGRESS:** Add true sub-pixel block-origin refinement and evaluate
+      whether residual local warp/lens distortion requires a model beyond one
+      global homography.
+- [ ] Reduce negative-case cost of the mature arbitrary-geometry research paths;
+      `geometry-test` remains the dominant `all-test` runtime.
+- [ ] Decide whether/when the diagnostic projective path has enough evidence to
+      be promoted into `ExtractWithInfo`; do not integrate before the complete
+      synthetic/real/negative/regression promotion sequence.
 
 ## v0.3.0 — print-camera research
 
-- [ ] **IN PROGRESS:** Provide a private full-resolution smartphone regression target that never
-      ships the corpus and cleanly SKIPs when absent. Execute it on the original
-      photographs when they are available locally.
-- [ ] Determine whether the v3 DCT signal remains statistically measurable after
-      print -> paper -> smartphone capture before changing the encoder.
-- [ ] Improve arbitrary-angle local-basis candidate generation, then fit a general
-      homography and recover through virtual sampling.
-- [ ] Add controlled synthetic camera-channel stages: perspective, resize, blur,
-      gamma/illumination variation, JPEG recompression and sensor noise.
+- [x] Provide a private full-resolution smartphone regression target that never
+      ships the corpus, SKIPs when absent and PASSes only on valid v3 HMAC.
+- [x] Run the bounded lattice/boundary/projective diagnostics on both original
+      real smartphone captures; build2 obtains lattice evidence on both and build3
+      adds phase-aware refinement.
+- [ ] **IN PROGRESS:** Recover a valid Format-v3 HMAC from the frontal photograph.
+- [ ] Recover a valid Format-v3 HMAC from the inclined photograph.
+- [ ] Quantify signal survival more strongly than key-known header scores; those
+      scores are affected by bounded multiple testing and are not detection.
+- [ ] Add a small deterministic photometric-normalization bank only after
+      geometry/phase refinement shows it is needed.
+- [ ] Add controlled synthetic camera-channel stages: perspective, non-integer
+      resampling, blur, gamma/illumination variation, JPEG recompression and noise.
+- [ ] Generalize on new print-camera captures not used during development.
 
 ## Future platform work
 

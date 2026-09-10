@@ -1,7 +1,7 @@
 # PixSeal — Format v3 stable specification and v0.3 research diagnostics
 
 Sections 1-19 describe the stable Format v3 and production decoder shipped in
-**v0.2.0**; those rules remain unchanged in **v0.3.0-dev1**. Historical
+**v0.2.0**; those rules remain unchanged in **v0.3.0-build3**. Historical
 strategies from intermediate builds belong in `HISTORY.md`. The final appendix
 documents the separate v0.3 research diagnostic and is not part of the on-image
 format or authenticated extraction contract.
@@ -324,13 +324,13 @@ v3-only because no external v1/v2 compatibility population existed when the
 v0.2 line was consolidated. Historical details belong in `HISTORY.md` and
 `CHANGELOG.md`.
 
-## 20. v0.3.0-dev1 local-lattice diagnostic (non-normative)
+## 20. v0.3.0-build1 local-lattice diagnostic (non-normative)
 
 `DiagnoseGeometry` is intentionally separate from `ExtractWithInfo`. Its output
 is research evidence only; no confidence or lattice score can authenticate a
 watermark. Only the existing Format v3 frame/HMAC path can do that.
 
-The dev1 pipeline is:
+The build1 pipeline is:
 
 ```text
 decoded source image
@@ -351,7 +351,7 @@ the decoded image at a power-of-two divisor chosen to keep the analysis level
 within `MaxAnalysisDimension` (2048 by default). This avoids another full RGB
 search copy, but the standard Go decoder still materializes the source image.
 
-Default dev1 budgets per region are deterministic and exposed in JSON:
+Default build1 budgets per region are deterministic and exposed in JSON:
 
 ```text
 coarse basis candidates       117
@@ -374,4 +374,93 @@ generation is still insufficiently reliable on transformed carriers, so no
 homography is fitted and no diagnostic candidate is promoted into the production
 extractor. This separation is deliberate to avoid overfitting and unbounded
 search growth.
+## 21. v0.3.0-build2 bounded projective diagnostic (non-normative)
 
+Build2 extends the research-only `DiagnoseGeometry` path; it does **not** modify
+Format v3, embedding or the production `ExtractWithInfo` search order. The new
+flow is:
+
+```text
+decoded source image
+  -> bounded diagnostic pyramid
+  -> coarse visible-print quadrilateral (optional initializer)
+  -> local u/v candidates in multiple regions and levels
+  -> normalize bases in print-boundary coordinates
+  -> cross-region + cross-level native-scale support
+  -> bounded canonical-size clusters (max 8)
+  -> canonical-to-photo homography
+  -> sparse key-known header probe for candidate ordering
+  -> max 4 virtual projective full-grid decodes
+  -> existing Format-v3 frame decoder
+  -> HMAC
+```
+
+The print quadrilateral is never evidence of PixSeal. Likewise, a high lattice
+score or key-known header correlation is not detection. Header probing is an
+oracle/research ranking aid and is exposed because searching several geometries
+creates a multiple-testing effect. Only a valid Format-v3 HMAC can set
+`authenticated_payload=true`.
+
+### 21.1 Homography and virtual sampling
+
+For each retained canonical width/height candidate, build2 fits an 8-DOF
+homography from the canonical rectangle corners to the four observed print
+corners. The diagnostic decoder then maps requested canonical lattice samples
+directly into source-image coordinates through that homography and bilinearly
+interpolates luminance. It therefore constructs DCT blocks on demand instead of
+materializing a rectified ~200 MP bitmap.
+
+The projective diagnostic budgets are explicit:
+
+```text
+max canonical-size/projective candidates   8
+max complete virtual Format-v3 decodes     4
+```
+
+A synthetic regression embeds a real Format-v3 frame, places the carrier inside
+a larger image with a known print boundary and verifies authenticated recovery
+through this virtual path. The same regression verifies that a wrong key cannot
+authenticate.
+
+### 21.2 Remaining research gap
+
+On real print-camera photographs, local periodic texture can still create
+harmonics and aliases of the fundamental DCT lattice period. Build2 uses
+cross-region/cross-level support rather than a photo-specific target scale, but
+sub-pixel period/phase refinement and stronger deterministic scale
+disambiguation remain necessary before real HMAC recovery. No Format-v3 change
+is justified by this geometry-stage failure.
+
+
+## 22. v0.3.0-build3 spatial phase refinement (non-normative)
+
+Build3 adds a bounded key-assisted geometric refinement after the build2
+projective shortlist. It does not change Format v3 or production extraction.
+
+For each retained canonical scale, four spatially separated complete tiles are
+used when available. For every v3 profile, the strongest local sync phase is
+measured independently. Phase coherence is the circular concentration of phase
+X and phase Y across those tiles, weighted by their local known-header z-score.
+The combined score is diagnostic geometry evidence only.
+
+The maximum refinement budget is:
+
+```text
+coarse projective scales            8
+phase-refinement seeds              3
+scale evaluations per seed          9 (base + ±1%/±2% X and Y)
+phase-correspondence homographies   3
+complete virtual v3 decodes         4
+```
+
+When exactly four spatial phase observations are available, their circular mean
+phase defines a common lattice origin. Local phase drift is unwrapped modulo the
+35x32 tile and converted to canonical 8-pixel block offsets. Corrections larger
+than 64 canonical pixels on either axis are rejected. The remaining four
+canonical/source correspondences are fitted with the same bounded 4-point DLT
+solver used for projective geometry.
+
+This stage is deliberately key-assisted research: the key determines the known
+v3 header pattern, but neither the hidden message nor an expected payload is
+used. A phase score, z-score or fitted homography can never set
+`authenticated_payload=true`; only the existing Format-v3 frame parser/HMAC can.

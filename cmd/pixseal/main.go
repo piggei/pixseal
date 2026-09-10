@@ -668,6 +668,12 @@ func diagnose(args []string) error {
 		fmt.Printf("1/%d=%dx%d", level.Divisor, level.Width, level.Height)
 	}
 	fmt.Println()
+	fmt.Printf("Print boundary:           detected=%t confidence=%.3f prior=%t\n", report.PrintBoundary.Detected, report.PrintBoundary.Confidence, report.BoundaryPriorUsed)
+	if report.ProjectiveEstimate.Available {
+		fmt.Printf("Projective initializer:   confidence=%.3f canonical≈%.1fx%.1f candidates=%d\n",
+			report.ProjectiveEstimate.Confidence, report.ProjectiveEstimate.CanonicalWidthPixels,
+			report.ProjectiveEstimate.CanonicalHeightPixels, len(report.ProjectiveEstimate.ScaleCandidates))
+	}
 	fmt.Printf("Local regions:            %d\n", len(report.Regions))
 	for _, region := range report.Regions {
 		fmt.Printf("  [%d,%d] div=%d u=(%.2f,%.2f) v=(%.2f,%.2f) period=(%.2f,%.2f) angle=%.2f axis=%.2f coherence=%.3f repeat=%.3f confidence=%.3f\n",
@@ -682,13 +688,20 @@ func diagnose(args []string) error {
 	fmt.Printf("Lattice evidence:         %t  [diagnostic only]\n", report.LatticeEvidence)
 	fmt.Printf("Authentication status:    %s\n", report.AuthenticationStatus)
 	fmt.Printf("Authenticated payload:    %t\n", report.AuthenticatedPayload)
+	if report.ProjectiveAuthentication.CandidatesProbed > 0 {
+		fmt.Printf("Projective auth probe:    candidates=%d full-decodes=%d best-sync=%s %.3f (z=%.2f)\n",
+			report.ProjectiveAuthentication.CandidatesProbed, report.ProjectiveAuthentication.FullDecodeAttempts,
+			report.ProjectiveAuthentication.BestSyncProfile, report.ProjectiveAuthentication.BestSyncFraction,
+			report.ProjectiveAuthentication.BestSyncZScore)
+	}
 	if report.AuthenticatedPayload {
 		fmt.Printf("Authenticated profile:    %s\n", report.AuthenticatedProfile)
 		fmt.Printf("Authentication confidence: %.2f\n", report.AuthenticationConfidence)
+		fmt.Printf("Authenticated message:    %s\n", report.AuthenticatedMessage)
 	}
-	fmt.Printf("Timing:                   pyramid=%dms lattice=%dms auth=%dms total=%dms\n",
-		report.Timings.PyramidMilliseconds, report.Timings.LocalLatticeMilliseconds,
-		report.Timings.AuthenticationMilliseconds, report.Timings.TotalMilliseconds)
+	fmt.Printf("Timing:                   pyramid=%dms boundary=%dms lattice=%dms projective=%dms auth=%dms total=%dms\n",
+		report.Timings.PyramidMilliseconds, report.Timings.PrintBoundaryMilliseconds, report.Timings.LocalLatticeMilliseconds,
+		report.Timings.ProjectiveFitMilliseconds, report.Timings.AuthenticationMilliseconds, report.Timings.TotalMilliseconds)
 	fmt.Printf("Note:                     %s\n", report.Note)
 	return nil
 }

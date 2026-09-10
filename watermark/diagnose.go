@@ -13,7 +13,7 @@ const (
 	defaultDiagnosticRegionsY      = 3
 	defaultDiagnosticMaxDimension  = 2048
 	defaultDiagnosticMaxLevels     = 2
-	diagnosticMinPeriod            = 4.0
+	diagnosticMinPeriod            = 3.0
 	diagnosticMaxPeriod            = 12.0
 	diagnosticPeriodStep           = 1.0
 	diagnosticMinAngleDegrees      = -45.0
@@ -38,7 +38,7 @@ type DiagnosticOptions struct {
 	AttemptAuthentication bool
 }
 
-// DefaultDiagnosticOptions returns the bounded v0.3.0-dev1 research budget.
+// DefaultDiagnosticOptions returns the bounded v0.3.0-build3 research budget.
 func DefaultDiagnosticOptions() DiagnosticOptions {
 	return DiagnosticOptions{
 		RegionsX:             defaultDiagnosticRegionsX,
@@ -91,21 +91,28 @@ type DiagnosticLevel struct {
 
 // DiagnosticBudgets makes the bounded research search explicit in machine output.
 type DiagnosticBudgets struct {
-	MaxRegions                  int `json:"max_regions"`
-	MaxLevels                   int `json:"max_levels"`
-	CoarseBasisCandidates       int `json:"coarse_basis_candidates_per_region"`
-	RefinedBasisCandidates      int `json:"refined_basis_candidates_per_region"`
-	QuickRepetitionCandidates   int `json:"quick_repetition_candidates_per_region"`
-	FullRepetitionShortlist     int `json:"full_repetition_shortlist_per_region"`
-	MaxFullRepetitionCandidates int `json:"max_full_repetition_candidates_per_region"`
-	MaxPhaseHypotheses          int `json:"max_phase_hypotheses_per_basis"`
-	SampleBlocksPerPhase        int `json:"sample_blocks_per_phase"`
+	MaxRegions                   int `json:"max_regions"`
+	MaxLevels                    int `json:"max_levels"`
+	CoarseBasisCandidates        int `json:"coarse_basis_candidates_per_region"`
+	RefinedBasisCandidates       int `json:"refined_basis_candidates_per_region"`
+	QuickRepetitionCandidates    int `json:"quick_repetition_candidates_per_region"`
+	FullRepetitionShortlist      int `json:"full_repetition_shortlist_per_region"`
+	MaxFullRepetitionCandidates  int `json:"max_full_repetition_candidates_per_region"`
+	MaxPhaseHypotheses           int `json:"max_phase_hypotheses_per_basis"`
+	SampleBlocksPerPhase         int `json:"sample_blocks_per_phase"`
+	MaxProjectiveScaleCandidates int `json:"max_projective_scale_candidates"`
+	MaxProjectiveFullDecodes     int `json:"max_projective_full_decodes"`
+	MaxPhaseRefineSeeds          int `json:"max_phase_refine_seeds"`
+	MaxPhaseScaleProbes          int `json:"max_phase_scale_probes"`
+	MaxPhaseHomographyFits       int `json:"max_phase_homography_fits"`
 }
 
 // DiagnosticTimings reports wall-clock stage timings without affecting decoder behavior.
 type DiagnosticTimings struct {
 	PyramidMilliseconds        int64 `json:"pyramid_ms"`
+	PrintBoundaryMilliseconds  int64 `json:"print_boundary_ms"`
 	LocalLatticeMilliseconds   int64 `json:"local_lattice_ms"`
+	ProjectiveFitMilliseconds  int64 `json:"projective_fit_ms"`
 	AuthenticationMilliseconds int64 `json:"authentication_ms"`
 	TotalMilliseconds          int64 `json:"total_ms"`
 }
@@ -113,23 +120,28 @@ type DiagnosticTimings struct {
 // DiagnosticReport is research evidence, not a watermark-detection result.
 // AuthenticatedPayload can become true only through the existing v3 HMAC path.
 type DiagnosticReport struct {
-	Width                    int                    `json:"width"`
-	Height                   int                    `json:"height"`
-	Levels                   []DiagnosticLevel      `json:"levels"`
-	Regions                  []LocalLatticeEstimate `json:"regions"`
-	GlobalU                  LatticeVector          `json:"global_u"`
-	GlobalV                  LatticeVector          `json:"global_v"`
-	GlobalConsistency        float64                `json:"global_consistency"`
-	ConsensusRegions         int                    `json:"consensus_regions"`
-	ConsensusFraction        float64                `json:"consensus_fraction"`
-	LatticeEvidence          bool                   `json:"lattice_evidence"`
-	AuthenticationStatus     string                 `json:"authentication_status"`
-	AuthenticatedPayload     bool                   `json:"authenticated_payload"`
-	AuthenticatedProfile     Profile                `json:"authenticated_profile,omitempty"`
-	AuthenticationConfidence float64                `json:"authentication_confidence,omitempty"`
-	Budgets                  DiagnosticBudgets      `json:"budgets"`
-	Timings                  DiagnosticTimings      `json:"timings"`
-	Note                     string                 `json:"note"`
+	Width                    int                                `json:"width"`
+	Height                   int                                `json:"height"`
+	Levels                   []DiagnosticLevel                  `json:"levels"`
+	PrintBoundary            PrintBoundaryEstimate              `json:"print_boundary"`
+	BoundaryPriorUsed        bool                               `json:"boundary_prior_used"`
+	ProjectiveEstimate       DiagnosticProjectiveEstimate       `json:"projective_estimate"`
+	Regions                  []LocalLatticeEstimate             `json:"regions"`
+	GlobalU                  LatticeVector                      `json:"global_u"`
+	GlobalV                  LatticeVector                      `json:"global_v"`
+	GlobalConsistency        float64                            `json:"global_consistency"`
+	ConsensusRegions         int                                `json:"consensus_regions"`
+	ConsensusFraction        float64                            `json:"consensus_fraction"`
+	LatticeEvidence          bool                               `json:"lattice_evidence"`
+	AuthenticationStatus     string                             `json:"authentication_status"`
+	AuthenticatedPayload     bool                               `json:"authenticated_payload"`
+	AuthenticatedMessage     string                             `json:"authenticated_message,omitempty"`
+	AuthenticatedProfile     Profile                            `json:"authenticated_profile,omitempty"`
+	AuthenticationConfidence float64                            `json:"authentication_confidence,omitempty"`
+	ProjectiveAuthentication DiagnosticProjectiveAuthentication `json:"projective_authentication"`
+	Budgets                  DiagnosticBudgets                  `json:"budgets"`
+	Timings                  DiagnosticTimings                  `json:"timings"`
+	Note                     string                             `json:"note"`
 }
 
 type diagnosticPlane struct {
@@ -153,7 +165,7 @@ type diagnosticBasisCandidate struct {
 	candidatesEvaluated int
 }
 
-// DiagnoseGeometry performs the v0.3.0-dev1 bounded, key-independent local
+// DiagnoseGeometry performs the v0.3.0-build3 bounded, key-independent local
 // lattice analysis. Optional baseline authentication is deliberately separate:
 // it does not consume lattice estimates and therefore cannot turn a false lattice
 // candidate into an authenticated result.
@@ -176,15 +188,20 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 	coarseCount := diagnosticCoarseCandidateCount()
 	refinedCount := diagnosticCoarseKeep * 3 * 3 * 3 * 3
 	report.Budgets = DiagnosticBudgets{
-		MaxRegions:                  options.RegionsX * options.RegionsY,
-		MaxLevels:                   options.MaxLevels,
-		CoarseBasisCandidates:       coarseCount,
-		RefinedBasisCandidates:      refinedCount,
-		QuickRepetitionCandidates:   coarseCount,
-		FullRepetitionShortlist:     diagnosticRepetitionPool,
-		MaxFullRepetitionCandidates: 2*diagnosticRepetitionPool + 1,
-		MaxPhaseHypotheses:          diagnosticFinePhaseDivisions * diagnosticFinePhaseDivisions,
-		SampleBlocksPerPhase:        diagnosticSampleBlocks * diagnosticSampleBlocks,
+		MaxRegions:                   options.RegionsX * options.RegionsY,
+		MaxLevels:                    options.MaxLevels,
+		CoarseBasisCandidates:        coarseCount,
+		RefinedBasisCandidates:       refinedCount,
+		QuickRepetitionCandidates:    coarseCount,
+		FullRepetitionShortlist:      diagnosticRepetitionPool,
+		MaxFullRepetitionCandidates:  2*diagnosticRepetitionPool + 1,
+		MaxPhaseHypotheses:           diagnosticFinePhaseDivisions * diagnosticFinePhaseDivisions,
+		SampleBlocksPerPhase:         diagnosticSampleBlocks * diagnosticSampleBlocks,
+		MaxProjectiveScaleCandidates: diagnosticMaxProjectiveScaleCandidates,
+		MaxProjectiveFullDecodes:     diagnosticMaxProjectiveFullDecodes,
+		MaxPhaseRefineSeeds:          diagnosticMaxPhaseRefineSeeds,
+		MaxPhaseScaleProbes:          diagnosticMaxPhaseRefineSeeds * diagnosticPhaseScaleProbesPerSeed,
+		MaxPhaseHomographyFits:       diagnosticMaxPhaseRefineSeeds,
 	}
 
 	pyramidStarted := time.Now()
@@ -197,13 +214,23 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 	}
 	report.Timings.PyramidMilliseconds = time.Since(pyramidStarted).Milliseconds()
 
+	boundaryStarted := time.Now()
+	report.PrintBoundary = estimatePrintBoundary(src)
+	report.Timings.PrintBoundaryMilliseconds = time.Since(boundaryStarted).Milliseconds()
+	report.BoundaryPriorUsed = report.PrintBoundary.Detected && report.PrintBoundary.Confidence >= 0.35 && bounds.Dx() >= 1000 && bounds.Dy() >= 1000
+
 	latticeStarted := time.Now()
 	pools := make([][]LocalLatticeEstimate, options.RegionsX*options.RegionsY)
 	for _, plane := range planes {
 		for ry := 0; ry < options.RegionsY; ry++ {
 			for rx := 0; rx < options.RegionsX; rx++ {
 				region := diagnosticRegion(plane, rx, ry, options.RegionsX, options.RegionsY)
-				candidates := estimateDiagnosticBasisPool(plane, region)
+				var pageU, pageV LatticeVector
+				useLocalBoundaryPrior := false
+				if report.BoundaryPriorUsed {
+					pageU, pageV, useLocalBoundaryPrior = boundaryExpectedTangents(report.PrintBoundary, rx, ry, options.RegionsX, options.RegionsY)
+				}
+				candidates := estimateDiagnosticBasisPoolWithPrior(plane, region, pageU, pageV, useLocalBoundaryPrior)
 				index := ry*options.RegionsX + rx
 				for _, candidate := range candidates {
 					pools[index] = append(pools[index], diagnosticCandidateToEstimate(candidate, plane, region, rx, ry))
@@ -211,27 +238,54 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 			}
 		}
 	}
-	report.Regions, report.GlobalU, report.GlobalV, report.GlobalConsistency, report.ConsensusRegions, report.LatticeEvidence = selectDiagnosticConsensus(pools)
+	report.Regions, report.GlobalU, report.GlobalV, report.GlobalConsistency, report.ConsensusRegions, report.LatticeEvidence = selectDiagnosticConsensus(pools, report.PrintBoundary, report.BoundaryPriorUsed, options.RegionsX, options.RegionsY)
 	if len(pools) > 0 {
 		report.ConsensusFraction = float64(report.ConsensusRegions) / float64(len(pools))
 	}
 	report.Timings.LocalLatticeMilliseconds = time.Since(latticeStarted).Milliseconds()
 
+	projectiveStarted := time.Now()
+	if report.BoundaryPriorUsed {
+		report.ProjectiveEstimate = estimateDiagnosticProjective(report.PrintBoundary, pools, report.Regions, report.GlobalConsistency, options.RegionsX, options.RegionsY)
+	}
+	report.Timings.ProjectiveFitMilliseconds = time.Since(projectiveStarted).Milliseconds()
+
 	if options.AttemptAuthentication {
 		authStarted := time.Now()
 		if len(key) < 8 {
 			report.AuthenticationStatus = "invalid-key"
-		} else if exceedsPixelLimit(bounds.Dx(), bounds.Dy(), maxSearchPixels) {
-			report.AuthenticationStatus = "skipped-large-image"
 		} else {
-			_, info, err := ExtractWithInfo(src, key)
-			if err == nil {
-				report.AuthenticationStatus = "baseline-authenticated"
-				report.AuthenticatedPayload = true
-				report.AuthenticatedProfile = info.Profile
-				report.AuthenticationConfidence = info.Confidence
-			} else {
-				report.AuthenticationStatus = "baseline-failed"
+			baselineAttempted := !exceedsPixelLimit(bounds.Dx(), bounds.Dy(), maxSearchPixels)
+			if baselineAttempted {
+				payload, info, err := ExtractWithInfo(src, key)
+				if err == nil {
+					report.AuthenticationStatus = "baseline-authenticated"
+					report.AuthenticatedPayload = true
+					report.AuthenticatedMessage = string(payload)
+					report.AuthenticatedProfile = info.Profile
+					report.AuthenticationConfidence = info.Confidence
+				}
+			}
+			if !report.AuthenticatedPayload && report.ProjectiveEstimate.Available {
+				payload, info, evidence, found := attemptDiagnosticProjectiveAuthentication(src, key, report.ProjectiveEstimate)
+				report.ProjectiveAuthentication = evidence
+				if found {
+					report.AuthenticationStatus = "projective-authenticated"
+					report.AuthenticatedPayload = true
+					report.AuthenticatedMessage = string(payload)
+					report.AuthenticatedProfile = info.Profile
+					report.AuthenticationConfidence = info.Confidence
+				} else if baselineAttempted {
+					report.AuthenticationStatus = "baseline+projective-failed"
+				} else {
+					report.AuthenticationStatus = "projective-failed"
+				}
+			} else if !report.AuthenticatedPayload {
+				if baselineAttempted {
+					report.AuthenticationStatus = "baseline-failed"
+				} else {
+					report.AuthenticationStatus = "skipped-large-image"
+				}
 			}
 		}
 		report.Timings.AuthenticationMilliseconds = time.Since(authStarted).Milliseconds()
@@ -359,6 +413,10 @@ func diagnosticCoarseCandidateCount() int {
 }
 
 func estimateDiagnosticBasisPool(plane *diagnosticPlane, region diagnosticRect) []diagnosticBasisCandidate {
+	return estimateDiagnosticBasisPoolWithPrior(plane, region, LatticeVector{}, LatticeVector{}, false)
+}
+
+func estimateDiagnosticBasisPoolWithPrior(plane *diagnosticPlane, region diagnosticRect, pageU, pageV LatticeVector, useBoundaryPrior bool) []diagnosticBasisCandidate {
 	coarse := make([]diagnosticBasisCandidate, 0, diagnosticCoarseCandidateCount())
 	for angle := diagnosticMinAngleDegrees; angle <= diagnosticMaxAngleDegrees+1e-9; angle += diagnosticAngleStepDegrees {
 		radians := angle * math.Pi / 180
@@ -374,13 +432,17 @@ func estimateDiagnosticBasisPool(plane *diagnosticPlane, region diagnosticRect) 
 	for index := range coarse {
 		applyDiagnosticRepetitionQuick(plane, region, &coarse[index])
 	}
-	sort.Slice(coarse, func(i, j int) bool { return coarse[i].quality > coarse[j].quality })
+	sort.Slice(coarse, func(i, j int) bool {
+		return diagnosticCandidateRank(coarse[i], plane.divisor, pageU, pageV, useBoundaryPrior) > diagnosticCandidateRank(coarse[j], plane.divisor, pageU, pageV, useBoundaryPrior)
+	})
 	coarsePool := selectDistinctDiagnosticCandidates(coarse, diagnosticRepetitionPool)
 	coarsePool = ensureDiagnosticCanonicalAnchor(plane, region, coarsePool, coarse)
 	for index := range coarsePool {
 		applyDiagnosticRepetition(plane, region, &coarsePool[index])
 	}
-	sort.Slice(coarsePool, func(i, j int) bool { return coarsePool[i].quality > coarsePool[j].quality })
+	sort.Slice(coarsePool, func(i, j int) bool {
+		return diagnosticCandidateRank(coarsePool[i], plane.divisor, pageU, pageV, useBoundaryPrior) > diagnosticCandidateRank(coarsePool[j], plane.divisor, pageU, pageV, useBoundaryPrior)
+	})
 	seeds := selectDistinctDiagnosticCandidates(coarsePool, diagnosticCoarseKeep)
 
 	refined := make([]diagnosticBasisCandidate, 0, diagnosticCoarseKeep*81)
@@ -420,12 +482,16 @@ func estimateDiagnosticBasisPool(plane *diagnosticPlane, region diagnosticRect) 
 		}
 		return result
 	}
-	sort.Slice(refined, func(i, j int) bool { return refined[i].quality > refined[j].quality })
+	sort.Slice(refined, func(i, j int) bool {
+		return diagnosticCandidateRank(refined[i], plane.divisor, pageU, pageV, useBoundaryPrior) > diagnosticCandidateRank(refined[j], plane.divisor, pageU, pageV, useBoundaryPrior)
+	})
 	refinedPool := selectDistinctDiagnosticCandidates(refined, diagnosticRepetitionPool)
 	for index := range refinedPool {
 		applyDiagnosticRepetition(plane, region, &refinedPool[index])
 	}
-	sort.Slice(refinedPool, func(i, j int) bool { return refinedPool[i].quality > refinedPool[j].quality })
+	sort.Slice(refinedPool, func(i, j int) bool {
+		return diagnosticCandidateRank(refinedPool[i], plane.divisor, pageU, pageV, useBoundaryPrior) > diagnosticCandidateRank(refinedPool[j], plane.divisor, pageU, pageV, useBoundaryPrior)
+	})
 	if len(refinedPool) == 0 {
 		return nil
 	}
@@ -438,6 +504,55 @@ func estimateDiagnosticBasisPool(plane *diagnosticPlane, region diagnosticRect) 
 		result[index].candidatesEvaluated = len(coarse) + len(refined)
 	}
 	return result
+}
+
+func diagnosticCandidateRank(candidate diagnosticBasisCandidate, divisor int, pageU, pageV LatticeVector, useBoundaryPrior bool) float64 {
+	if !useBoundaryPrior {
+		return candidate.quality
+	}
+	fit := diagnosticCandidateBoundaryFit(candidate, divisor, pageU, pageV)
+	// The print boundary is an initializer, never watermark evidence. Keep a
+	// non-zero floor so strong lattice measurements can still disagree with it.
+	return candidate.quality * (0.12 + 0.88*fit)
+}
+
+func diagnosticCandidateBoundaryFit(candidate diagnosticBasisCandidate, divisor int, pageU, pageV LatticeVector) float64 {
+	determinant := pageU.X*pageV.Y - pageU.Y*pageV.X
+	if math.Abs(determinant) < 1e-9 {
+		return 0
+	}
+	native := LocalLatticeEstimate{
+		U: LatticeVector{X: candidate.u.X * float64(divisor), Y: candidate.u.Y * float64(divisor)},
+		V: LatticeVector{X: candidate.v.X * float64(divisor), Y: candidate.v.Y * float64(divisor)},
+	}
+	best := 0.0
+	for quarter := 0; quarter < 4; quarter++ {
+		variant := diagnosticQuarterEquivalent(native, quarter)
+		transform := func(vector LatticeVector) LatticeVector {
+			return LatticeVector{
+				X: (vector.X*pageV.Y - vector.Y*pageV.X) / determinant,
+				Y: (pageU.X*vector.Y - pageU.Y*vector.X) / determinant,
+			}
+		}
+		u, v := transform(variant.U), transform(variant.V)
+		ul, vl := math.Hypot(u.X, u.Y), math.Hypot(v.X, v.Y)
+		if ul < 1e-12 || vl < 1e-12 {
+			continue
+		}
+		offAxis := math.Abs(u.Y)/ul + math.Abs(v.X)/vl
+		signPenalty := 0.0
+		if u.X < 0 {
+			signPenalty += 0.8
+		}
+		if v.Y < 0 {
+			signPenalty += 0.8
+		}
+		fit := math.Exp(-2.8 * (offAxis + signPenalty))
+		if fit > best {
+			best = fit
+		}
+	}
+	return clampUnit(best)
 }
 
 func ensureDiagnosticCanonicalAnchor(plane *diagnosticPlane, region diagnosticRect, pool, all []diagnosticBasisCandidate) []diagnosticBasisCandidate {
@@ -751,30 +866,90 @@ func diagnosticCandidateToEstimate(candidate diagnosticBasisCandidate, plane *di
 	}
 }
 
-func selectDiagnosticConsensus(pools [][]LocalLatticeEstimate) ([]LocalLatticeEstimate, LatticeVector, LatticeVector, float64, int, bool) {
-	var bestReference LocalLatticeEstimate
+type diagnosticConsensusCandidate struct {
+	original     LocalLatticeEstimate
+	comparable   LocalLatticeEstimate
+	boundaryFit  float64
+	levelSupport float64
+}
+
+func selectDiagnosticConsensus(pools [][]LocalLatticeEstimate, boundary PrintBoundaryEstimate, useBoundary bool, regionsX, regionsY int) ([]LocalLatticeEstimate, LatticeVector, LatticeVector, float64, int, bool) {
+	working := make([][]diagnosticConsensusCandidate, len(pools))
+	for poolIndex, pool := range pools {
+		working[poolIndex] = make([]diagnosticConsensusCandidate, 0, len(pool))
+		multipleLevels := false
+		if len(pool) > 1 {
+			firstDivisor := pool[0].AnalysisDivisor
+			for _, candidate := range pool[1:] {
+				if candidate.AnalysisDivisor != firstDivisor {
+					multipleLevels = true
+					break
+				}
+			}
+		}
+		for _, candidate := range pool {
+			original, comparable, fit := candidate, candidate, 1.0
+			if useBoundary {
+				var ok bool
+				original, comparable, fit, ok = normalizeDiagnosticEstimateByBoundary(boundary, candidate, regionsX, regionsY)
+				if !ok {
+					fit = 0.15
+					original, comparable = candidate, candidate
+				}
+			}
+			levelSupport := 1.0
+			if multipleLevels {
+				levelSupport = 0.15
+				for _, other := range pool {
+					if other.AnalysisDivisor == candidate.AnalysisDivisor {
+						continue
+					}
+					distance := diagnosticBasisDistance(candidate, other)
+					support := math.Exp(-1.25 * distance)
+					if support > levelSupport {
+						levelSupport = support
+					}
+				}
+			}
+			working[poolIndex] = append(working[poolIndex], diagnosticConsensusCandidate{original: original, comparable: comparable, boundaryFit: fit, levelSupport: levelSupport})
+		}
+	}
+
+	var bestReference diagnosticConsensusCandidate
 	bestScore := -1.0
 	bestMatches := -1
-	for _, pool := range pools {
+	for _, pool := range working {
 		for _, reference := range pool {
 			score := 0.0
 			matches := 0
-			for _, otherPool := range pools {
+			for _, otherPool := range working {
 				bestLocal := 0.0
+				matched := false
 				for _, candidate := range otherPool {
-					distance := diagnosticBasisDistance(reference, candidate)
+					distance := diagnosticBasisDistance(reference.comparable, candidate.comparable)
 					compatibility := math.Exp(-1.15 * distance)
-					value := candidate.Confidence * compatibility
+					prior := 1.0
+					if useBoundary {
+						prior = 0.20 + 0.80*candidate.boundaryFit
+					}
+					prior *= 0.25 + 0.75*candidate.levelSupport
+					value := candidate.original.Confidence * compatibility * prior
 					if value > bestLocal {
 						bestLocal = value
 					}
-					if distance <= 1.0 && candidate.Confidence >= 0.12 {
-						matches++
-						break
+					if distance <= 1.0 && candidate.original.Confidence >= 0.12 && (!useBoundary || candidate.boundaryFit >= 0.30) {
+						matched = true
 					}
+				}
+				if matched {
+					matches++
 				}
 				score += bestLocal
 			}
+			if useBoundary {
+				score *= 0.35 + 0.65*reference.boundaryFit
+			}
+			score *= 0.35 + 0.65*reference.levelSupport
 			// Prefer broad agreement first, then intrinsic weighted support.
 			if matches > bestMatches || (matches == bestMatches && score > bestScore) {
 				bestMatches, bestScore, bestReference = matches, score, reference
@@ -785,32 +960,138 @@ func selectDiagnosticConsensus(pools [][]LocalLatticeEstimate) ([]LocalLatticeEs
 		return nil, LatticeVector{}, LatticeVector{}, 0, 0, false
 	}
 
-	selected := make([]LocalLatticeEstimate, 0, len(pools))
-	for _, pool := range pools {
+	selected := make([]LocalLatticeEstimate, 0, len(working))
+	selectedComparable := make([]LocalLatticeEstimate, 0, len(working))
+	for _, pool := range working {
 		bestIndex := -1
 		bestValue := -1.0
-		var bestAligned LocalLatticeEstimate
+		var bestOriginal, bestComparable LocalLatticeEstimate
 		for index, candidate := range pool {
-			aligned, distance := alignDiagnosticEstimate(bestReference, candidate)
-			value := candidate.Confidence*math.Exp(-1.35*distance) + 0.08*math.Exp(-2.0*distance)
+			alignedComparable, distance := alignDiagnosticEstimate(bestReference.comparable, candidate.comparable)
+			prior := 1.0
+			if useBoundary {
+				prior = 0.20 + 0.80*candidate.boundaryFit
+			}
+			prior *= 0.25 + 0.75*candidate.levelSupport
+			value := (candidate.original.Confidence*math.Exp(-1.35*distance) + 0.08*math.Exp(-2.0*distance)) * prior
 			if value > bestValue {
-				bestValue, bestIndex, bestAligned = value, index, aligned
+				bestValue, bestIndex = value, index
+				bestOriginal = candidate.original
+				bestComparable = alignedComparable
 			}
 		}
 		if bestIndex >= 0 {
-			selected = append(selected, bestAligned)
+			selected = append(selected, bestOriginal)
+			selectedComparable = append(selectedComparable, bestComparable)
 		}
 	}
-	globalU, globalV, consistency, _ := summarizeDiagnosticRegions(selected)
+	globalU, globalV, _, _ := summarizeDiagnosticRegions(selected)
+	consistency := diagnosticNormalizedConsistency(selectedComparable)
 	strong := 0
-	for _, region := range selected {
-		if diagnosticBasisDistance(bestReference, region) <= 1.0 && region.Confidence >= 0.12 {
+	for index, region := range selectedComparable {
+		if diagnosticBasisDistance(bestReference.comparable, region) <= 1.0 && selected[index].Confidence >= 0.12 {
 			strong++
 		}
 	}
 	minimumStrong := (len(pools) + 1) / 2
-	evidence := strong >= minimumStrong && consistency >= 0.55
+	evidenceThreshold := 0.55
+	if useBoundary {
+		evidenceThreshold = 0.62
+	}
+	evidence := strong >= minimumStrong && consistency >= evidenceThreshold
 	return selected, globalU, globalV, consistency, strong, evidence
+}
+
+func normalizeDiagnosticEstimateByBoundary(boundary PrintBoundaryEstimate, candidate LocalLatticeEstimate, regionsX, regionsY int) (LocalLatticeEstimate, LocalLatticeEstimate, float64, bool) {
+	pageU, pageV, ok := boundaryExpectedTangents(boundary, candidate.RegionX, candidate.RegionY, regionsX, regionsY)
+	if !ok {
+		return candidate, candidate, 0, false
+	}
+	determinant := pageU.X*pageV.Y - pageU.Y*pageV.X
+	if math.Abs(determinant) < 1e-9 {
+		return candidate, candidate, 0, false
+	}
+	transform := func(vector LatticeVector) LatticeVector {
+		return LatticeVector{
+			X: (vector.X*pageV.Y - vector.Y*pageV.X) / determinant,
+			Y: (pageU.X*vector.Y - pageU.Y*vector.X) / determinant,
+		}
+	}
+
+	bestFit := -1.0
+	bestOriginal, bestComparable := candidate, candidate
+	for quarter := 0; quarter < 4; quarter++ {
+		original := diagnosticQuarterEquivalent(candidate, quarter)
+		u := transform(original.U)
+		v := transform(original.V)
+		ul, vl := math.Hypot(u.X, u.Y), math.Hypot(v.X, v.Y)
+		if ul < 1e-12 || vl < 1e-12 {
+			continue
+		}
+		offAxis := math.Abs(u.Y)/ul + math.Abs(v.X)/vl
+		signPenalty := 0.0
+		if u.X < 0 {
+			signPenalty += 0.8
+		}
+		if v.Y < 0 {
+			signPenalty += 0.8
+		}
+		fit := math.Exp(-2.8 * (offAxis + signPenalty))
+		if fit <= bestFit {
+			continue
+		}
+		comparable := original
+		comparable.U, comparable.V = u, v
+		comparable.PeriodU, comparable.PeriodV = ul, vl
+		comparable.OrientationDegrees = math.Atan2(u.Y, u.X) * 180 / math.Pi
+		comparable.InterAxisDegrees = vectorAngleDegrees(u, v)
+		bestFit, bestOriginal, bestComparable = fit, original, comparable
+	}
+	if bestFit < 0 {
+		return candidate, candidate, 0, false
+	}
+	return bestOriginal, bestComparable, clampUnit(bestFit), true
+}
+
+func diagnosticNormalizedConsistency(regions []LocalLatticeEstimate) float64 {
+	if len(regions) == 0 {
+		return 0
+	}
+	var sumU, sumV LatticeVector
+	totalWeight := 0.0
+	for _, region := range regions {
+		weight := region.Confidence
+		if weight < 0.12 {
+			continue
+		}
+		sumU.X += region.U.X * weight
+		sumU.Y += region.U.Y * weight
+		sumV.X += region.V.X * weight
+		sumV.Y += region.V.Y * weight
+		totalWeight += weight
+	}
+	if totalWeight == 0 {
+		return 0
+	}
+	meanU := LatticeVector{X: sumU.X / totalWeight, Y: sumU.Y / totalWeight}
+	meanV := LatticeVector{X: sumV.X / totalWeight, Y: sumV.Y / totalWeight}
+	meanULength := math.Max(math.Hypot(meanU.X, meanU.Y), 1e-9)
+	meanVLength := math.Max(math.Hypot(meanV.X, meanV.Y), 1e-9)
+	deviation, deviationWeight := 0.0, 0.0
+	for _, region := range regions {
+		weight := region.Confidence
+		if weight < 0.12 {
+			continue
+		}
+		du := math.Hypot(region.U.X-meanU.X, region.U.Y-meanU.Y) / meanULength
+		dv := math.Hypot(region.V.X-meanV.X, region.V.Y-meanV.Y) / meanVLength
+		deviation += weight * (du + dv) / 2
+		deviationWeight += weight
+	}
+	if deviationWeight > 0 {
+		deviation /= deviationWeight
+	}
+	return clampUnit(math.Exp(-2.5 * deviation))
 }
 
 func diagnosticBasisDistance(a, b LocalLatticeEstimate) float64 {

@@ -1,6 +1,89 @@
 # Changelog
 
-## v0.3.0-dev1 — 2026-09-09
+## v0.3.0-build3 — 2026-09-10
+
+Third print-camera research checkpoint. Format v3, the deterministic encoder and
+the production `ExtractWithInfo` path remain unchanged from v0.2.0.
+
+### Added
+
+- Spatial Format-v3 phase-consensus measurement across independent complete
+  tiles for every retained projective scale candidate. Aggregate sync peaks no
+  longer decide geometry by themselves.
+- Bounded phase-aware scale refinement: at most three seeds, each evaluated at
+  the base scale plus ±1%/±2% width and height perturbations (maximum 27 scale
+  evaluations total).
+- Deterministic phase-correspondence DLT refinement. Four local phase
+  observations can refine the coarse homography, with canonical corrections
+  bounded to 64 pixels per axis.
+- Phase coherence, refinement budgets, refined candidates and phase-DLT evidence
+  in `diagnose -json`.
+- Full virtual Format-v3 decodes remain capped at four and HMAC remains the only
+  success criterion.
+
+### Real-corpus research status
+
+- The build2 lattice/boundary results are preserved: about 0.760 global
+  consistency on `foto stampa.PNG` and 0.812 on `foto stampa storta.PNG`, both
+  with lattice evidence.
+- Two independent captures contain a closely matching coarse scale family near
+  1668x1250 / 1653x1254. Build3 discovers and measures that family from local
+  phase consistency; it is not hard-coded and is not assumed to be the true
+  carrier size.
+- On the frontal capture, phase-DLT refinement of that family raises its sparse
+  known-header probe from z≈3.50 to z≈4.45. On the inclined capture the bounded
+  phase search also improves the best sparse probe (to about z≈3.97).
+- Neither photograph authenticates yet. The hidden real payload therefore
+  remains unknown and `print-camera-test` correctly remains a research failure.
+
+### Preserved
+
+- Format v3 and deterministic encoder fingerprints.
+- Production `ExtractWithInfo` behavior/search order.
+- Eight coarse projective candidates and at most four complete virtual v3
+  decodes.
+- Private-corpus policy: real smartphone photographs are never distributed.
+
+## v0.3.0-build2 — 2026-09-09
+
+Second print-camera research checkpoint. Format v3, the deterministic encoder and
+the production `ExtractWithInfo` search banks remain unchanged from v0.2.0.
+
+### Added
+
+- Pure-Go coarse print-boundary estimator with explicit confidence and corners.
+  The quadrilateral is an initializer only and never watermark evidence.
+- Boundary-aware normalization of local lattice bases and cross-level native-scale
+  support to reduce scene-texture and single-pyramid-level harmonics.
+- Bounded projective scale clustering and explicit canonical-to-photo homography.
+- Virtual projective DCT sampler that avoids materializing a full rectified copy.
+- Diagnostic key-known Format-v3 header probes for candidate ordering, capped at
+  eight geometry probes and four complete virtual Format-v3 decodes.
+- Synthetic end-to-end projective authentication regression, including wrong-key
+  rejection.
+- `make homography-test`; it is included in `make all-test` as a research target.
+- Additional projective-fit/authentication timings and budgets in diagnose JSON.
+
+### Real-corpus research status
+
+- `foto stampa.PNG`: automatic print boundary, global lattice consistency about
+  0.760, `lattice_evidence=true`.
+- `foto stampa storta.PNG`: automatic print boundary, global lattice consistency
+  about 0.812, `lattice_evidence=true`; build1 was about 0.505/false.
+- Both 200 MP captures now reach the bounded virtual projective authentication
+  path without a full rectified image. No Format-v3 HMAC is valid yet, therefore
+  **the hidden real payload remains unrecovered and print-camera PASS is not
+  claimed**.
+- Key-known header scores are explicitly treated as multiple-testing-affected
+  research evidence, not as proof that a watermark is present.
+
+### Preserved
+
+- Format v3 and deterministic encoder fingerprints.
+- Production `ExtractWithInfo` behavior/search order.
+- Private-corpus policy: real smartphone photographs are never distributed.
+
+## v0.3.0-build1 — 2026-09-09
 
 First research checkpoint toward print -> paper -> smartphone recovery. Format
 v3, the deterministic encoder and the production `ExtractWithInfo` decoder are
@@ -26,11 +109,11 @@ unchanged from the qualified v0.2.0 baseline.
 ### Research status
 
 - Canonical marked synthetic/digital carriers can produce coherent local lattice
-  evidence while corresponding unmarked inputs remain negative in the dev1
+  evidence while corresponding unmarked inputs remain negative in the build1
   regression path.
 - Arbitrary-angle automatic local-basis estimation is not yet reliable enough to
   feed homography fitting; this remains the next geometry milestone.
-- No claim of real print-camera payload recovery is made by dev1.
+- No claim of real print-camera payload recovery is made by build1.
 
 ## v0.2.0 — 2026-09-09
 

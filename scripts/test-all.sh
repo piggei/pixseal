@@ -8,7 +8,7 @@ if [[ -n "$REPORT" ]]; then
     exec > >(tee "$REPORT") 2>&1
 fi
 
-default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit lattice-estimator-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
+default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit lattice-estimator-test homography-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
 read -r -a targets <<< "${ALL_TEST_TARGETS:-$default_targets}"
 if (( ${#targets[@]} == 0 )); then
     echo "error: ALL_TEST_TARGETS resolved to an empty list" >&2
@@ -25,6 +25,7 @@ label_for() {
         extreme-test) echo "progressive limits" ;;
         research-unit) echo "experimental geometry Go regressions" ;;
         lattice-estimator-test) echo "v0.3 local lattice estimator" ;;
+        homography-test) echo "v0.3 bounded homography/projective decoder" ;;
         geometry-test) echo "rotation/combined geometry" ;;
         affine-test) echo "axis-aligned affine" ;;
         composition-test) echo "build-7 composition regression" ;;
@@ -36,7 +37,7 @@ label_for() {
 }
 
 release_targets=(version-check vet release-unit test-images deep-test core-target-check)
-research_targets=(extreme-test research-unit lattice-estimator-test geometry-test affine-test composition-test lattice-test perspective-test)
+research_targets=(extreme-test research-unit lattice-estimator-test homography-test geometry-test affine-test composition-test lattice-test perspective-test)
 
 in_list() {
     local needle="$1"; shift

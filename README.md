@@ -7,7 +7,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits in luminance DCT coefficients while trying to keep the visual change small
 under normal viewing conditions.
 
-Current development snapshot: **v0.3.0-dev1**.
+Current development snapshot: **v0.3.0-build3**.
 
 Stable release baseline: **v0.2.0**.
 
@@ -44,30 +44,37 @@ two mild projective/keystone hypotheses. These are measured research
 capabilities, not universal guarantees. General homography estimation and the
 physical print-camera channel are outside v0.2.0 scope.
 
-## What v0.3.0-dev1 adds
+## What v0.3.0-build3 adds
 
-The first v0.3 research snapshot deliberately leaves the encoder, Format v3 and
-the production `ExtractWithInfo` search order unchanged. It adds a separate,
-bounded geometry diagnostic path:
+Build3 preserves everything introduced by build2 and adds a bounded phase-aware
+refinement stage before expensive projective decoding. Format v3, the
+deterministic encoder and the production `ExtractWithInfo` search order remain
+unchanged.
 
-- `watermark.DiagnoseGeometry`, kept independent from authenticated extraction;
-- a sampled luminance analysis plane and bounded diagnostic pyramid for large
-  inputs, avoiding an additional full RGB search copy;
-- 3x3-by-default local regions that estimate lattice basis vectors `u` and `v`,
-  phase, DCT differential margin, periodic coherence and v3 tile-repetition
-  coherence;
-- per-region shortlists followed by cross-region consensus, including the 90
-  degree basis symmetry of the square lattice;
-- explicit candidate/phase/sample budgets and per-stage timing in machine output;
-- `pixseal diagnose` with human-readable or JSON output;
-- an optional, independent baseline HMAC attempt when `-key` is supplied; lattice
-  evidence alone is never reported as an authenticated watermark;
-- `make lattice-estimator-test` and a private `make print-camera-test` harness.
+The research path now includes:
 
-`v0.3.0-dev1` is a **research checkpoint**, not a new robustness claim. The
-current local estimator discriminates canonical marked/unmarked synthetic and
-qualification-style digital carriers, but arbitrary-angle automatic local-basis
-estimation, homography fitting and real print-camera recovery remain open work.
+- the build2 pure-Go print-boundary initializer, boundary-normalized local `u/v`
+  field, multiscale support, projective scale shortlist and virtual homography
+  sampler;
+- **spatial phase consensus**: Format-v3 sync phase is measured independently in
+  separated complete tiles, so a single aggregate header peak cannot by itself
+  promote a geometry;
+- bounded scale refinement of at most three phase-consistent seeds, testing the
+  base scale plus ±1% and ±2% width/height perturbations;
+- deterministic phase-correspondence DLT refinement when four spatial phase
+  observations are available, with canonical corrections bounded to 64 pixels;
+- JSON evidence for phase profile, X/Y coherence, scale refinements and
+  phase-refined homographies;
+- unchanged HMAC-only success semantics and a hard maximum of four complete
+  virtual Format-v3 decodes.
+
+On the two private real print-camera photographs, both captures continue to
+produce coherent lattice evidence. A closely matching coarse scale family near
+1668x1250 / 1653x1254 appears independently in the frontal and inclined
+captures, and build3 measures it through phase consistency rather than by a
+photo-specific constant. Phase refinement improves sparse sync evidence, but no
+real HMAC is valid yet; the hidden payload remains unknown and no print-camera
+success claim is made.
 
 ## Build
 
@@ -176,11 +183,13 @@ pixseal diagnose -in capture.jpg -json
 pixseal diagnose -in capture.jpg -key "a long secret" -json
 ```
 
-The diagnostic command reports local and global lattice evidence, bounded search
-budgets and timings. Supplying a key additionally runs the existing baseline
-authenticated extractor when the image is within its bounded search policy. The
-diagnostic estimator does **not** use its lattice candidates to authenticate the
-payload in dev1. A valid Format v3 HMAC remains the only success criterion.
+The diagnostic command reports local/global lattice evidence, the optional print
+boundary initializer, bounded projective candidates, budgets and timings. When a
+key is supplied, small ordinary carriers still use the mature baseline extractor;
+the research path may additionally rank bounded projective hypotheses with the
+key-known Format-v3 header and run at most four complete virtual projective
+decodes. Those probe scores are diagnostic only. A valid Format v3 HMAC remains
+the only success criterion.
 
 ## Analyze and capacity
 
@@ -232,8 +241,8 @@ bound. Such candidates are skipped rather than materialized.
 
 The v0.3 diagnostic path now builds sampled luminance analysis planes rather than
 an additional full RGB extraction plane. The Go image decoder still materializes
-the decoded source image; dev1 therefore reduces diagnostic working copies but
-is not a streaming/tiled image decoder.
+the decoded source image; build3 avoids additional full-size rectified/projective
+working copies but is not yet a streaming/tiled source decoder.
 
 ## Decoder order
 
@@ -319,6 +328,7 @@ make test            # complete Go tests + local image round trips
 make release-unit    # release-gate Go regressions only
 make research-unit   # experimental geometry Go regressions
 make lattice-estimator-test # v0.3 bounded local-lattice diagnostics
+make homography-test   # v0.3 boundary/homography/virtual decoder regressions
 make print-camera-test # private real print-camera corpus; SKIP when absent
 make deep-test       # stable JPEG/resize/crop baseline
 make extreme-test    # non-strict progressive resize/crop limit map
@@ -359,10 +369,10 @@ This harness requirement is separate from reusable-core portability.
 - Maximum v3 payload: 64 bytes.
 - Minimum aligned embed geometry: 280x256 pixels.
 - CLI embedding currently accepts text via `-message`; the core stores bytes.
-- General affine inference, arbitrary homography estimation and print-camera
-  recovery are not v0.2.0 guarantees and are not yet achieved by v0.3.0-dev1.
-- The v0.3.0-dev1 local estimator still needs stronger arbitrary-angle candidate
-  generation before it can feed a general homography model.
+- General affine/projective print-camera recovery is not a v0.2.0 guarantee.
+- v0.3.0-build3 can estimate/refine bounded projective candidates and authenticate the
+  virtual path synthetically, but it has not yet authenticated either real
+  smartphone capture. Scale/phase/sub-pixel disambiguation remains research work.
 - Experimental rotation/affine performance is image-content dependent.
 - Failed extraction can be substantially more expensive than successful
   extraction because bounded candidates must be exhausted.
@@ -371,9 +381,10 @@ This harness requirement is separate from reusable-core portability.
 
 ## Release status
 
-**v0.3.0-dev1** is an experimental development snapshot. It preserves the
-qualified v0.2.0 encoder/Format-v3/production-extractor baseline and adds only a
-separate diagnostic research path.
+**v0.3.0-build3** is an experimental development snapshot. It preserves the
+qualified v0.2.0 encoder/Format-v3/production-extractor baseline and extends only
+the separate diagnostic research path through bounded homography estimation and
+virtual projective decoding.
 
 **v0.2.0** remains the qualified stable release of the Format v3 line. It was
 promoted from RC4 after the stable release baseline passed on the private

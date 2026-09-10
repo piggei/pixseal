@@ -45,7 +45,7 @@ ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit release-unit research-unit lattice-estimator-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
+.PHONY: build test test-unit release-unit research-unit lattice-estimator-test homography-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -77,6 +77,12 @@ release-unit:
 lattice-estimator-test:
 	@echo "Running v0.3 local-lattice estimator regressions..."
 	@go test ./watermark -run '^TestDiagnostic' -count=1
+
+# v0.3 deterministic print-boundary/homography/projective virtual-decoder
+# regressions. These stay research-only and do not alter ExtractWithInfo.
+homography-test:
+	@echo "Running v0.3 bounded homography/projective regressions..."
+	@go test ./watermark -run 'Test(PrintBoundaryEstimatorFindsSyntheticPrint|HomographyForPrintBoundaryMapsCorners|DiagnosticScaleClusteringRewardsCrossRegionSupport|DiagnosticProjectiveVirtualAuthentication|DiagnosticPhaseConsensusPrefersExactScale|DiagnosticPhaseDifferenceIsBoundedModuloTile)$$' -count=1
 
 # Private real print -> paper -> smartphone regression gate. The two original
 # photographs are never distributed with the source tree. Missing corpus is a
