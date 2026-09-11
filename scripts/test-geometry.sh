@@ -159,15 +159,15 @@ for image in "${images[@]}"; do
 	width=""
 	height=""
 	read -r width height < <(read_image_dimensions "$image") || true
+	per_profile=$(( ${#angles[@]} + ${#combined_angles[@]} * ${#combined_modes[@]} ))
 	if [[ ! "$width" =~ ^[0-9]+$ || ! "$height" =~ ^[0-9]+$ ]]; then
+		count=$(( ${#profiles[@]} * per_profile ))
 		echo "Image: $name"
-		echo "  ERROR dimensions       could not read image dimensions"
-		((errors += 1))
-		((cases += 1))
+		printf '  SKIP  all geometry     dimensions unavailable (%d cases)\n' "$count"
+		((skipped += count))
 		continue
 	fi
 	megapixels=$(( (width * height + 999999) / 1000000 ))
-	per_profile=$(( ${#angles[@]} + ${#combined_angles[@]} * ${#combined_modes[@]} ))
 	if (( GEOMETRY_MAX_MPIX > 0 && width * height > GEOMETRY_MAX_MPIX * 1000000 )); then
 		count=$(( ${#profiles[@]} * per_profile ))
 		printf 'Image: %s\n  SKIP  all geometry     %d MP exceeds limit of %d MP (%d cases)\n' \

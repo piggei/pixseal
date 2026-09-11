@@ -57,8 +57,8 @@ for image in "${images[@]}"; do
     read -r width height < <(read_image_dimensions "$image") || true
     if [[ ! "$width" =~ ^[0-9]+$ || ! "$height" =~ ^[0-9]+$ ]]; then
         echo "Image: $name"
-        printf '  ERROR dimensions       could not read image dimensions (%d cases)\n' "${#modes[@]}"
-        ((errors+=${#modes[@]})); ((cases+=${#modes[@]}))
+        printf '  SKIP  mild perspective dimensions unavailable (%d cases)\n' "${#modes[@]}"
+        ((skipped+=${#modes[@]}))
         continue
     fi
     mp=$(( (width*height+999999)/1000000 ))

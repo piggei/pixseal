@@ -7,6 +7,9 @@
 # Local source images used by tests
 /original pics/
 /print-camera private/
+/print-scan private/
+/private-corpus-manifest.sha256
+/.pixseal-private.env
 
 # Test and coverage artifacts
 coverage.out

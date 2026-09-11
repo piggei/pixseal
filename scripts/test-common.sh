@@ -15,18 +15,19 @@ read_image_dimensions() {
     fi
 
     # PNG signature + first IHDR chunk. Never trust the extension alone: camera
-    # files can be misnamed, and interpreting arbitrary JPEG bytes as IHDR yields
-    # nonsense dimensions.
-    local header=()
-    read -r -a header <<< "$(od -An -v -tx1 -N24 -- "$image" 2>/dev/null)"
-    if (( ${#header[@]} == 24 )) &&
-       [[ "${header[*]:0:8}" == "89 50 4e 47 0d 0a 1a 0a" ]] &&
-       [[ "${header[12]} ${header[13]} ${header[14]} ${header[15]}" == "49 48 44 52" ]]; then
-        width=$(( 16#${header[16]} * 16777216 + 16#${header[17]} * 65536 + 16#${header[18]} * 256 + 16#${header[19]} ))
-        height=$(( 16#${header[20]} * 16777216 + 16#${header[21]} * 65536 + 16#${header[22]} * 256 + 16#${header[23]} ))
-        if (( width > 0 && height > 0 )); then
-            printf '%s %s\n' "$width" "$height"
-            return 0
+    # files can be misnamed. Use decimal bytes for the dimensions so this path
+    # is independent of shell hexadecimal parsing quirks on older hosts.
+    local sig dims=()
+    sig="$(od -An -v -tx1 -N8 -- "$image" 2>/dev/null | tr -d ' \n')"
+    if [[ "$sig" == "89504e470d0a1a0a" ]]; then
+        read -r -a dims <<< "$(od -An -v -tu1 -j16 -N8 -- "$image" 2>/dev/null)"
+        if (( ${#dims[@]} == 8 )); then
+            width=$(( dims[0] * 16777216 + dims[1] * 65536 + dims[2] * 256 + dims[3] ))
+            height=$(( dims[4] * 16777216 + dims[5] * 65536 + dims[6] * 256 + dims[7] ))
+            if (( width > 0 && height > 0 )); then
+                printf '%s %s\n' "$width" "$height"
+                return 0
+            fi
         fi
     fi
     return 1

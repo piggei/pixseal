@@ -8,7 +8,7 @@ if [[ -n "$REPORT" ]]; then
     exec > >(tee "$REPORT") 2>&1
 fi
 
-default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit lattice-estimator-test homography-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
+default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test smooth-phase-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
 read -r -a targets <<< "${ALL_TEST_TARGETS:-$default_targets}"
 if (( ${#targets[@]} == 0 )); then
     echo "error: ALL_TEST_TARGETS resolved to an empty list" >&2
@@ -26,6 +26,15 @@ label_for() {
         research-unit) echo "experimental geometry Go regressions" ;;
         lattice-estimator-test) echo "v0.3 local lattice estimator" ;;
         homography-test) echo "v0.3 bounded homography/projective decoder" ;;
+        photometric-test) echo "v0.3 bounded print-camera photometric bank" ;;
+        bit-channel-test) echo "v0.3 protected-bit/ECC channel diagnostics" ;;
+        reliability-test) echo "v0.3 bounded reliability/full-grid decoder" ;;
+        spatial-channel-test) echo "v0.3 spatial protected-bit stability" ;;
+        phase-surface-test) echo "v0.3 confidence-weighted phase surface" ;;
+        blind-phase-test) echo "v0.3 repetition/cross-cell blind phase" ;;
+        lattice-phase-test) echo "v0.3 local fractional lattice phase" ;;
+        global-unwrap-test) echo "v0.3 global discrete phase unwrap" ;;
+        smooth-phase-test) echo "v0.3 bounded smooth phase field" ;;
         geometry-test) echo "rotation/combined geometry" ;;
         affine-test) echo "axis-aligned affine" ;;
         composition-test) echo "build-7 composition regression" ;;
@@ -36,8 +45,9 @@ label_for() {
     esac
 }
 
-release_targets=(version-check vet release-unit test-images deep-test core-target-check)
-research_targets=(extreme-test research-unit lattice-estimator-test homography-test geometry-test affine-test composition-test lattice-test perspective-test)
+release_targets=(version-check vet release-unit test-images core-target-check)
+qualification_targets=(deep-test extreme-test)
+research_targets=(research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test smooth-phase-test geometry-test affine-test composition-test lattice-test perspective-test)
 
 in_list() {
     local needle="$1"; shift
@@ -102,7 +112,9 @@ printf '%-22s %-12s %10s\n' '----------------------' '------------' '----------'
 failed=0
 release_failed=0
 research_failed=0
+qualification_failed=0
 release_selected=0
+qualification_selected=0
 research_selected=0
 for i in "${!targets[@]}"; do
     target="${targets[$i]}"
@@ -111,6 +123,9 @@ for i in "${!targets[@]}"; do
     if in_list "$target" "${release_targets[@]}"; then
         ((release_selected += 1))
         [[ "$status" == PASS ]] || ((release_failed += 1))
+    elif in_list "$target" "${qualification_targets[@]}"; then
+        ((qualification_selected += 1))
+        [[ "$status" == PASS ]] || ((qualification_failed += 1))
     elif in_list "$target" "${research_targets[@]}"; then
         ((research_selected += 1))
         [[ "$status" == PASS ]] || ((research_failed += 1))
@@ -134,6 +149,20 @@ else
     printf 'Release baseline: FAIL (%d release-gate target%s failed)\n' "$release_failed" "$([[ $release_failed -eq 1 ]] && echo '' || echo 's')"
 fi
 
+if (( qualification_selected == 0 )); then
+    echo 'Qualification corpus: NOT RUN'
+elif (( qualification_selected < ${#qualification_targets[@]} )); then
+    if (( qualification_failed > 0 )); then
+        printf 'Qualification corpus: PARTIAL/ATTENTION (%d/%d targets run; %d failed)\n' "$qualification_selected" "${#qualification_targets[@]}" "$qualification_failed"
+    else
+        printf 'Qualification corpus: PARTIAL (%d/%d targets run)\n' "$qualification_selected" "${#qualification_targets[@]}"
+    fi
+elif (( qualification_failed == 0 )); then
+    echo 'Qualification corpus: PASS'
+else
+    printf 'Qualification corpus: ATTENTION (%d qualification target%s failed)\n' "$qualification_failed" "$([[ $qualification_failed -eq 1 ]] && echo '' || echo 's')"
+fi
+
 if (( research_selected == 0 )); then
     echo 'Research suites: NOT RUN'
 elif (( research_selected < ${#research_targets[@]} )); then
@@ -152,7 +181,7 @@ if (( failed > 0 )); then
     printf 'Overall: FAIL (%d target%s failed)\n' "$failed" "$([[ $failed -eq 1 ]] && echo '' || echo 's')"
     exit 1
 fi
-if (( release_selected < ${#release_targets[@]} || research_selected < ${#research_targets[@]} )); then
+if (( release_selected < ${#release_targets[@]} || qualification_selected < ${#qualification_targets[@]} || research_selected < ${#research_targets[@]} )); then
     echo 'Overall: PARTIAL (requested target set did not run the complete qualification matrix)'
     exit 0
 fi

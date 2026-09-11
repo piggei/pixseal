@@ -9,22 +9,25 @@ import (
 )
 
 const (
-	defaultDiagnosticRegionsX      = 3
-	defaultDiagnosticRegionsY      = 3
-	defaultDiagnosticMaxDimension  = 2048
-	defaultDiagnosticMaxLevels     = 2
-	diagnosticMinPeriod            = 3.0
-	diagnosticMaxPeriod            = 12.0
-	diagnosticPeriodStep           = 1.0
-	diagnosticMinAngleDegrees      = -45.0
-	diagnosticMaxAngleDegrees      = 45.0
-	diagnosticAngleStepDegrees     = 7.5
-	diagnosticCoarsePhaseDivisions = 3
-	diagnosticFinePhaseDivisions   = 4
-	diagnosticSampleBlocks         = 5
-	diagnosticCoarseKeep           = 3
-	diagnosticFinalPool            = 8
-	diagnosticRepetitionPool       = 12
+	diagnosticBaselineAuthMaxPixels  = 16 * 1024 * 1024
+	defaultDiagnosticRegionsX        = 3
+	defaultDiagnosticRegionsY        = 3
+	defaultDiagnosticMaxDimension    = 2048
+	defaultDiagnosticMaxLevels       = 2
+	diagnosticAdaptiveMaxDimension   = 4096
+	diagnosticAdaptiveMinConsistency = 0.45
+	diagnosticMinPeriod              = 3.0
+	diagnosticMaxPeriod              = 12.0
+	diagnosticPeriodStep             = 1.0
+	diagnosticMinAngleDegrees        = -45.0
+	diagnosticMaxAngleDegrees        = 45.0
+	diagnosticAngleStepDegrees       = 7.5
+	diagnosticCoarsePhaseDivisions   = 3
+	diagnosticFinePhaseDivisions     = 4
+	diagnosticSampleBlocks           = 5
+	diagnosticCoarseKeep             = 3
+	diagnosticFinalPool              = 8
+	diagnosticRepetitionPool         = 12
 )
 
 // DiagnosticOptions bounds the experimental local-lattice estimator. It is
@@ -38,7 +41,7 @@ type DiagnosticOptions struct {
 	AttemptAuthentication bool
 }
 
-// DefaultDiagnosticOptions returns the bounded v0.3.0-build3 research budget.
+// DefaultDiagnosticOptions returns the bounded v0.3.0-build6 research budget.
 func DefaultDiagnosticOptions() DiagnosticOptions {
 	return DiagnosticOptions{
 		RegionsX:             defaultDiagnosticRegionsX,
@@ -91,20 +94,55 @@ type DiagnosticLevel struct {
 
 // DiagnosticBudgets makes the bounded research search explicit in machine output.
 type DiagnosticBudgets struct {
-	MaxRegions                   int `json:"max_regions"`
-	MaxLevels                    int `json:"max_levels"`
-	CoarseBasisCandidates        int `json:"coarse_basis_candidates_per_region"`
-	RefinedBasisCandidates       int `json:"refined_basis_candidates_per_region"`
-	QuickRepetitionCandidates    int `json:"quick_repetition_candidates_per_region"`
-	FullRepetitionShortlist      int `json:"full_repetition_shortlist_per_region"`
-	MaxFullRepetitionCandidates  int `json:"max_full_repetition_candidates_per_region"`
-	MaxPhaseHypotheses           int `json:"max_phase_hypotheses_per_basis"`
-	SampleBlocksPerPhase         int `json:"sample_blocks_per_phase"`
-	MaxProjectiveScaleCandidates int `json:"max_projective_scale_candidates"`
-	MaxProjectiveFullDecodes     int `json:"max_projective_full_decodes"`
-	MaxPhaseRefineSeeds          int `json:"max_phase_refine_seeds"`
-	MaxPhaseScaleProbes          int `json:"max_phase_scale_probes"`
-	MaxPhaseHomographyFits       int `json:"max_phase_homography_fits"`
+	AdaptiveMaxDimension                int     `json:"adaptive_max_dimension"`
+	AdaptiveMinConsistency              float64 `json:"adaptive_min_consistency"`
+	MaxRegions                          int     `json:"max_regions"`
+	MaxLevels                           int     `json:"max_levels"`
+	CoarseBasisCandidates               int     `json:"coarse_basis_candidates_per_region"`
+	RefinedBasisCandidates              int     `json:"refined_basis_candidates_per_region"`
+	QuickRepetitionCandidates           int     `json:"quick_repetition_candidates_per_region"`
+	FullRepetitionShortlist             int     `json:"full_repetition_shortlist_per_region"`
+	MaxFullRepetitionCandidates         int     `json:"max_full_repetition_candidates_per_region"`
+	MaxPhaseHypotheses                  int     `json:"max_phase_hypotheses_per_basis"`
+	SampleBlocksPerPhase                int     `json:"sample_blocks_per_phase"`
+	MaxProjectiveScaleCandidates        int     `json:"max_projective_scale_candidates"`
+	MaxProjectiveFullDecodes            int     `json:"max_projective_full_decodes"`
+	MaxPhaseRefineSeeds                 int     `json:"max_phase_refine_seeds"`
+	MaxPhaseScaleProbes                 int     `json:"max_phase_scale_probes"`
+	MaxPhaseHomographyFits              int     `json:"max_phase_homography_fits"`
+	MaxFundamentalScaleProbes           int     `json:"max_fundamental_scale_probes"`
+	MaxSubpixelRefinements              int     `json:"max_subpixel_refinements"`
+	MaxSubpixelProbeAttempts            int     `json:"max_subpixel_probe_attempts"`
+	MaxResidualWarpFits                 int     `json:"max_residual_warp_fits"`
+	PhotometricModes                    int     `json:"photometric_modes"`
+	MaxPhotometricGeometries            int     `json:"max_photometric_geometries"`
+	MaxPhotometricProbeAttempts         int     `json:"max_photometric_probe_attempts"`
+	MaxBitDiagnosticAttempts            int     `json:"max_bit_diagnostic_attempts"`
+	MaxSpatialDiagnosticCells           int     `json:"max_spatial_diagnostic_cells"`
+	MaxSpatialPhaseProbes               int     `json:"max_spatial_phase_probes"`
+	MaxBlindGlobalPhaseProbes           int     `json:"max_blind_global_phase_probes"`
+	MaxBlindLocalPhaseProbes            int     `json:"max_blind_local_phase_probes"`
+	MaxBlindGuidedPairwiseProbes        int     `json:"max_blind_guided_pairwise_probes"`
+	MaxBlindPairwiseFallbackProbes      int     `json:"max_blind_pairwise_fallback_probes"`
+	MaxBlindLatticePhaseControls        int     `json:"max_blind_lattice_phase_controls"`
+	GlobalUnwrapSearch                  string  `json:"global_unwrap_search"`
+	GlobalUnwrapMaxShift                int     `json:"global_unwrap_max_shift_blocks"`
+	MaxGlobalUnwrapEvaluatedStates      int     `json:"max_global_unwrap_evaluated_states"`
+	SmoothPhaseMinControls              int     `json:"smooth_phase_min_controls"`
+	SmoothPhaseQuadraticMinControls     int     `json:"smooth_phase_quadratic_min_controls"`
+	SmoothPhaseMinMeanConfidence        float64 `json:"smooth_phase_min_mean_confidence"`
+	SmoothPhaseDecodeMinMeanConfidence  float64 `json:"smooth_phase_decode_min_mean_confidence"`
+	SmoothPhaseQuadraticRidge           float64 `json:"smooth_phase_quadratic_ridge"`
+	SmoothPhaseQuadraticMinAbsoluteGain float64 `json:"smooth_phase_quadratic_min_absolute_loo_gain"`
+	SmoothPhaseQuadraticMinRelativeGain float64 `json:"smooth_phase_quadratic_min_relative_loo_gain"`
+	SmoothPhaseMaxFitRMSBlocks          float64 `json:"smooth_phase_max_fit_rms_blocks"`
+	SmoothPhaseMaxLOORMSBlocks          float64 `json:"smooth_phase_max_leave_one_out_rms_blocks"`
+	SmoothPhaseDecodeMaxFitRMS          float64 `json:"smooth_phase_decode_max_fit_rms_blocks"`
+	SmoothPhaseDecodeMaxLOORMS          float64 `json:"smooth_phase_decode_max_leave_one_out_rms_blocks"`
+	MaxSmoothPhaseResamples             int     `json:"max_smooth_phase_resamples"`
+	BaselineAuthMaxPixels               int     `json:"baseline_auth_max_pixels"`
+	MaxFullGridBlocks                   int     `json:"max_full_grid_blocks"`
+	MaxFullGridSampledTiles             int     `json:"max_full_grid_sampled_tiles"`
 }
 
 // DiagnosticTimings reports wall-clock stage timings without affecting decoder behavior.
@@ -120,28 +158,34 @@ type DiagnosticTimings struct {
 // DiagnosticReport is research evidence, not a watermark-detection result.
 // AuthenticatedPayload can become true only through the existing v3 HMAC path.
 type DiagnosticReport struct {
-	Width                    int                                `json:"width"`
-	Height                   int                                `json:"height"`
-	Levels                   []DiagnosticLevel                  `json:"levels"`
-	PrintBoundary            PrintBoundaryEstimate              `json:"print_boundary"`
-	BoundaryPriorUsed        bool                               `json:"boundary_prior_used"`
-	ProjectiveEstimate       DiagnosticProjectiveEstimate       `json:"projective_estimate"`
-	Regions                  []LocalLatticeEstimate             `json:"regions"`
-	GlobalU                  LatticeVector                      `json:"global_u"`
-	GlobalV                  LatticeVector                      `json:"global_v"`
-	GlobalConsistency        float64                            `json:"global_consistency"`
-	ConsensusRegions         int                                `json:"consensus_regions"`
-	ConsensusFraction        float64                            `json:"consensus_fraction"`
-	LatticeEvidence          bool                               `json:"lattice_evidence"`
-	AuthenticationStatus     string                             `json:"authentication_status"`
-	AuthenticatedPayload     bool                               `json:"authenticated_payload"`
-	AuthenticatedMessage     string                             `json:"authenticated_message,omitempty"`
-	AuthenticatedProfile     Profile                            `json:"authenticated_profile,omitempty"`
-	AuthenticationConfidence float64                            `json:"authentication_confidence,omitempty"`
-	ProjectiveAuthentication DiagnosticProjectiveAuthentication `json:"projective_authentication"`
-	Budgets                  DiagnosticBudgets                  `json:"budgets"`
-	Timings                  DiagnosticTimings                  `json:"timings"`
-	Note                     string                             `json:"note"`
+	Width                               int                                `json:"width"`
+	Height                              int                                `json:"height"`
+	Levels                              []DiagnosticLevel                  `json:"levels"`
+	PrintBoundary                       PrintBoundaryEstimate              `json:"print_boundary"`
+	BoundaryPriorUsed                   bool                               `json:"boundary_prior_used"`
+	AdaptiveEscalated                   bool                               `json:"adaptive_escalated"`
+	AdaptiveDivisor                     int                                `json:"adaptive_divisor,omitempty"`
+	AdaptiveReason                      string                             `json:"adaptive_reason,omitempty"`
+	LatticeFirstFallbackUsed            bool                               `json:"lattice_first_fallback_used"`
+	ProjectiveEstimate                  DiagnosticProjectiveEstimate       `json:"projective_estimate"`
+	Regions                             []LocalLatticeEstimate             `json:"regions"`
+	GlobalU                             LatticeVector                      `json:"global_u"`
+	GlobalV                             LatticeVector                      `json:"global_v"`
+	GlobalConsistency                   float64                            `json:"global_consistency"`
+	ConsensusRegions                    int                                `json:"consensus_regions"`
+	ConsensusFraction                   float64                            `json:"consensus_fraction"`
+	LatticeEvidence                     bool                               `json:"lattice_evidence"`
+	AuthenticationStatus                string                             `json:"authentication_status"`
+	BaselineAuthenticationAttempted     bool                               `json:"baseline_authentication_attempted"`
+	BaselineAuthenticationSkippedReason string                             `json:"baseline_authentication_skipped_reason,omitempty"`
+	AuthenticatedPayload                bool                               `json:"authenticated_payload"`
+	AuthenticatedMessage                string                             `json:"authenticated_message,omitempty"`
+	AuthenticatedProfile                Profile                            `json:"authenticated_profile,omitempty"`
+	AuthenticationConfidence            float64                            `json:"authentication_confidence,omitempty"`
+	ProjectiveAuthentication            DiagnosticProjectiveAuthentication `json:"projective_authentication"`
+	Budgets                             DiagnosticBudgets                  `json:"budgets"`
+	Timings                             DiagnosticTimings                  `json:"timings"`
+	Note                                string                             `json:"note"`
 }
 
 type diagnosticPlane struct {
@@ -165,7 +209,7 @@ type diagnosticBasisCandidate struct {
 	candidatesEvaluated int
 }
 
-// DiagnoseGeometry performs the v0.3.0-build3 bounded, key-independent local
+// DiagnoseGeometry performs the v0.3.0-build9 bounded, key-independent local
 // lattice analysis. Optional baseline authentication is deliberately separate:
 // it does not consume lattice estimates and therefore cannot turn a false lattice
 // candidate into an authenticated result.
@@ -188,20 +232,55 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 	coarseCount := diagnosticCoarseCandidateCount()
 	refinedCount := diagnosticCoarseKeep * 3 * 3 * 3 * 3
 	report.Budgets = DiagnosticBudgets{
-		MaxRegions:                   options.RegionsX * options.RegionsY,
-		MaxLevels:                    options.MaxLevels,
-		CoarseBasisCandidates:        coarseCount,
-		RefinedBasisCandidates:       refinedCount,
-		QuickRepetitionCandidates:    coarseCount,
-		FullRepetitionShortlist:      diagnosticRepetitionPool,
-		MaxFullRepetitionCandidates:  2*diagnosticRepetitionPool + 1,
-		MaxPhaseHypotheses:           diagnosticFinePhaseDivisions * diagnosticFinePhaseDivisions,
-		SampleBlocksPerPhase:         diagnosticSampleBlocks * diagnosticSampleBlocks,
-		MaxProjectiveScaleCandidates: diagnosticMaxProjectiveScaleCandidates,
-		MaxProjectiveFullDecodes:     diagnosticMaxProjectiveFullDecodes,
-		MaxPhaseRefineSeeds:          diagnosticMaxPhaseRefineSeeds,
-		MaxPhaseScaleProbes:          diagnosticMaxPhaseRefineSeeds * diagnosticPhaseScaleProbesPerSeed,
-		MaxPhaseHomographyFits:       diagnosticMaxPhaseRefineSeeds,
+		AdaptiveMaxDimension:                diagnosticAdaptiveMaxDimension,
+		AdaptiveMinConsistency:              diagnosticAdaptiveMinConsistency,
+		MaxRegions:                          options.RegionsX * options.RegionsY,
+		MaxLevels:                           options.MaxLevels,
+		CoarseBasisCandidates:               coarseCount,
+		RefinedBasisCandidates:              refinedCount,
+		QuickRepetitionCandidates:           coarseCount,
+		FullRepetitionShortlist:             diagnosticRepetitionPool,
+		MaxFullRepetitionCandidates:         2*diagnosticRepetitionPool + 1,
+		MaxPhaseHypotheses:                  diagnosticFinePhaseDivisions * diagnosticFinePhaseDivisions,
+		SampleBlocksPerPhase:                diagnosticSampleBlocks * diagnosticSampleBlocks,
+		MaxProjectiveScaleCandidates:        diagnosticMaxProjectiveScaleCandidates,
+		MaxProjectiveFullDecodes:            diagnosticMaxProjectiveFullDecodes,
+		MaxPhaseRefineSeeds:                 diagnosticMaxPhaseRefineSeeds,
+		MaxPhaseScaleProbes:                 diagnosticMaxPhaseRefineSeeds * diagnosticPhaseScaleProbesPerSeed,
+		MaxPhaseHomographyFits:              diagnosticMaxPhaseRefineSeeds,
+		MaxFundamentalScaleProbes:           diagnosticFundamentalScaleProbeBudget,
+		MaxSubpixelRefinements:              diagnosticMaxSubpixelRefinements,
+		MaxSubpixelProbeAttempts:            diagnosticMaxSubpixelRefinements * diagnosticSubpixelProbeBudgetPerRefine,
+		MaxResidualWarpFits:                 diagnosticMaxResidualWarpFits,
+		PhotometricModes:                    diagnosticPhotometricModeCount,
+		MaxPhotometricGeometries:            diagnosticMaxPhotometricGeometries,
+		MaxPhotometricProbeAttempts:         diagnosticMaxPhotometricProbeAttempts,
+		MaxBitDiagnosticAttempts:            diagnosticMaxProjectiveFullDecodes,
+		MaxSpatialDiagnosticCells:           diagnosticSpatialGridAxis * diagnosticSpatialGridAxis,
+		MaxSpatialPhaseProbes:               diagnosticSpatialGridAxis * diagnosticSpatialGridAxis * (2*diagnosticSpatialPhaseRadius + 1) * (2*diagnosticSpatialPhaseRadius + 1),
+		MaxBlindGlobalPhaseProbes:           diagnosticMaxBlindGlobalPhaseProbes,
+		MaxBlindLocalPhaseProbes:            diagnosticMaxBlindLocalPhaseProbes,
+		MaxBlindGuidedPairwiseProbes:        diagnosticMaxBlindGuidedPairwiseProbes,
+		MaxBlindPairwiseFallbackProbes:      diagnosticMaxBlindPairwiseFallbackProbes,
+		MaxBlindLatticePhaseControls:        diagnosticSpatialGridAxis * diagnosticSpatialGridAxis,
+		GlobalUnwrapSearch:                  "exact-enumeration",
+		GlobalUnwrapMaxShift:                diagnosticDiscreteUnwrapMaxShift,
+		MaxGlobalUnwrapEvaluatedStates:      2 * diagnosticDiscreteUnwrapMaxAssignmentsPerAxis,
+		SmoothPhaseMinControls:              diagnosticSmoothPhaseMinControls,
+		SmoothPhaseQuadraticMinControls:     diagnosticSmoothPhaseQuadraticMinControls,
+		SmoothPhaseMinMeanConfidence:        diagnosticSmoothPhaseMinMeanConfidence,
+		SmoothPhaseDecodeMinMeanConfidence:  diagnosticSmoothPhaseDecodeMinMeanConfidence,
+		SmoothPhaseQuadraticRidge:           diagnosticSmoothPhaseQuadraticRidge,
+		SmoothPhaseQuadraticMinAbsoluteGain: diagnosticSmoothPhaseQuadraticMinAbsoluteGain,
+		SmoothPhaseQuadraticMinRelativeGain: diagnosticSmoothPhaseQuadraticMinRelativeGain,
+		SmoothPhaseMaxFitRMSBlocks:          diagnosticSmoothPhaseMaxFitRMSBlocks,
+		SmoothPhaseMaxLOORMSBlocks:          diagnosticSmoothPhaseMaxLOORMSBlocks,
+		SmoothPhaseDecodeMaxFitRMS:          diagnosticSmoothPhaseDecodeMaxFitRMSBlocks,
+		SmoothPhaseDecodeMaxLOORMS:          diagnosticSmoothPhaseDecodeMaxLOORMSBlocks,
+		MaxSmoothPhaseResamples:             diagnosticMaxSmoothPhaseResamples,
+		BaselineAuthMaxPixels:               diagnosticBaselineAuthMaxPixels,
+		MaxFullGridBlocks:                   diagnosticMaxFullGridBlocks,
+		MaxFullGridSampledTiles:             diagnosticMaxSampledTiles,
 	}
 
 	pyramidStarted := time.Now()
@@ -222,23 +301,24 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 	latticeStarted := time.Now()
 	pools := make([][]LocalLatticeEstimate, options.RegionsX*options.RegionsY)
 	for _, plane := range planes {
-		for ry := 0; ry < options.RegionsY; ry++ {
-			for rx := 0; rx < options.RegionsX; rx++ {
-				region := diagnosticRegion(plane, rx, ry, options.RegionsX, options.RegionsY)
-				var pageU, pageV LatticeVector
-				useLocalBoundaryPrior := false
-				if report.BoundaryPriorUsed {
-					pageU, pageV, useLocalBoundaryPrior = boundaryExpectedTangents(report.PrintBoundary, rx, ry, options.RegionsX, options.RegionsY)
-				}
-				candidates := estimateDiagnosticBasisPoolWithPrior(plane, region, pageU, pageV, useLocalBoundaryPrior)
-				index := ry*options.RegionsX + rx
-				for _, candidate := range candidates {
-					pools[index] = append(pools[index], diagnosticCandidateToEstimate(candidate, plane, region, rx, ry))
-				}
-			}
-		}
+		appendDiagnosticPlaneCandidates(pools, plane, report.PrintBoundary, report.BoundaryPriorUsed, options.RegionsX, options.RegionsY)
 	}
 	report.Regions, report.GlobalU, report.GlobalV, report.GlobalConsistency, report.ConsensusRegions, report.LatticeEvidence = selectDiagnosticConsensus(pools, report.PrintBoundary, report.BoundaryPriorUsed, options.RegionsX, options.RegionsY)
+
+	// Build6 adaptive escalation: when the cheap 1/8 + 1/16 pass is already
+	// borderline but a strong print boundary is unavailable, add at most one
+	// finer diagnostic level (normally 1/4 on a 200 MP photograph). This is a
+	// bounded second look, not a larger geometric candidate bank.
+	if divisor, reason, ok := diagnosticAdaptiveDivisor(report.Levels, report.BoundaryPriorUsed, report.LatticeEvidence, report.GlobalConsistency, bounds.Dx(), bounds.Dy()); ok {
+		plane := buildDiagnosticPlane(src, divisor)
+		planes = append([]*diagnosticPlane{plane}, planes...)
+		report.Levels = append([]DiagnosticLevel{{Divisor: divisor, Width: plane.width, Height: plane.height}}, report.Levels...)
+		appendDiagnosticPlaneCandidates(pools, plane, report.PrintBoundary, false, options.RegionsX, options.RegionsY)
+		report.Regions, report.GlobalU, report.GlobalV, report.GlobalConsistency, report.ConsensusRegions, report.LatticeEvidence = selectDiagnosticConsensus(pools, report.PrintBoundary, false, options.RegionsX, options.RegionsY)
+		report.AdaptiveEscalated = true
+		report.AdaptiveDivisor = divisor
+		report.AdaptiveReason = reason
+	}
 	if len(pools) > 0 {
 		report.ConsensusFraction = float64(report.ConsensusRegions) / float64(len(pools))
 	}
@@ -247,6 +327,12 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 	projectiveStarted := time.Now()
 	if report.BoundaryPriorUsed {
 		report.ProjectiveEstimate = estimateDiagnosticProjective(report.PrintBoundary, pools, report.Regions, report.GlobalConsistency, options.RegionsX, options.RegionsY)
+	} else if report.LatticeEvidence && diagnosticBoundaryCandidateUsable(report.PrintBoundary, bounds.Dx(), bounds.Dy()) {
+		// A weak physical boundary may initialize geometry only after lattice
+		// evidence exists. It remains non-evidence and is never allowed to turn
+		// an image into a watermark detection by itself.
+		report.ProjectiveEstimate = estimateDiagnosticProjectiveWeakBoundary(report.PrintBoundary, pools, report.Regions, report.GlobalConsistency, options.RegionsX, options.RegionsY)
+		report.LatticeFirstFallbackUsed = report.ProjectiveEstimate.Available
 	}
 	report.Timings.ProjectiveFitMilliseconds = time.Since(projectiveStarted).Milliseconds()
 
@@ -255,7 +341,11 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 		if len(key) < 8 {
 			report.AuthenticationStatus = "invalid-key"
 		} else {
-			baselineAttempted := !exceedsPixelLimit(bounds.Dx(), bounds.Dy(), maxSearchPixels)
+			baselineAttempted := !exceedsPixelLimit(bounds.Dx(), bounds.Dy(), diagnosticBaselineAuthMaxPixels)
+			report.BaselineAuthenticationAttempted = baselineAttempted
+			if !baselineAttempted {
+				report.BaselineAuthenticationSkippedReason = "diagnostic-pixel-budget"
+			}
 			if baselineAttempted {
 				payload, info, err := ExtractWithInfo(src, key)
 				if err == nil {
@@ -324,6 +414,59 @@ func normalizeDiagnosticOptions(options DiagnosticOptions) DiagnosticOptions {
 		options.MaxLevels = 3
 	}
 	return options
+}
+
+func appendDiagnosticPlaneCandidates(pools [][]LocalLatticeEstimate, plane *diagnosticPlane, boundary PrintBoundaryEstimate, useBoundaryPrior bool, regionsX, regionsY int) {
+	if plane == nil {
+		return
+	}
+	for ry := 0; ry < regionsY; ry++ {
+		for rx := 0; rx < regionsX; rx++ {
+			region := diagnosticRegion(plane, rx, ry, regionsX, regionsY)
+			var pageU, pageV LatticeVector
+			useLocalBoundaryPrior := false
+			if useBoundaryPrior {
+				pageU, pageV, useLocalBoundaryPrior = boundaryExpectedTangents(boundary, rx, ry, regionsX, regionsY)
+			}
+			candidates := estimateDiagnosticBasisPoolWithPrior(plane, region, pageU, pageV, useLocalBoundaryPrior)
+			index := ry*regionsX + rx
+			for _, candidate := range candidates {
+				pools[index] = append(pools[index], diagnosticCandidateToEstimate(candidate, plane, region, rx, ry))
+			}
+		}
+	}
+}
+
+func diagnosticAdaptiveDivisor(levels []DiagnosticLevel, boundaryPriorUsed, latticeEvidence bool, consistency float64, width, height int) (int, string, bool) {
+	if boundaryPriorUsed || latticeEvidence || consistency < diagnosticAdaptiveMinConsistency || len(levels) == 0 {
+		return 0, "", false
+	}
+	finest := levels[0].Divisor
+	for _, level := range levels[1:] {
+		if level.Divisor < finest {
+			finest = level.Divisor
+		}
+	}
+	if finest <= 1 {
+		return 0, "", false
+	}
+	divisor := finest / 2
+	if divisor < 1 {
+		divisor = 1
+	}
+	largest := width
+	if height > largest {
+		largest = height
+	}
+	if (largest+divisor-1)/divisor > diagnosticAdaptiveMaxDimension {
+		return 0, "", false
+	}
+	for _, level := range levels {
+		if level.Divisor == divisor {
+			return 0, "", false
+		}
+	}
+	return divisor, "no-strong-boundary+borderline-lattice", true
 }
 
 func diagnosticDivisors(width, height, maxDimension, maxLevels int) []int {

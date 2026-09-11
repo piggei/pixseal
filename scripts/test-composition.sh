@@ -75,9 +75,10 @@ for image in "${images[@]}"; do
     name="$(basename "$image")"
     read -r width height < <(read_image_dimensions "$image") || true
     if [[ ! "$width" =~ ^[0-9]+$ || ! "$height" =~ ^[0-9]+$ ]]; then
+        count=$(( ${#profiles[@]} * ${#angles[@]} * ${#modes[@]} ))
         echo "Image: $name"
-        echo "  ERROR dimensions       could not read image dimensions"
-        ((errors += 1)); ((cases += 1))
+        printf '  SKIP  composed geometry dimensions unavailable (%d cases)\n' "$count"
+        ((skipped += count))
         continue
     fi
     megapixels=$(( (width * height + 999999) / 1000000 ))

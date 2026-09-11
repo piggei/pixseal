@@ -669,10 +669,13 @@ func diagnose(args []string) error {
 	}
 	fmt.Println()
 	fmt.Printf("Print boundary:           detected=%t confidence=%.3f prior=%t\n", report.PrintBoundary.Detected, report.PrintBoundary.Confidence, report.BoundaryPriorUsed)
+	if report.AdaptiveEscalated {
+		fmt.Printf("Adaptive lattice:         escalated=true divisor=1/%d reason=%s\n", report.AdaptiveDivisor, report.AdaptiveReason)
+	}
 	if report.ProjectiveEstimate.Available {
-		fmt.Printf("Projective initializer:   confidence=%.3f canonical≈%.1fx%.1f candidates=%d\n",
-			report.ProjectiveEstimate.Confidence, report.ProjectiveEstimate.CanonicalWidthPixels,
-			report.ProjectiveEstimate.CanonicalHeightPixels, len(report.ProjectiveEstimate.ScaleCandidates))
+		fmt.Printf("Projective initializer:   source=%s confidence=%.3f canonical≈%.1fx%.1f candidates=%d fallback=%t\n",
+			report.ProjectiveEstimate.Source, report.ProjectiveEstimate.Confidence, report.ProjectiveEstimate.CanonicalWidthPixels,
+			report.ProjectiveEstimate.CanonicalHeightPixels, len(report.ProjectiveEstimate.ScaleCandidates), report.LatticeFirstFallbackUsed)
 	}
 	fmt.Printf("Local regions:            %d\n", len(report.Regions))
 	for _, region := range report.Regions {
@@ -693,6 +696,71 @@ func diagnose(args []string) error {
 			report.ProjectiveAuthentication.CandidatesProbed, report.ProjectiveAuthentication.FullDecodeAttempts,
 			report.ProjectiveAuthentication.BestSyncProfile, report.ProjectiveAuthentication.BestSyncFraction,
 			report.ProjectiveAuthentication.BestSyncZScore)
+		if report.ProjectiveAuthentication.BitDiagnosticAttempts > 0 {
+			fmt.Printf("Bit-channel diagnostic:   attempts=%d best=%s/%s/%s known-coded-errors=%d/42 multi-error-words=%d/6 post-ECC-header-errors=%d/24 syndrome=%.3f wrong/correct-margin=%.3f\n",
+				report.ProjectiveAuthentication.BitDiagnosticAttempts,
+				report.ProjectiveAuthentication.BestBitGeometrySource,
+				report.ProjectiveAuthentication.BestBitMode,
+				report.ProjectiveAuthentication.BestBitProfile,
+				report.ProjectiveAuthentication.BestKnownHeaderErrors,
+				report.ProjectiveAuthentication.BestKnownHeaderMulti,
+				report.ProjectiveAuthentication.BestPostECCHeaderErrors,
+				report.ProjectiveAuthentication.BestSyndromeFraction,
+				report.ProjectiveAuthentication.BestWrongMarginRatio)
+			if report.ProjectiveAuthentication.SmoothPhaseFitAttempts > 0 {
+				fmt.Printf("Smooth phase diagnostic:  attempts=%d eligible=%d resamples=%d decodes=%d best=%s/%s/%s model=%s source=%s controls=%d fit=%.2f loo=%.2f base=%d/24 corrected=%d/24 gain=%d\n",
+					report.ProjectiveAuthentication.SmoothPhaseFitAttempts,
+					report.ProjectiveAuthentication.SmoothPhaseEligibleFits,
+					report.ProjectiveAuthentication.SmoothPhaseResampleAttempts,
+					report.ProjectiveAuthentication.SmoothPhaseDecodeAttempts,
+					report.ProjectiveAuthentication.BestSmoothPhaseGeometry,
+					report.ProjectiveAuthentication.BestSmoothPhaseMode,
+					report.ProjectiveAuthentication.BestSmoothPhaseProfile,
+					report.ProjectiveAuthentication.BestSmoothPhaseModel,
+					report.ProjectiveAuthentication.BestSmoothPhaseControlSource,
+					report.ProjectiveAuthentication.BestSmoothPhaseControls,
+					report.ProjectiveAuthentication.BestSmoothPhaseFitRMS,
+					report.ProjectiveAuthentication.BestSmoothPhaseLOORMS,
+					report.ProjectiveAuthentication.BestSmoothPhaseBasePostECC,
+					report.ProjectiveAuthentication.BestSmoothPhasePostECC,
+					report.ProjectiveAuthentication.BestSmoothPhaseImprovement)
+			}
+			if report.ProjectiveAuthentication.BestSpatialBlindCells > 0 {
+				fmt.Printf("Blind phase observer:    method=%s profile=%s global=(%d,%d) score=%.3f cells=%d mean-confidence=%.3f oracle-distance=%.2f blocks\n",
+					report.ProjectiveAuthentication.BestSpatialBlindMethod,
+					report.ProjectiveAuthentication.BestSpatialBlindProfile,
+					report.ProjectiveAuthentication.BestSpatialBlindGlobalX,
+					report.ProjectiveAuthentication.BestSpatialBlindGlobalY,
+					report.ProjectiveAuthentication.BestSpatialBlindGlobalScore,
+					report.ProjectiveAuthentication.BestSpatialBlindCells,
+					report.ProjectiveAuthentication.BestSpatialBlindMeanConfidence,
+					report.ProjectiveAuthentication.BestSpatialBlindMeanOracleDistance)
+			}
+			if report.ProjectiveAuthentication.SpatialDiagnosticAttempts > 0 {
+				fmt.Printf("Spatial bit diagnostic: attempts=%d best=%s/%s/%s cells=%d tile-sign-agreement=%.3f tile-unstable=%.3f stable-wrong=%d/42 mixed=%d/42 majority-coded-errors=%d/42 majority-post-ECC=%d/24 gain=%d all-coded-agreement=%.3f unstable=%.3f local-phase-same=%d/%d mean-offset=%.2f max-offset=%.2f local-agreement=%.3f local-unstable=%.3f local-majority-post-ECC=%d/24\n",
+					report.ProjectiveAuthentication.SpatialDiagnosticAttempts,
+					report.ProjectiveAuthentication.BestSpatialGeometrySource,
+					report.ProjectiveAuthentication.BestSpatialMode,
+					report.ProjectiveAuthentication.BestSpatialProfile,
+					report.ProjectiveAuthentication.BestSpatialCells,
+					report.ProjectiveAuthentication.BestSpatialTileAgreement,
+					report.ProjectiveAuthentication.BestSpatialTileUnstable,
+					report.ProjectiveAuthentication.BestSpatialStableWrongBits,
+					report.ProjectiveAuthentication.BestSpatialMixedBits,
+					report.ProjectiveAuthentication.BestSpatialMajorityErrors,
+					report.ProjectiveAuthentication.BestSpatialMajorityPostECC,
+					report.ProjectiveAuthentication.BestSpatialMajorityGain,
+					report.ProjectiveAuthentication.BestSpatialAllAgreement,
+					report.ProjectiveAuthentication.BestSpatialUnstableFraction,
+					report.ProjectiveAuthentication.BestSpatialLocalPhaseSame,
+					report.ProjectiveAuthentication.BestSpatialCells,
+					report.ProjectiveAuthentication.BestSpatialMeanPhaseOffset,
+					report.ProjectiveAuthentication.BestSpatialMaxPhaseOffset,
+					report.ProjectiveAuthentication.BestSpatialLocalAgreement,
+					report.ProjectiveAuthentication.BestSpatialLocalUnstable,
+					report.ProjectiveAuthentication.BestSpatialLocalMajorityECC)
+			}
+		}
 	}
 	if report.AuthenticatedPayload {
 		fmt.Printf("Authenticated profile:    %s\n", report.AuthenticatedProfile)

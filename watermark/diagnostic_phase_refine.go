@@ -45,13 +45,20 @@ func diagnosticProjectivePhaseConsensus(src image.Image, boundary PrintBoundaryE
 }
 
 func diagnosticProjectivePhaseConsensusWithHomography(src image.Image, width, height int, h homography, decoder *decoder) diagnosticPhaseConsensus {
+	return diagnosticProjectivePhaseConsensusWithMapper(src, width, height, diagnosticProjectiveMapper{h: h}, decoder, diagnosticPhaseTilesPerAxis)
+}
+
+func diagnosticProjectivePhaseConsensusWithMapper(src image.Image, width, height int, mapper diagnosticProjectiveMapper, decoder *decoder, tilesPerAxis int) diagnosticPhaseConsensus {
 	bw, bh := width/blockSize, height/blockSize
 	fullTilesX, fullTilesY := bw/tileWidth, bh/tileHeight
 	if fullTilesX <= 0 || fullTilesY <= 0 {
 		return diagnosticPhaseConsensus{}
 	}
-	tileXs := diagnosticSpacedIndices(fullTilesX, diagnosticPhaseTilesPerAxis)
-	tileYs := diagnosticSpacedIndices(fullTilesY, diagnosticPhaseTilesPerAxis)
+	if tilesPerAxis <= 0 {
+		tilesPerAxis = diagnosticPhaseTilesPerAxis
+	}
+	tileXs := diagnosticSpacedIndices(fullTilesX, tilesPerAxis)
+	tileYs := diagnosticSpacedIndices(fullTilesY, tilesPerAxis)
 	byProfile := make(map[Profile][]diagnosticPhaseObservation, len(decoder.v3Patterns))
 	for _, tileY := range tileYs {
 		for _, tileX := range tileXs {
@@ -61,7 +68,7 @@ func diagnosticProjectivePhaseConsensusWithHomography(src image.Image, width, he
 				for logicalX := 0; logicalX < tileWidth; logicalX++ {
 					bx := logicalX + tileX*tileWidth
 					by := logicalY + tileY*tileHeight
-					margin, ok := diagnosticReadProjectiveBlock(src, h, float64(bx*blockSize), float64(by*blockSize))
+					margin, ok := diagnosticReadProjectiveBlockWithMapper(src, mapper, float64(bx*blockSize), float64(by*blockSize))
 					if !ok {
 						valid = false
 						break
@@ -251,11 +258,13 @@ func diagnosticHomographyFromFourPoints(src, dst [4][2]float64) (homography, boo
 }
 
 type diagnosticAuthCandidate struct {
-	source    string
-	candidate DiagnosticScaleCandidate
-	phase     diagnosticPhaseConsensus
-	h         homography
-	probe     diagnosticProjectiveProbe
+	source           string
+	candidate        DiagnosticScaleCandidate
+	phase            diagnosticPhaseConsensus
+	mapper           diagnosticProjectiveMapper
+	probe            diagnosticProjectiveProbe
+	residualControls int
+	residualRMS      float64
 }
 
 func sortDiagnosticAuthCandidates(candidates []diagnosticAuthCandidate) {

@@ -319,7 +319,7 @@ func boundaryQuadSane(plane *boundaryColorPlane, tl, tr, br, bl ImagePoint) bool
 }
 
 func boundaryExpectedTangents(boundary PrintBoundaryEstimate, regionX, regionY, regionsX, regionsY int) (LatticeVector, LatticeVector, bool) {
-	if !boundary.Detected || regionsX <= 0 || regionsY <= 0 {
+	if regionsX <= 0 || regionsY <= 0 {
 		return LatticeVector{}, LatticeVector{}, false
 	}
 	fx := (float64(regionX) + 0.5) / float64(regionsX)

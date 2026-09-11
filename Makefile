@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 PIXSEAL := dist/pixseal
 ORIGINAL_PICS_DIR := original pics
-TEST_KEY ?= pixseal-test-key
+TEST_KEY ?= Piccotti
 TEST_PROFILES ?= robust balanced capacity
 TEST_MESSAGE_ROBUST ?= PixSeal robust
 TEST_MESSAGE_BALANCED ?= PixSeal balanced profile test
@@ -40,12 +40,21 @@ PERSPECTIVE_MAX_MPIX ?= 50
 PRINT_CAMERA_DIR ?= print-camera private
 PRINT_CAMERA_KEY ?= Piccotti
 PRINT_CAMERA_TIMEOUT ?= 180
+PRINT_SCAN_DIR ?= print-scan private
 ALL_TEST_REPORT ?=
 ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: build test test-unit release-unit research-unit lattice-estimator-test homography-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
+.PHONY: test-list private-corpus-manifest print-scan-test build test test-unit release-unit research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test smooth-phase-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
+
+# Print a categorized index of all test/check targets without running them.
+test-list:
+	@bash ./scripts/test-list.sh
+
+# Generate a local, Git-ignored SHA-256 manifest for the private physical corpus.
+private-corpus-manifest:
+	@PRINT_CAMERA_DIR="$(PRINT_CAMERA_DIR)" PRINT_SCAN_DIR="$(PRINT_SCAN_DIR)" bash ./scripts/private-corpus-manifest.sh
 
 # Default target: build the native executable for the current platform.
 build: $(PIXSEAL)
@@ -82,16 +91,63 @@ lattice-estimator-test:
 # regressions. These stay research-only and do not alter ExtractWithInfo.
 homography-test:
 	@echo "Running v0.3 bounded homography/projective regressions..."
-	@go test ./watermark -run 'Test(PrintBoundaryEstimatorFindsSyntheticPrint|HomographyForPrintBoundaryMapsCorners|DiagnosticScaleClusteringRewardsCrossRegionSupport|DiagnosticProjectiveVirtualAuthentication|DiagnosticPhaseConsensusPrefersExactScale|DiagnosticPhaseDifferenceIsBoundedModuloTile)$$' -count=1
+	@go test ./watermark -run 'Test(PrintBoundaryEstimatorFindsSyntheticPrint|HomographyForPrintBoundaryMapsCorners|DiagnosticScaleClusteringRewardsCrossRegionSupport|DiagnosticProjectiveVirtualAuthentication|DiagnosticPhaseConsensusPrefersExactScale|DiagnosticPhaseDifferenceIsBoundedModuloTile|DiagnosticFundamentalSelectionRejectsHigherFrequencyAliases|DiagnosticSubpixelOffsetCorrectsBoundaryPhase|DiagnosticResidualWarpFitsSmoothSubBlockField|DiagnosticAdaptiveEscalationAddsOneFinerLevel|DiagnosticWeakBoundaryRequiresPlausibleQuad)$$' -count=1
 
-# Private real print -> paper -> smartphone regression gate. The two original
-# photographs are never distributed with the source tree. Missing corpus is a
-# clean SKIP; when present, PASS requires an authenticated Format v3 HMAC.
+photometric-test:
+	@echo "Running v0.3 bounded print-camera photometric regressions..."
+	@go test ./watermark -run '^TestDiagnosticPhotometric' -count=1
+
+bit-channel-test:
+	@echo "Running v0.3 protected-bit/ECC diagnostics..."
+	@go test ./watermark -run '^TestDiagnosticBitChannel' -count=1
+
+reliability-test:
+	@echo "Running v0.3 bounded reliability/full-grid regressions..."
+	@go test ./watermark -run '^TestDiagnostic(SoftHamming|Reliability|FullGridSampling)' -count=1
+
+spatial-channel-test:
+	@echo "Running v0.3 spatial protected-bit stability regressions..."
+	@go test ./watermark -run '^TestDiagnostic(SpatialBitEvidence|FullGridSamplingCollectsSpatialCells)' -count=1
+
+phase-surface-test:
+	@echo "Running v0.3 confidence-weighted phase-surface regressions..."
+	@go test ./watermark -run '^TestDiagnostic(PhaseSurface|SmoothPhaseConfidence|SmoothPhaseQuadratic|SmoothPhaseHuber)' -count=1
+
+blind-phase-test:
+	@echo "Running v0.3 key-independent blind phase regressions..."
+	@go test ./watermark -run '^TestDiagnosticBlind' -count=1
+
+lattice-phase-test:
+	@echo "Running v0.3 local fractional lattice-phase regressions..."
+	@go test ./watermark -run '^TestDiagnostic(LocalLatticeFractionalPhase|BlindLatticeFusion)' -count=1
+
+global-unwrap-test:
+	@echo "Running v0.3 global discrete phase-unwrapping regressions..."
+	@go test ./watermark -run '^TestDiagnosticGlobalDiscreteUnwrap' -count=1
+
+smooth-phase-test:
+	@echo "Running v0.3 bounded smooth phase-field regressions..."
+	@go test ./watermark -run '^TestDiagnosticSmoothPhase' -count=1
+
+# Private real print -> paper -> smartphone regression gate. Every PNG/JPEG in
+# the private corpus directory is tested automatically. The photographs are
+# never distributed with the source tree. Missing/empty corpus is a clean SKIP;
+# when present, each image PASS requires an authenticated Format v3 HMAC.
 print-camera-test: build
 	@PIXSEAL="$(abspath $(PIXSEAL))" \
-	PRINT_CAMERA_DIR="$(CURDIR)/$(PRINT_CAMERA_DIR)" \
+	PRINT_CAMERA_DIR="$(PRINT_CAMERA_DIR)" \
 	PRINT_CAMERA_KEY="$(PRINT_CAMERA_KEY)" \
 	PRINT_CAMERA_TIMEOUT="$(PRINT_CAMERA_TIMEOUT)" \
+	bash ./scripts/test-print-camera.sh
+
+# Optional private print -> scanner corpus. Uses the same HMAC-only semantics as
+# print-camera-test but keeps acquisition methods separate in the filesystem.
+print-scan-test: build
+	@PIXSEAL="$(abspath $(PIXSEAL))" \
+	PRINT_CAMERA_DIR="$(PRINT_SCAN_DIR)" \
+	PRINT_CAMERA_KEY="$(PRINT_CAMERA_KEY)" \
+	PRINT_CAMERA_TIMEOUT="$(PRINT_CAMERA_TIMEOUT)" \
+	PRINT_CAMERA_LABEL="Print-scan" \
 	bash ./scripts/test-print-camera.sh
 
 # Deterministic Go regressions for experimental geometry. all-test runs this

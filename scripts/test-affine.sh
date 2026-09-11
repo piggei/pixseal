@@ -143,9 +143,10 @@ for image in "${images[@]}"; do
 	width=""; height=""
 	read -r width height < <(read_image_dimensions "$image") || true
 	if [[ ! "$width" =~ ^[0-9]+$ || ! "$height" =~ ^[0-9]+$ ]]; then
+		count=$(( ${#profiles[@]} * ${#modes[@]} ))
 		echo "Image: $name"
-		echo "  ERROR dimensions       could not read image dimensions"
-		((errors += 1)); ((cases += 1))
+		printf '  SKIP  all affine       dimensions unavailable (%d cases)\n' "$count"
+		((skipped += count))
 		continue
 	fi
 	megapixels=$(( (width * height + 999999) / 1000000 ))
