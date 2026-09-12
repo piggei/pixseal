@@ -49,46 +49,78 @@ type DiagnosticBitChannelEvidence struct {
 // DiagnosticSpatialCellEvidence reports the known-prefix error count observed
 // in one coarse 3x3 spatial cell. It never authenticates payload data.
 type DiagnosticSpatialCellEvidence struct {
-	RegionX                        int     `json:"region_x"`
-	RegionY                        int     `json:"region_y"`
-	KnownHeaderCodedErrors         int     `json:"known_header_coded_bit_errors"`
-	PostECCHeaderErrors            int     `json:"post_ecc_known_header_bit_errors"`
-	LocalPhaseX                    int     `json:"local_phase_x"`
-	LocalPhaseY                    int     `json:"local_phase_y"`
-	LocalPhaseOffsetX              int     `json:"local_phase_offset_x"`
-	LocalPhaseOffsetY              int     `json:"local_phase_offset_y"`
-	LocalPhaseSyncFraction         float64 `json:"local_phase_sync_fraction"`
-	LocalPhaseSubblockAvailable    bool    `json:"local_phase_subblock_available"`
-	LocalPhaseSubblockOffsetX      float64 `json:"local_phase_subblock_offset_x"`
-	LocalPhaseSubblockOffsetY      float64 `json:"local_phase_subblock_offset_y"`
-	LocalPhasePeakScore            float64 `json:"local_phase_peak_score"`
-	LocalPhaseSecondScore          float64 `json:"local_phase_second_score"`
-	LocalPhaseConfidence           float64 `json:"local_phase_confidence"`
-	LocalPhaseAtSearchBoundary     bool    `json:"local_phase_at_search_boundary"`
-	LocalPhaseKnownCodedErrors     int     `json:"local_phase_known_header_coded_bit_errors"`
-	LocalPhasePostECCHeaderErrors  int     `json:"local_phase_post_ecc_known_header_bit_errors"`
-	BlindPhaseAvailable            bool    `json:"blind_phase_available"`
-	BlindPhaseOffsetX              float64 `json:"blind_phase_offset_x"`
-	BlindPhaseOffsetY              float64 `json:"blind_phase_offset_y"`
-	BlindPhaseConfidence           float64 `json:"blind_phase_confidence"`
-	BlindPhasePairSupport          int     `json:"blind_phase_pair_support"`
-	BlindPhaseResidualBlocks       float64 `json:"blind_phase_pair_residual_blocks"`
-	BlindSecondaryAvailable        bool    `json:"blind_secondary_available"`
-	BlindSecondaryOffsetX          float64 `json:"blind_secondary_offset_x"`
-	BlindSecondaryOffsetY          float64 `json:"blind_secondary_offset_y"`
-	BlindSecondaryConfidence       float64 `json:"blind_secondary_confidence"`
-	BlindObserverDistanceBlocks    float64 `json:"blind_observer_distance_blocks"`
-	BlindCycleSlipAdjusted         bool    `json:"blind_cycle_slip_adjusted"`
-	BlindLatticePhaseAvailable     bool    `json:"blind_lattice_phase_available"`
-	BlindLatticePhaseOffsetX       float64 `json:"blind_lattice_phase_offset_x"`
-	BlindLatticePhaseOffsetY       float64 `json:"blind_lattice_phase_offset_y"`
-	BlindLatticePhaseConfidence    float64 `json:"blind_lattice_phase_confidence"`
-	BlindLatticeFractionDistance   float64 `json:"blind_lattice_fraction_distance_blocks"`
-	BlindLatticeCycleSlipAdjusted  bool    `json:"blind_lattice_cycle_slip_adjusted"`
-	BlindGlobalUnwrapAdjusted      bool    `json:"blind_global_unwrap_adjusted"`
-	BlindGlobalUnwrapShiftX        int     `json:"blind_global_unwrap_shift_x"`
-	BlindGlobalUnwrapShiftY        int     `json:"blind_global_unwrap_shift_y"`
-	BlindPhaseOracleDistanceBlocks float64 `json:"blind_phase_oracle_distance_blocks"`
+	RegionX                         int     `json:"region_x"`
+	RegionY                         int     `json:"region_y"`
+	KnownHeaderCodedErrors          int     `json:"known_header_coded_bit_errors"`
+	PostECCHeaderErrors             int     `json:"post_ecc_known_header_bit_errors"`
+	LocalPhaseX                     int     `json:"local_phase_x"`
+	LocalPhaseY                     int     `json:"local_phase_y"`
+	LocalPhaseOffsetX               int     `json:"local_phase_offset_x"`
+	LocalPhaseOffsetY               int     `json:"local_phase_offset_y"`
+	LocalPhaseSyncFraction          float64 `json:"local_phase_sync_fraction"`
+	LocalPhaseSubblockAvailable     bool    `json:"local_phase_subblock_available"`
+	LocalPhaseSubblockOffsetX       float64 `json:"local_phase_subblock_offset_x"`
+	LocalPhaseSubblockOffsetY       float64 `json:"local_phase_subblock_offset_y"`
+	LocalPhasePeakScore             float64 `json:"local_phase_peak_score"`
+	LocalPhaseSecondScore           float64 `json:"local_phase_second_score"`
+	LocalPhaseConfidence            float64 `json:"local_phase_confidence"`
+	LocalPhaseAtSearchBoundary      bool    `json:"local_phase_at_search_boundary"`
+	LocalPhaseKnownCodedErrors      int     `json:"local_phase_known_header_coded_bit_errors"`
+	LocalPhasePostECCHeaderErrors   int     `json:"local_phase_post_ecc_known_header_bit_errors"`
+	BlindPhaseAvailable             bool    `json:"blind_phase_available"`
+	BlindPhaseOffsetX               float64 `json:"blind_phase_offset_x"`
+	BlindPhaseOffsetY               float64 `json:"blind_phase_offset_y"`
+	BlindPhaseConfidence            float64 `json:"blind_phase_confidence"`
+	BlindPhasePairSupport           int     `json:"blind_phase_pair_support"`
+	BlindPhaseResidualBlocks        float64 `json:"blind_phase_pair_residual_blocks"`
+	BlindSecondaryAvailable         bool    `json:"blind_secondary_available"`
+	BlindSecondaryOffsetX           float64 `json:"blind_secondary_offset_x"`
+	BlindSecondaryOffsetY           float64 `json:"blind_secondary_offset_y"`
+	BlindSecondaryConfidence        float64 `json:"blind_secondary_confidence"`
+	BlindObserverDistanceBlocks     float64 `json:"blind_observer_distance_blocks"`
+	BlindCycleSlipAdjusted          bool    `json:"blind_cycle_slip_adjusted"`
+	BlindLatticePhaseAvailable      bool    `json:"blind_lattice_phase_available"`
+	BlindLatticePhaseOffsetX        float64 `json:"blind_lattice_phase_offset_x"`
+	BlindLatticePhaseOffsetY        float64 `json:"blind_lattice_phase_offset_y"`
+	BlindLatticePhaseConfidence     float64 `json:"blind_lattice_phase_confidence"`
+	BlindLatticeFractionDistance    float64 `json:"blind_lattice_fraction_distance_blocks"`
+	BlindLatticeCycleSlipAdjusted   bool    `json:"blind_lattice_cycle_slip_adjusted"`
+	BlindGlobalUnwrapAdjusted       bool    `json:"blind_global_unwrap_adjusted"`
+	BlindGlobalUnwrapShiftX         int     `json:"blind_global_unwrap_shift_x"`
+	BlindGlobalUnwrapShiftY         int     `json:"blind_global_unwrap_shift_y"`
+	BlindGlobalUnwrapProposedShiftX int     `json:"blind_global_unwrap_proposed_shift_x"`
+	BlindGlobalUnwrapProposedShiftY int     `json:"blind_global_unwrap_proposed_shift_y"`
+	BlindCrossfitAToBAvailable      bool    `json:"blind_crossfit_a_to_b_available"`
+	BlindCrossfitAToBCycleX         int     `json:"blind_crossfit_a_to_b_cycle_x"`
+	BlindCrossfitAToBCycleY         int     `json:"blind_crossfit_a_to_b_cycle_y"`
+	BlindCrossfitAToBConfidence     float64 `json:"blind_crossfit_a_to_b_confidence"`
+	BlindCrossfitBToAAvailable      bool    `json:"blind_crossfit_b_to_a_available"`
+	BlindCrossfitBToACycleX         int     `json:"blind_crossfit_b_to_a_cycle_x"`
+	BlindCrossfitBToACycleY         int     `json:"blind_crossfit_b_to_a_cycle_y"`
+	BlindCrossfitBToAConfidence     float64 `json:"blind_crossfit_b_to_a_confidence"`
+	BlindCrossfitCycleAgreement     bool    `json:"blind_crossfit_cycle_agreement"`
+	BlindStabilityAvailable         bool    `json:"blind_stability_available"`
+	BlindStabilityObservations      int     `json:"blind_stability_observations"`
+	BlindStabilityUniqueCycles      int     `json:"blind_stability_unique_cycles"`
+	BlindStabilityModalCycleX       int     `json:"blind_stability_modal_cycle_x"`
+	BlindStabilityModalCycleY       int     `json:"blind_stability_modal_cycle_y"`
+	BlindStabilityModalCount        int     `json:"blind_stability_modal_count"`
+	BlindStabilityModalFraction     float64 `json:"blind_stability_modal_fraction"`
+	BlindStabilitySupportedObs      int     `json:"blind_stability_supported_observations"`
+	BlindStabilitySupportedUnique   int     `json:"blind_stability_supported_unique_cycles"`
+	BlindStabilitySupportedModalX   int     `json:"blind_stability_supported_modal_cycle_x"`
+	BlindStabilitySupportedModalY   int     `json:"blind_stability_supported_modal_cycle_y"`
+	BlindStabilitySupportedCount    int     `json:"blind_stability_supported_modal_count"`
+	BlindStabilitySupportedFraction float64 `json:"blind_stability_supported_modal_fraction"`
+	BlindCycleAnchorAvailable       bool    `json:"blind_cycle_anchor_available"`
+	BlindCycleAnchorOffsetX         float64 `json:"blind_cycle_anchor_offset_x"`
+	BlindCycleAnchorOffsetY         float64 `json:"blind_cycle_anchor_offset_y"`
+	BlindCycleAnchorConfidence      float64 `json:"blind_cycle_anchor_confidence"`
+	BlindCycleAnchorTop1CycleX      int     `json:"blind_cycle_anchor_top1_cycle_x"`
+	BlindCycleAnchorTop1CycleY      int     `json:"blind_cycle_anchor_top1_cycle_y"`
+	BlindCycleAnchorSecondCycleX    int     `json:"blind_cycle_anchor_second_cycle_x"`
+	BlindCycleAnchorSecondCycleY    int     `json:"blind_cycle_anchor_second_cycle_y"`
+	BlindPhaseOracleDistanceBlocks  float64 `json:"blind_phase_oracle_distance_blocks"`
 }
 
 // DiagnosticSpatialBitEvidence measures whether protected coded-bit signs are
@@ -97,96 +129,164 @@ type DiagnosticSpatialCellEvidence struct {
 // agreement metrics remain message-independent. These numbers are research
 // evidence only and cannot authenticate a watermark.
 type DiagnosticSpatialBitEvidence struct {
-	Cells                                   int                             `json:"cells"`
-	MeanTilePositionSignAgreement           float64                         `json:"mean_tile_position_sign_agreement"`
-	UnstableTilePositions                   int                             `json:"unstable_tile_positions"`
-	UnstableTilePositionFraction            float64                         `json:"unstable_tile_position_fraction"`
-	KnownHeaderCodedBits                    int                             `json:"known_header_coded_bits"`
-	KnownHeaderStableCorrectBits            int                             `json:"known_header_stable_correct_bits"`
-	KnownHeaderStableWrongBits              int                             `json:"known_header_stable_wrong_bits"`
-	KnownHeaderMixedBits                    int                             `json:"known_header_mixed_bits"`
-	KnownHeaderMajorityCodedErrors          int                             `json:"known_header_majority_coded_bit_errors"`
-	KnownHeaderMajorityPostECCErrors        int                             `json:"known_header_majority_post_ecc_bit_errors"`
-	KnownHeaderAggregatePostECCErrors       int                             `json:"known_header_aggregate_post_ecc_bit_errors"`
-	KnownHeaderMajorityECCImprovement       int                             `json:"known_header_majority_ecc_improvement"`
-	MeanKnownHeaderCorrectCellFraction      float64                         `json:"mean_known_header_correct_cell_fraction"`
-	MeanAllCodedBitAgreement                float64                         `json:"mean_all_coded_bit_agreement"`
-	UnstableAllCodedBits                    int                             `json:"unstable_all_coded_bits"`
-	UnstableAllCodedBitFraction             float64                         `json:"unstable_all_coded_bit_fraction"`
-	LocalPhaseCells                         int                             `json:"local_phase_cells"`
-	LocalPhaseSameAsGlobalCells             int                             `json:"local_phase_same_as_global_cells"`
-	MeanLocalPhaseOffsetBlocks              float64                         `json:"mean_local_phase_offset_blocks"`
-	MaxLocalPhaseOffsetBlocks               float64                         `json:"max_local_phase_offset_blocks"`
-	MeanLocalPhaseSubblockOffsetBlocks      float64                         `json:"mean_local_phase_subblock_offset_blocks"`
-	MaxLocalPhaseSubblockOffsetBlocks       float64                         `json:"max_local_phase_subblock_offset_blocks"`
-	MeanLocalPhaseConfidence                float64                         `json:"mean_local_phase_confidence"`
-	MinLocalPhaseConfidence                 float64                         `json:"min_local_phase_confidence"`
-	LocalPhaseStableWrongBits               int                             `json:"local_phase_known_header_stable_wrong_bits"`
-	LocalPhaseMixedBits                     int                             `json:"local_phase_known_header_mixed_bits"`
-	LocalPhaseMajorityCodedErrors           int                             `json:"local_phase_majority_coded_bit_errors"`
-	LocalPhaseMajorityPostECCErrors         int                             `json:"local_phase_majority_post_ecc_bit_errors"`
-	LocalPhaseMeanAllCodedAgreement         float64                         `json:"local_phase_mean_all_coded_bit_agreement"`
-	LocalPhaseUnstableAllCodedFraction      float64                         `json:"local_phase_unstable_all_coded_bit_fraction"`
-	BlindPhaseMethod                        string                          `json:"blind_phase_method,omitempty"`
-	BlindPhaseProfile                       Profile                         `json:"blind_phase_profile,omitempty"`
-	BlindPhaseGlobalX                       int                             `json:"blind_phase_global_x"`
-	BlindPhaseGlobalY                       int                             `json:"blind_phase_global_y"`
-	BlindPhaseGlobalScore                   float64                         `json:"blind_phase_global_score"`
-	BlindPhaseCells                         int                             `json:"blind_phase_cells"`
-	BlindPhasePairs                         int                             `json:"blind_phase_pairs"`
-	BlindPhaseMeanPairScore                 float64                         `json:"blind_phase_mean_pair_score"`
-	BlindPhaseMeanOffsetBlocks              float64                         `json:"blind_phase_mean_offset_blocks"`
-	BlindPhaseMaxOffsetBlocks               float64                         `json:"blind_phase_max_offset_blocks"`
-	BlindPhaseMeanConfidence                float64                         `json:"blind_phase_mean_confidence"`
-	BlindPhaseMinConfidence                 float64                         `json:"blind_phase_min_confidence"`
-	BlindPhaseRobustOutliers                int                             `json:"blind_phase_robust_pair_outliers"`
-	BlindSecondaryMethod                    string                          `json:"blind_secondary_method,omitempty"`
-	BlindSecondaryCells                     int                             `json:"blind_secondary_cells"`
-	BlindSecondaryMeanPairScore             float64                         `json:"blind_secondary_mean_pair_score"`
-	BlindConsensusCells                     int                             `json:"blind_consensus_cells"`
-	BlindCycleSlipCorrections               int                             `json:"blind_cycle_slip_corrections"`
-	BlindMeanObserverDistanceBlocks         float64                         `json:"blind_mean_observer_distance_blocks"`
-	BlindMaxObserverDistanceBlocks          float64                         `json:"blind_max_observer_distance_blocks"`
-	BlindLatticePhaseMethod                 string                          `json:"blind_lattice_phase_method,omitempty"`
-	BlindLatticePhaseCells                  int                             `json:"blind_lattice_phase_cells"`
-	BlindLatticeMeanConfidence              float64                         `json:"blind_lattice_phase_mean_confidence"`
-	BlindLatticeMinConfidence               float64                         `json:"blind_lattice_phase_min_confidence"`
-	BlindLatticeMeanFractionDistance        float64                         `json:"blind_lattice_mean_fraction_distance_blocks"`
-	BlindLatticeMaxFractionDistance         float64                         `json:"blind_lattice_max_fraction_distance_blocks"`
-	BlindLatticeConsensusCells              int                             `json:"blind_lattice_consensus_cells"`
-	BlindLatticeCycleSlipCorrections        int                             `json:"blind_lattice_cycle_slip_corrections"`
-	BlindGlobalUnwrapMethod                 string                          `json:"blind_global_unwrap_method,omitempty"`
-	BlindGlobalUnwrapStatus                 string                          `json:"blind_global_unwrap_status,omitempty"`
-	BlindGlobalUnwrapStatusX                string                          `json:"blind_global_unwrap_status_x,omitempty"`
-	BlindGlobalUnwrapStatusY                string                          `json:"blind_global_unwrap_status_y,omitempty"`
-	BlindGlobalUnwrapEvaluatedStates        int                             `json:"blind_global_unwrap_evaluated_states"`
-	BlindGlobalUnwrapEligibleCells          int                             `json:"blind_global_unwrap_eligible_cells"`
-	BlindGlobalUnwrapEligibleCellsX         int                             `json:"blind_global_unwrap_eligible_cells_x"`
-	BlindGlobalUnwrapEligibleCellsY         int                             `json:"blind_global_unwrap_eligible_cells_y"`
-	BlindGlobalUnwrapChangedCells           int                             `json:"blind_global_unwrap_changed_cells"`
-	BlindGlobalUnwrapProposedChanged        int                             `json:"blind_global_unwrap_proposed_changed_cells"`
-	BlindGlobalUnwrapAcceptedAxes           int                             `json:"blind_global_unwrap_accepted_axes"`
-	BlindGlobalUnwrapBaselineObjective      float64                         `json:"blind_global_unwrap_baseline_objective"`
-	BlindGlobalUnwrapObjective              float64                         `json:"blind_global_unwrap_proposed_objective"`
-	BlindGlobalUnwrapAppliedObjective       float64                         `json:"blind_global_unwrap_applied_objective"`
-	BlindGlobalUnwrapSecondObjective        float64                         `json:"blind_global_unwrap_second_objective"`
-	BlindGlobalUnwrapSecondAvailable        bool                            `json:"blind_global_unwrap_second_objective_available"`
-	BlindGlobalUnwrapImprovement            float64                         `json:"blind_global_unwrap_improvement"`
-	BlindGlobalUnwrapMargin                 float64                         `json:"blind_global_unwrap_margin"`
-	BlindGlobalUnwrapAmbiguous              bool                            `json:"blind_global_unwrap_ambiguous"`
-	BlindGlobalUnwrapValidationMethod       string                          `json:"blind_global_unwrap_validation_method,omitempty"`
-	BlindGlobalUnwrapValidationAvailable    bool                            `json:"blind_global_unwrap_validation_available"`
-	BlindGlobalUnwrapValidationCells        int                             `json:"blind_global_unwrap_validation_cells"`
-	BlindGlobalUnwrapValidationPairsFold0   int                             `json:"blind_global_unwrap_validation_pairs_fold0"`
-	BlindGlobalUnwrapValidationPairsFold1   int                             `json:"blind_global_unwrap_validation_pairs_fold1"`
-	BlindGlobalUnwrapValidationFold0Delta   float64                         `json:"blind_global_unwrap_validation_fold0_delta"`
-	BlindGlobalUnwrapValidationFold1Delta   float64                         `json:"blind_global_unwrap_validation_fold1_delta"`
-	BlindGlobalUnwrapValidationMeanDelta    float64                         `json:"blind_global_unwrap_validation_mean_delta"`
-	BlindGlobalUnwrapValidationSupportsBest bool                            `json:"blind_global_unwrap_validation_supports_best"`
-	BlindPhaseOracleComparedCells           int                             `json:"blind_phase_oracle_compared_cells"`
-	BlindPhaseMeanOracleDistanceBlocks      float64                         `json:"blind_phase_mean_oracle_distance_blocks"`
-	BlindPhaseMaxOracleDistanceBlocks       float64                         `json:"blind_phase_max_oracle_distance_blocks"`
-	CellsEvidence                           []DiagnosticSpatialCellEvidence `json:"cell_evidence,omitempty"`
+	Cells                                               int                             `json:"cells"`
+	MeanTilePositionSignAgreement                       float64                         `json:"mean_tile_position_sign_agreement"`
+	UnstableTilePositions                               int                             `json:"unstable_tile_positions"`
+	UnstableTilePositionFraction                        float64                         `json:"unstable_tile_position_fraction"`
+	KnownHeaderCodedBits                                int                             `json:"known_header_coded_bits"`
+	KnownHeaderStableCorrectBits                        int                             `json:"known_header_stable_correct_bits"`
+	KnownHeaderStableWrongBits                          int                             `json:"known_header_stable_wrong_bits"`
+	KnownHeaderMixedBits                                int                             `json:"known_header_mixed_bits"`
+	KnownHeaderMajorityCodedErrors                      int                             `json:"known_header_majority_coded_bit_errors"`
+	KnownHeaderMajorityPostECCErrors                    int                             `json:"known_header_majority_post_ecc_bit_errors"`
+	KnownHeaderAggregatePostECCErrors                   int                             `json:"known_header_aggregate_post_ecc_bit_errors"`
+	KnownHeaderMajorityECCImprovement                   int                             `json:"known_header_majority_ecc_improvement"`
+	MeanKnownHeaderCorrectCellFraction                  float64                         `json:"mean_known_header_correct_cell_fraction"`
+	MeanAllCodedBitAgreement                            float64                         `json:"mean_all_coded_bit_agreement"`
+	UnstableAllCodedBits                                int                             `json:"unstable_all_coded_bits"`
+	UnstableAllCodedBitFraction                         float64                         `json:"unstable_all_coded_bit_fraction"`
+	LocalPhaseCells                                     int                             `json:"local_phase_cells"`
+	LocalPhaseSameAsGlobalCells                         int                             `json:"local_phase_same_as_global_cells"`
+	MeanLocalPhaseOffsetBlocks                          float64                         `json:"mean_local_phase_offset_blocks"`
+	MaxLocalPhaseOffsetBlocks                           float64                         `json:"max_local_phase_offset_blocks"`
+	MeanLocalPhaseSubblockOffsetBlocks                  float64                         `json:"mean_local_phase_subblock_offset_blocks"`
+	MaxLocalPhaseSubblockOffsetBlocks                   float64                         `json:"max_local_phase_subblock_offset_blocks"`
+	MeanLocalPhaseConfidence                            float64                         `json:"mean_local_phase_confidence"`
+	MinLocalPhaseConfidence                             float64                         `json:"min_local_phase_confidence"`
+	LocalPhaseStableWrongBits                           int                             `json:"local_phase_known_header_stable_wrong_bits"`
+	LocalPhaseMixedBits                                 int                             `json:"local_phase_known_header_mixed_bits"`
+	LocalPhaseMajorityCodedErrors                       int                             `json:"local_phase_majority_coded_bit_errors"`
+	LocalPhaseMajorityPostECCErrors                     int                             `json:"local_phase_majority_post_ecc_bit_errors"`
+	LocalPhaseMeanAllCodedAgreement                     float64                         `json:"local_phase_mean_all_coded_bit_agreement"`
+	LocalPhaseUnstableAllCodedFraction                  float64                         `json:"local_phase_unstable_all_coded_bit_fraction"`
+	BlindPhaseMethod                                    string                          `json:"blind_phase_method,omitempty"`
+	BlindPhaseProfile                                   Profile                         `json:"blind_phase_profile,omitempty"`
+	BlindPhaseGlobalX                                   int                             `json:"blind_phase_global_x"`
+	BlindPhaseGlobalY                                   int                             `json:"blind_phase_global_y"`
+	BlindPhaseGlobalScore                               float64                         `json:"blind_phase_global_score"`
+	BlindPhaseCells                                     int                             `json:"blind_phase_cells"`
+	BlindPhasePairs                                     int                             `json:"blind_phase_pairs"`
+	BlindPhaseMeanPairScore                             float64                         `json:"blind_phase_mean_pair_score"`
+	BlindPhaseMeanOffsetBlocks                          float64                         `json:"blind_phase_mean_offset_blocks"`
+	BlindPhaseMaxOffsetBlocks                           float64                         `json:"blind_phase_max_offset_blocks"`
+	BlindPhaseMeanConfidence                            float64                         `json:"blind_phase_mean_confidence"`
+	BlindPhaseMinConfidence                             float64                         `json:"blind_phase_min_confidence"`
+	BlindPhaseRobustOutliers                            int                             `json:"blind_phase_robust_pair_outliers"`
+	BlindSecondaryMethod                                string                          `json:"blind_secondary_method,omitempty"`
+	BlindSecondaryCells                                 int                             `json:"blind_secondary_cells"`
+	BlindSecondaryMeanPairScore                         float64                         `json:"blind_secondary_mean_pair_score"`
+	BlindConsensusCells                                 int                             `json:"blind_consensus_cells"`
+	BlindCycleSlipCorrections                           int                             `json:"blind_cycle_slip_corrections"`
+	BlindMeanObserverDistanceBlocks                     float64                         `json:"blind_mean_observer_distance_blocks"`
+	BlindMaxObserverDistanceBlocks                      float64                         `json:"blind_max_observer_distance_blocks"`
+	BlindLatticePhaseMethod                             string                          `json:"blind_lattice_phase_method,omitempty"`
+	BlindLatticePhaseCells                              int                             `json:"blind_lattice_phase_cells"`
+	BlindLatticeMeanConfidence                          float64                         `json:"blind_lattice_phase_mean_confidence"`
+	BlindLatticeMinConfidence                           float64                         `json:"blind_lattice_phase_min_confidence"`
+	BlindLatticeMeanFractionDistance                    float64                         `json:"blind_lattice_mean_fraction_distance_blocks"`
+	BlindLatticeMaxFractionDistance                     float64                         `json:"blind_lattice_max_fraction_distance_blocks"`
+	BlindLatticeConsensusCells                          int                             `json:"blind_lattice_consensus_cells"`
+	BlindLatticeCycleSlipCorrections                    int                             `json:"blind_lattice_cycle_slip_corrections"`
+	BlindGlobalUnwrapMethod                             string                          `json:"blind_global_unwrap_method,omitempty"`
+	BlindGlobalUnwrapStatus                             string                          `json:"blind_global_unwrap_status,omitempty"`
+	BlindGlobalUnwrapStatusX                            string                          `json:"blind_global_unwrap_status_x,omitempty"`
+	BlindGlobalUnwrapStatusY                            string                          `json:"blind_global_unwrap_status_y,omitempty"`
+	BlindGlobalUnwrapEvaluatedStates                    int                             `json:"blind_global_unwrap_evaluated_states"`
+	BlindGlobalUnwrapEligibleCells                      int                             `json:"blind_global_unwrap_eligible_cells"`
+	BlindGlobalUnwrapEligibleCellsX                     int                             `json:"blind_global_unwrap_eligible_cells_x"`
+	BlindGlobalUnwrapEligibleCellsY                     int                             `json:"blind_global_unwrap_eligible_cells_y"`
+	BlindGlobalUnwrapChangedCells                       int                             `json:"blind_global_unwrap_changed_cells"`
+	BlindGlobalUnwrapProposedChanged                    int                             `json:"blind_global_unwrap_proposed_changed_cells"`
+	BlindGlobalUnwrapAcceptedAxes                       int                             `json:"blind_global_unwrap_accepted_axes"`
+	BlindGlobalUnwrapBaselineObjective                  float64                         `json:"blind_global_unwrap_baseline_objective"`
+	BlindGlobalUnwrapObjective                          float64                         `json:"blind_global_unwrap_proposed_objective"`
+	BlindGlobalUnwrapAppliedObjective                   float64                         `json:"blind_global_unwrap_applied_objective"`
+	BlindGlobalUnwrapSecondObjective                    float64                         `json:"blind_global_unwrap_second_objective"`
+	BlindGlobalUnwrapSecondAvailable                    bool                            `json:"blind_global_unwrap_second_objective_available"`
+	BlindGlobalUnwrapImprovement                        float64                         `json:"blind_global_unwrap_improvement"`
+	BlindGlobalUnwrapMargin                             float64                         `json:"blind_global_unwrap_margin"`
+	BlindGlobalUnwrapAmbiguous                          bool                            `json:"blind_global_unwrap_ambiguous"`
+	BlindGlobalUnwrapValidationMethod                   string                          `json:"blind_global_unwrap_validation_method,omitempty"`
+	BlindGlobalUnwrapValidationAvailable                bool                            `json:"blind_global_unwrap_validation_available"`
+	BlindGlobalUnwrapValidationCells                    int                             `json:"blind_global_unwrap_validation_cells"`
+	BlindGlobalUnwrapValidationPairsFold0               int                             `json:"blind_global_unwrap_validation_pairs_fold0"`
+	BlindGlobalUnwrapValidationPairsFold1               int                             `json:"blind_global_unwrap_validation_pairs_fold1"`
+	BlindGlobalUnwrapValidationFold0Delta               float64                         `json:"blind_global_unwrap_validation_fold0_delta"`
+	BlindGlobalUnwrapValidationFold1Delta               float64                         `json:"blind_global_unwrap_validation_fold1_delta"`
+	BlindGlobalUnwrapValidationMeanDelta                float64                         `json:"blind_global_unwrap_validation_mean_delta"`
+	BlindGlobalUnwrapValidationSupportsBest             bool                            `json:"blind_global_unwrap_validation_supports_best"`
+	BlindGlobalUnwrapCrossfitMethod                     string                          `json:"blind_global_unwrap_crossfit_method,omitempty"`
+	BlindGlobalUnwrapCrossfitAvailable                  bool                            `json:"blind_global_unwrap_crossfit_available"`
+	BlindGlobalUnwrapCrossfitAToBAvailable              bool                            `json:"blind_global_unwrap_crossfit_a_to_b_available"`
+	BlindGlobalUnwrapCrossfitBToAAvailable              bool                            `json:"blind_global_unwrap_crossfit_b_to_a_available"`
+	BlindGlobalUnwrapCrossfitAToBProfile                Profile                         `json:"blind_global_unwrap_crossfit_a_to_b_profile,omitempty"`
+	BlindGlobalUnwrapCrossfitBToAProfile                Profile                         `json:"blind_global_unwrap_crossfit_b_to_a_profile,omitempty"`
+	BlindGlobalUnwrapCrossfitProposalPairsA             int                             `json:"blind_global_unwrap_crossfit_proposal_pairs_a"`
+	BlindGlobalUnwrapCrossfitProposalPairsB             int                             `json:"blind_global_unwrap_crossfit_proposal_pairs_b"`
+	BlindGlobalUnwrapCrossfitValidationPairsA           int                             `json:"blind_global_unwrap_crossfit_validation_pairs_a"`
+	BlindGlobalUnwrapCrossfitValidationPairsB           int                             `json:"blind_global_unwrap_crossfit_validation_pairs_b"`
+	BlindGlobalUnwrapCrossfitAToBCells                  int                             `json:"blind_global_unwrap_crossfit_a_to_b_cells"`
+	BlindGlobalUnwrapCrossfitBToACells                  int                             `json:"blind_global_unwrap_crossfit_b_to_a_cells"`
+	BlindGlobalUnwrapCrossfitAToBStates                 int                             `json:"blind_global_unwrap_crossfit_a_to_b_evaluated_states"`
+	BlindGlobalUnwrapCrossfitBToAStates                 int                             `json:"blind_global_unwrap_crossfit_b_to_a_evaluated_states"`
+	BlindGlobalUnwrapCrossfitAToBMargin                 float64                         `json:"blind_global_unwrap_crossfit_a_to_b_margin"`
+	BlindGlobalUnwrapCrossfitBToAMargin                 float64                         `json:"blind_global_unwrap_crossfit_b_to_a_margin"`
+	BlindGlobalUnwrapCrossfitAToBDelta                  float64                         `json:"blind_global_unwrap_crossfit_a_to_b_validation_delta"`
+	BlindGlobalUnwrapCrossfitBToADelta                  float64                         `json:"blind_global_unwrap_crossfit_b_to_a_validation_delta"`
+	BlindGlobalUnwrapCrossfitAToBSupportsBest           bool                            `json:"blind_global_unwrap_crossfit_a_to_b_supports_best"`
+	BlindGlobalUnwrapCrossfitBToASupportsBest           bool                            `json:"blind_global_unwrap_crossfit_b_to_a_supports_best"`
+	BlindGlobalUnwrapCrossfitComparedCells              int                             `json:"blind_global_unwrap_crossfit_compared_cells"`
+	BlindGlobalUnwrapCrossfitAgreementCells             int                             `json:"blind_global_unwrap_crossfit_agreement_cells"`
+	BlindGlobalUnwrapCrossfitAgreementFraction          float64                         `json:"blind_global_unwrap_crossfit_agreement_fraction"`
+	BlindGlobalUnwrapCrossfitAgreementMeanConfidence    float64                         `json:"blind_global_unwrap_crossfit_agreement_mean_confidence"`
+	BlindGlobalUnwrapCrossfitDisagreementMeanConfidence float64                         `json:"blind_global_unwrap_crossfit_disagreement_mean_confidence"`
+	BlindGlobalUnwrapCrossfitAgreementMeanLattice       float64                         `json:"blind_global_unwrap_crossfit_agreement_mean_lattice_confidence"`
+	BlindGlobalUnwrapCrossfitDisagreementMeanLattice    float64                         `json:"blind_global_unwrap_crossfit_disagreement_mean_lattice_confidence"`
+	BlindGlobalUnwrapCrossfitSupportsBest               bool                            `json:"blind_global_unwrap_crossfit_supports_best"`
+	BlindGlobalUnwrapStabilityMethod                    string                          `json:"blind_global_unwrap_stability_method,omitempty"`
+	BlindGlobalUnwrapStabilityAvailable                 bool                            `json:"blind_global_unwrap_stability_available"`
+	BlindGlobalUnwrapStabilityPartitions                int                             `json:"blind_global_unwrap_stability_partitions"`
+	BlindGlobalUnwrapStabilityTrialsRequested           int                             `json:"blind_global_unwrap_stability_trials_requested"`
+	BlindGlobalUnwrapStabilityTrialsAvailable           int                             `json:"blind_global_unwrap_stability_trials_available"`
+	BlindGlobalUnwrapStabilityTrialsSupported           int                             `json:"blind_global_unwrap_stability_trials_supported"`
+	BlindGlobalUnwrapStabilitySupportedFraction         float64                         `json:"blind_global_unwrap_stability_supported_trial_fraction"`
+	BlindGlobalUnwrapStabilityEvaluatedStates           int                             `json:"blind_global_unwrap_stability_evaluated_states"`
+	BlindGlobalUnwrapStabilityMeanMargin                float64                         `json:"blind_global_unwrap_stability_mean_margin"`
+	BlindGlobalUnwrapStabilityMeanValidationDelta       float64                         `json:"blind_global_unwrap_stability_mean_validation_delta"`
+	BlindGlobalUnwrapStabilityCompleteFields            int                             `json:"blind_global_unwrap_stability_complete_field_trials"`
+	BlindGlobalUnwrapStabilityUniqueFields              int                             `json:"blind_global_unwrap_stability_unique_fields"`
+	BlindGlobalUnwrapStabilityModalFieldCount           int                             `json:"blind_global_unwrap_stability_modal_field_count"`
+	BlindGlobalUnwrapStabilityModalFieldFraction        float64                         `json:"blind_global_unwrap_stability_modal_field_fraction"`
+	BlindGlobalUnwrapStabilitySupportedCompleteFields   int                             `json:"blind_global_unwrap_stability_supported_complete_field_trials"`
+	BlindGlobalUnwrapStabilitySupportedUniqueFields     int                             `json:"blind_global_unwrap_stability_supported_unique_fields"`
+	BlindGlobalUnwrapStabilitySupportedModalFieldCount  int                             `json:"blind_global_unwrap_stability_supported_modal_field_count"`
+	BlindGlobalUnwrapStabilitySupportedModalFieldFrac   float64                         `json:"blind_global_unwrap_stability_supported_modal_field_fraction"`
+	BlindGlobalUnwrapStabilityComparedCells             int                             `json:"blind_global_unwrap_stability_compared_cells"`
+	BlindGlobalUnwrapStabilityUnanimousCells            int                             `json:"blind_global_unwrap_stability_unanimous_cells"`
+	BlindGlobalUnwrapStabilityMeanCellModalFraction     float64                         `json:"blind_global_unwrap_stability_mean_cell_modal_fraction"`
+	BlindGlobalUnwrapStabilityMinCellModalFraction      float64                         `json:"blind_global_unwrap_stability_min_cell_modal_fraction"`
+	BlindGlobalUnwrapStabilitySupportedComparedCells    int                             `json:"blind_global_unwrap_stability_supported_compared_cells"`
+	BlindGlobalUnwrapStabilitySupportedUnanimousCells   int                             `json:"blind_global_unwrap_stability_supported_unanimous_cells"`
+	BlindGlobalUnwrapStabilitySupportedMeanCellModal    float64                         `json:"blind_global_unwrap_stability_supported_mean_cell_modal_fraction"`
+	BlindGlobalUnwrapStabilitySupportedMinCellModal     float64                         `json:"blind_global_unwrap_stability_supported_min_cell_modal_fraction"`
+	BlindGlobalUnwrapStabilityMeanPairwiseAgreement     float64                         `json:"blind_global_unwrap_stability_mean_pairwise_agreement_fraction"`
+	BlindGlobalUnwrapCycleAnchorMethod                  string                          `json:"blind_global_unwrap_cycle_anchor_method,omitempty"`
+	BlindGlobalUnwrapCycleAnchorAvailable               bool                            `json:"blind_global_unwrap_cycle_anchor_available"`
+	BlindGlobalUnwrapCycleAnchorPairs                   int                             `json:"blind_global_unwrap_cycle_anchor_pairs"`
+	BlindGlobalUnwrapCycleAnchorCells                   int                             `json:"blind_global_unwrap_cycle_anchor_cells"`
+	BlindGlobalUnwrapCycleAnchorMeanConfidence          float64                         `json:"blind_global_unwrap_cycle_anchor_mean_confidence"`
+	BlindGlobalUnwrapCycleAnchorTop1Objective           float64                         `json:"blind_global_unwrap_cycle_anchor_top1_objective"`
+	BlindGlobalUnwrapCycleAnchorSecondObjective         float64                         `json:"blind_global_unwrap_cycle_anchor_second_objective"`
+	BlindGlobalUnwrapCycleAnchorDelta                   float64                         `json:"blind_global_unwrap_cycle_anchor_delta_second_minus_top1"`
+	BlindGlobalUnwrapCycleAnchorPrefersTop1             bool                            `json:"blind_global_unwrap_cycle_anchor_prefers_top1"`
+	BlindGlobalUnwrapCycleAnchorTop1AgreementCells      int                             `json:"blind_global_unwrap_cycle_anchor_top1_agreement_cells"`
+	BlindGlobalUnwrapCycleAnchorTop1AgreementFraction   float64                         `json:"blind_global_unwrap_cycle_anchor_top1_agreement_fraction"`
+	BlindGlobalUnwrapCycleAnchorSecondAgreementCells    int                             `json:"blind_global_unwrap_cycle_anchor_second_agreement_cells"`
+	BlindGlobalUnwrapCycleAnchorSecondAgreementFraction float64                         `json:"blind_global_unwrap_cycle_anchor_second_agreement_fraction"`
+	BlindPhaseOracleComparedCells                       int                             `json:"blind_phase_oracle_compared_cells"`
+	BlindPhaseMeanOracleDistanceBlocks                  float64                         `json:"blind_phase_mean_oracle_distance_blocks"`
+	BlindPhaseMaxOracleDistanceBlocks                   float64                         `json:"blind_phase_max_oracle_distance_blocks"`
+	CellsEvidence                                       []DiagnosticSpatialCellEvidence `json:"cell_evidence,omitempty"`
 }
 
 func diagnosticAnalyzeBitChannel(grid []float64, key []byte, decoder *decoder, geometrySource string, mode diagnosticPhotometricMode) (DiagnosticBitChannelEvidence, bool) {
@@ -329,6 +429,10 @@ func diagnosticAttachSpatialBitEvidenceWithGrid(evidence *DiagnosticBitChannelEv
 }
 
 func diagnosticAttachSpatialBitEvidenceWithGridAndLattice(evidence *DiagnosticBitChannelEvidence, cells []diagnosticSpatialGridCell, aggregate []float64, key []byte, lattice diagnosticBlindPhaseResult, latticeOK bool) {
+	diagnosticAttachSpatialBitEvidenceWithGridAndLatticeOptions(evidence, cells, aggregate, key, lattice, latticeOK, true)
+}
+
+func diagnosticAttachSpatialBitEvidenceWithGridAndLatticeOptions(evidence *DiagnosticBitChannelEvidence, cells []diagnosticSpatialGridCell, aggregate []float64, key []byte, lattice diagnosticBlindPhaseResult, latticeOK bool, runCrossfit bool) {
 	if evidence == nil || len(cells) < 2 || len(key) < 8 || evidence.Profile == "" {
 		return
 	}
@@ -407,7 +511,7 @@ func diagnosticAttachSpatialBitEvidenceWithGridAndLattice(evidence *DiagnosticBi
 		}
 		spatial.CellsEvidence = append(spatial.CellsEvidence, cellResult)
 	}
-	if blind, blindOK := diagnosticEstimateBlindSpatialPhaseWithLattice(cells, aggregate, lattice, latticeOK); blindOK {
+	if blind, blindOK := diagnosticEstimateBlindSpatialPhaseWithLatticeOptions(cells, aggregate, lattice, latticeOK, runCrossfit); blindOK {
 		spatial.BlindPhaseMethod = blind.method
 		spatial.BlindPhaseProfile = blind.profile
 		spatial.BlindPhaseGlobalX = blind.globalPhaseX
@@ -463,6 +567,30 @@ func diagnosticAttachSpatialBitEvidenceWithGridAndLattice(evidence *DiagnosticBi
 		spatial.BlindGlobalUnwrapValidationFold1Delta = blind.unwrapValidationFold1Delta
 		spatial.BlindGlobalUnwrapValidationMeanDelta = blind.unwrapValidationMeanDelta
 		spatial.BlindGlobalUnwrapValidationSupportsBest = blind.unwrapValidationSupportsBest
+		spatial.BlindGlobalUnwrapCrossfitMethod = blind.unwrapCrossfitMethod
+		spatial.BlindGlobalUnwrapCrossfitAvailable = blind.unwrapCrossfitAvailable
+		spatial.BlindGlobalUnwrapCrossfitAToBAvailable = blind.unwrapCrossfitAToBAvailable
+		spatial.BlindGlobalUnwrapCrossfitBToAAvailable = blind.unwrapCrossfitBToAAvailable
+		spatial.BlindGlobalUnwrapCrossfitAToBProfile = blind.unwrapCrossfitAToBProfile
+		spatial.BlindGlobalUnwrapCrossfitBToAProfile = blind.unwrapCrossfitBToAProfile
+		spatial.BlindGlobalUnwrapCrossfitProposalPairsA = blind.unwrapCrossfitProposalPairsA
+		spatial.BlindGlobalUnwrapCrossfitProposalPairsB = blind.unwrapCrossfitProposalPairsB
+		spatial.BlindGlobalUnwrapCrossfitValidationPairsA = blind.unwrapCrossfitValidationPairsA
+		spatial.BlindGlobalUnwrapCrossfitValidationPairsB = blind.unwrapCrossfitValidationPairsB
+		spatial.BlindGlobalUnwrapCrossfitAToBCells = blind.unwrapCrossfitAToBCells
+		spatial.BlindGlobalUnwrapCrossfitBToACells = blind.unwrapCrossfitBToACells
+		spatial.BlindGlobalUnwrapCrossfitAToBStates = blind.unwrapCrossfitAToBStates
+		spatial.BlindGlobalUnwrapCrossfitBToAStates = blind.unwrapCrossfitBToAStates
+		spatial.BlindGlobalUnwrapCrossfitAToBMargin = blind.unwrapCrossfitAToBMargin
+		spatial.BlindGlobalUnwrapCrossfitBToAMargin = blind.unwrapCrossfitBToAMargin
+		spatial.BlindGlobalUnwrapCrossfitAToBDelta = blind.unwrapCrossfitAToBDelta
+		spatial.BlindGlobalUnwrapCrossfitBToADelta = blind.unwrapCrossfitBToADelta
+		spatial.BlindGlobalUnwrapCrossfitAToBSupportsBest = blind.unwrapCrossfitAToBSupportsBest
+		spatial.BlindGlobalUnwrapCrossfitBToASupportsBest = blind.unwrapCrossfitBToASupportsBest
+		spatial.BlindGlobalUnwrapCrossfitComparedCells = blind.unwrapCrossfitComparedCells
+		spatial.BlindGlobalUnwrapCrossfitAgreementCells = blind.unwrapCrossfitAgreementCells
+		spatial.BlindGlobalUnwrapCrossfitAgreementFraction = blind.unwrapCrossfitAgreementFraction
+		spatial.BlindGlobalUnwrapCrossfitSupportsBest = blind.unwrapCrossfitSupportsBest
 		for cellIndex, control := range blind.controls {
 			if !control.available || cellIndex >= len(cells) {
 				continue
@@ -505,6 +633,12 @@ func diagnosticAttachSpatialBitEvidenceWithGridAndLattice(evidence *DiagnosticBi
 				}
 				if cellIndex < len(blind.unwrapShiftY) {
 					cellEvidence.BlindGlobalUnwrapShiftY = blind.unwrapShiftY[cellIndex]
+				}
+				if cellIndex < len(blind.unwrapProposedShiftX) {
+					cellEvidence.BlindGlobalUnwrapProposedShiftX = blind.unwrapProposedShiftX[cellIndex]
+				}
+				if cellIndex < len(blind.unwrapProposedShiftY) {
+					cellEvidence.BlindGlobalUnwrapProposedShiftY = blind.unwrapProposedShiftY[cellIndex]
 				}
 				cellEvidence.BlindGlobalUnwrapAdjusted = cellEvidence.BlindGlobalUnwrapShiftX != 0 || cellEvidence.BlindGlobalUnwrapShiftY != 0
 				spatial.BlindPhaseCells++
@@ -586,6 +720,215 @@ func diagnosticAttachSpatialBitEvidenceWithGridAndLattice(evidence *DiagnosticBi
 		spatial.LocalPhaseUnstableAllCodedFraction = localSummary.unstableFraction
 	}
 	evidence.Spatial = spatial
+}
+
+func diagnosticApplyCrossfitSpatialEvidence(spatial *DiagnosticSpatialBitEvidence, crossfit diagnosticUnwrapCrossfitResult, cells []diagnosticSpatialGridCell) {
+	if spatial == nil {
+		return
+	}
+	spatial.BlindGlobalUnwrapCrossfitMethod = crossfit.method
+	spatial.BlindGlobalUnwrapCrossfitAvailable = crossfit.available
+	spatial.BlindGlobalUnwrapCrossfitAToBAvailable = crossfit.aToB.available
+	spatial.BlindGlobalUnwrapCrossfitBToAAvailable = crossfit.bToA.available
+	spatial.BlindGlobalUnwrapCrossfitAToBProfile = crossfit.aToB.profile
+	spatial.BlindGlobalUnwrapCrossfitBToAProfile = crossfit.bToA.profile
+	spatial.BlindGlobalUnwrapCrossfitProposalPairsA = crossfit.aToB.proposalPairs
+	spatial.BlindGlobalUnwrapCrossfitProposalPairsB = crossfit.bToA.proposalPairs
+	spatial.BlindGlobalUnwrapCrossfitValidationPairsA = crossfit.bToA.validationPairs
+	spatial.BlindGlobalUnwrapCrossfitValidationPairsB = crossfit.aToB.validationPairs
+	spatial.BlindGlobalUnwrapCrossfitAToBCells = crossfit.aToB.cells
+	spatial.BlindGlobalUnwrapCrossfitBToACells = crossfit.bToA.cells
+	spatial.BlindGlobalUnwrapCrossfitAToBStates = crossfit.aToB.evaluatedStates
+	spatial.BlindGlobalUnwrapCrossfitBToAStates = crossfit.bToA.evaluatedStates
+	spatial.BlindGlobalUnwrapCrossfitAToBMargin = crossfit.aToB.margin
+	spatial.BlindGlobalUnwrapCrossfitBToAMargin = crossfit.bToA.margin
+	spatial.BlindGlobalUnwrapCrossfitAToBDelta = crossfit.aToB.delta
+	spatial.BlindGlobalUnwrapCrossfitBToADelta = crossfit.bToA.delta
+	spatial.BlindGlobalUnwrapCrossfitAToBSupportsBest = crossfit.aToB.supportsBest
+	spatial.BlindGlobalUnwrapCrossfitBToASupportsBest = crossfit.bToA.supportsBest
+	spatial.BlindGlobalUnwrapCrossfitComparedCells = crossfit.comparedCells
+	spatial.BlindGlobalUnwrapCrossfitAgreementCells = crossfit.agreementCells
+	spatial.BlindGlobalUnwrapCrossfitAgreementFraction = crossfit.agreementFraction
+	spatial.BlindGlobalUnwrapCrossfitSupportsBest = crossfit.supportsBest
+
+	agreeConfidenceSum, disagreeConfidenceSum := 0.0, 0.0
+	agreeLatticeSum, disagreeLatticeSum := 0.0, 0.0
+	agreeCount, disagreeCount := 0, 0
+	for i := range cells {
+		var target *DiagnosticSpatialCellEvidence
+		for j := range spatial.CellsEvidence {
+			if spatial.CellsEvidence[j].RegionX == cells[i].RegionX && spatial.CellsEvidence[j].RegionY == cells[i].RegionY {
+				target = &spatial.CellsEvidence[j]
+				break
+			}
+		}
+		if target == nil {
+			continue
+		}
+		ax, ay, aok := diagnosticCrossfitBestLocalCycle(crossfit.aToB, i)
+		bx, by, bok := diagnosticCrossfitBestLocalCycle(crossfit.bToA, i)
+		if aok {
+			target.BlindCrossfitAToBAvailable = true
+			target.BlindCrossfitAToBCycleX = ax
+			target.BlindCrossfitAToBCycleY = ay
+			if i < len(crossfit.aToB.primary.controls) {
+				target.BlindCrossfitAToBConfidence = crossfit.aToB.primary.controls[i].confidence
+			}
+		}
+		if bok {
+			target.BlindCrossfitBToAAvailable = true
+			target.BlindCrossfitBToACycleX = bx
+			target.BlindCrossfitBToACycleY = by
+			if i < len(crossfit.bToA.primary.controls) {
+				target.BlindCrossfitBToAConfidence = crossfit.bToA.primary.controls[i].confidence
+			}
+		}
+		if aok && bok {
+			target.BlindCrossfitCycleAgreement = ax == bx && ay == by
+			jointConfidence := math.Min(target.BlindCrossfitAToBConfidence, target.BlindCrossfitBToAConfidence)
+			if target.BlindCrossfitCycleAgreement {
+				agreeConfidenceSum += jointConfidence
+				agreeLatticeSum += target.BlindLatticePhaseConfidence
+				agreeCount++
+			} else {
+				disagreeConfidenceSum += jointConfidence
+				disagreeLatticeSum += target.BlindLatticePhaseConfidence
+				disagreeCount++
+			}
+		}
+	}
+	if agreeCount > 0 {
+		spatial.BlindGlobalUnwrapCrossfitAgreementMeanConfidence = agreeConfidenceSum / float64(agreeCount)
+		spatial.BlindGlobalUnwrapCrossfitAgreementMeanLattice = agreeLatticeSum / float64(agreeCount)
+	}
+	if disagreeCount > 0 {
+		spatial.BlindGlobalUnwrapCrossfitDisagreementMeanConfidence = disagreeConfidenceSum / float64(disagreeCount)
+		spatial.BlindGlobalUnwrapCrossfitDisagreementMeanLattice = disagreeLatticeSum / float64(disagreeCount)
+	}
+}
+
+func diagnosticApplyStabilitySpatialEvidence(spatial *DiagnosticSpatialBitEvidence, stability diagnosticUnwrapStabilityResult, cells []diagnosticSpatialGridCell) {
+	if spatial == nil {
+		return
+	}
+	spatial.BlindGlobalUnwrapStabilityMethod = stability.method
+	spatial.BlindGlobalUnwrapStabilityAvailable = stability.available
+	spatial.BlindGlobalUnwrapStabilityPartitions = stability.partitions
+	spatial.BlindGlobalUnwrapStabilityTrialsRequested = stability.trialsRequested
+	spatial.BlindGlobalUnwrapStabilityTrialsAvailable = stability.trialsAvailable
+	spatial.BlindGlobalUnwrapStabilityTrialsSupported = stability.trialsSupported
+	spatial.BlindGlobalUnwrapStabilitySupportedFraction = stability.supportedTrialFraction
+	spatial.BlindGlobalUnwrapStabilityEvaluatedStates = stability.evaluatedStates
+	spatial.BlindGlobalUnwrapStabilityMeanMargin = stability.meanMargin
+	spatial.BlindGlobalUnwrapStabilityMeanValidationDelta = stability.meanValidationDelta
+	spatial.BlindGlobalUnwrapStabilityCompleteFields = stability.completeFieldTrials
+	spatial.BlindGlobalUnwrapStabilityUniqueFields = stability.uniqueFields
+	spatial.BlindGlobalUnwrapStabilityModalFieldCount = stability.modalFieldCount
+	spatial.BlindGlobalUnwrapStabilityModalFieldFraction = stability.modalFieldFraction
+	spatial.BlindGlobalUnwrapStabilitySupportedCompleteFields = stability.supportedCompleteFieldTrials
+	spatial.BlindGlobalUnwrapStabilitySupportedUniqueFields = stability.supportedUniqueFields
+	spatial.BlindGlobalUnwrapStabilitySupportedModalFieldCount = stability.supportedModalFieldCount
+	spatial.BlindGlobalUnwrapStabilitySupportedModalFieldFrac = stability.supportedModalFieldFraction
+	spatial.BlindGlobalUnwrapStabilityComparedCells = stability.comparedCells
+	spatial.BlindGlobalUnwrapStabilityUnanimousCells = stability.unanimousCells
+	spatial.BlindGlobalUnwrapStabilityMeanCellModalFraction = stability.meanCellModalFraction
+	spatial.BlindGlobalUnwrapStabilityMinCellModalFraction = stability.minCellModalFraction
+	spatial.BlindGlobalUnwrapStabilitySupportedComparedCells = stability.supportedComparedCells
+	spatial.BlindGlobalUnwrapStabilitySupportedUnanimousCells = stability.supportedUnanimousCells
+	spatial.BlindGlobalUnwrapStabilitySupportedMeanCellModal = stability.supportedMeanCellModalFraction
+	spatial.BlindGlobalUnwrapStabilitySupportedMinCellModal = stability.supportedMinCellModalFraction
+	spatial.BlindGlobalUnwrapStabilityMeanPairwiseAgreement = stability.meanPairwiseAgreementFraction
+
+	for i := range cells {
+		if i >= len(stability.cells) {
+			break
+		}
+		var target *DiagnosticSpatialCellEvidence
+		for j := range spatial.CellsEvidence {
+			if spatial.CellsEvidence[j].RegionX == cells[i].RegionX && spatial.CellsEvidence[j].RegionY == cells[i].RegionY {
+				target = &spatial.CellsEvidence[j]
+				break
+			}
+		}
+		if target == nil {
+			continue
+		}
+		cell := stability.cells[i]
+		target.BlindStabilityAvailable = cell.observations > 0
+		target.BlindStabilityObservations = cell.observations
+		target.BlindStabilityUniqueCycles = cell.uniqueCycles
+		target.BlindStabilityModalCycleX = cell.modalX
+		target.BlindStabilityModalCycleY = cell.modalY
+		target.BlindStabilityModalCount = cell.modalCount
+		target.BlindStabilityModalFraction = cell.modalFraction
+		target.BlindStabilitySupportedObs = cell.supportedObservations
+		target.BlindStabilitySupportedUnique = cell.supportedUniqueCycles
+		target.BlindStabilitySupportedModalX = cell.supportedModalX
+		target.BlindStabilitySupportedModalY = cell.supportedModalY
+		target.BlindStabilitySupportedCount = cell.supportedModalCount
+		target.BlindStabilitySupportedFraction = cell.supportedModalFraction
+	}
+}
+
+func diagnosticApplyCycleAnchorSpatialEvidence(spatial *DiagnosticSpatialBitEvidence, result diagnosticCycleAnchorResult, cells []diagnosticSpatialGridCell) {
+	if spatial == nil {
+		return
+	}
+	spatial.BlindGlobalUnwrapCycleAnchorMethod = result.method
+	spatial.BlindGlobalUnwrapCycleAnchorAvailable = result.available
+	spatial.BlindGlobalUnwrapCycleAnchorPairs = result.pairs
+	spatial.BlindGlobalUnwrapCycleAnchorCells = result.cells
+	spatial.BlindGlobalUnwrapCycleAnchorMeanConfidence = result.meanConfidence
+	spatial.BlindGlobalUnwrapCycleAnchorTop1Objective = result.top1Objective
+	spatial.BlindGlobalUnwrapCycleAnchorSecondObjective = result.secondObjective
+	spatial.BlindGlobalUnwrapCycleAnchorDelta = result.deltaSecondMinusTop1
+	spatial.BlindGlobalUnwrapCycleAnchorPrefersTop1 = result.prefersTop1
+	spatial.BlindGlobalUnwrapCycleAnchorTop1AgreementCells = result.top1AgreementCells
+	spatial.BlindGlobalUnwrapCycleAnchorTop1AgreementFraction = result.top1AgreementFraction
+	spatial.BlindGlobalUnwrapCycleAnchorSecondAgreementCells = result.secondAgreementCells
+	spatial.BlindGlobalUnwrapCycleAnchorSecondAgreementFraction = result.secondAgreementFraction
+	if !result.available {
+		return
+	}
+	for i := range cells {
+		if i >= len(result.anchor.controls) {
+			break
+		}
+		var target *DiagnosticSpatialCellEvidence
+		for j := range spatial.CellsEvidence {
+			if spatial.CellsEvidence[j].RegionX == cells[i].RegionX && spatial.CellsEvidence[j].RegionY == cells[i].RegionY {
+				target = &spatial.CellsEvidence[j]
+				break
+			}
+		}
+		if target == nil || !result.anchor.controls[i].available {
+			continue
+		}
+		a := result.anchor.controls[i]
+		target.BlindCycleAnchorAvailable = true
+		target.BlindCycleAnchorOffsetX = a.offsetX
+		target.BlindCycleAnchorOffsetY = a.offsetY
+		target.BlindCycleAnchorConfidence = a.confidence
+		primaryCycleX := int(math.Round(target.BlindPhaseOffsetX))
+		primaryCycleY := int(math.Round(target.BlindPhaseOffsetY))
+		if i < len(result.top1X) {
+			primaryCycleX += result.top1X[i]
+		}
+		if i < len(result.top1Y) {
+			primaryCycleY += result.top1Y[i]
+		}
+		secondCycleX, secondCycleY := int(math.Round(target.BlindPhaseOffsetX)), int(math.Round(target.BlindPhaseOffsetY))
+		if i < len(result.secondX) {
+			secondCycleX += result.secondX[i]
+		}
+		if i < len(result.secondY) {
+			secondCycleY += result.secondY[i]
+		}
+		target.BlindCycleAnchorTop1CycleX = primaryCycleX
+		target.BlindCycleAnchorTop1CycleY = primaryCycleY
+		target.BlindCycleAnchorSecondCycleX = secondCycleX
+		target.BlindCycleAnchorSecondCycleY = secondCycleY
+	}
 }
 
 func diagnosticTilePositionAgreement(cells []diagnosticSpatialGridCell) (float64, int, float64) {

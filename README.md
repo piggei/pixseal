@@ -7,7 +7,7 @@ hiding short authenticated messages inside images. It embeds protected payload
 bits in luminance DCT coefficients while trying to keep the visual change small
 under normal viewing conditions.
 
-Current development snapshot: **v0.3.0-build16**.
+Current development snapshot: **v0.3.0-build20**.
 
 Stable release baseline: **v0.2.0**.
 
@@ -46,6 +46,130 @@ two mild projective/keystone hypotheses. These are measured research
 capabilities, not universal guarantees. General homography estimation and the
 physical print-camera channel are outside v0.2.0 scope.
 
+## What v0.3.0-build20 adds
+
+Build20 keeps Format v3, deterministic encoding, production extraction, exact all-pairs
+unwrap, held-out cross-fit and build19 multi-partition diagnostics frozen. It tests a new
+**independent cycle-anchor hypothesis** using unguided cross-cell image-domain registration.
+The observer never sees repetition groups, key material, known header bits, payload, CRC or
+HMAC. It compares the exact top-1 and exact runner-up fields with a gauge-invariant weighted
+relative-offset objective. The result is telemetry only: it cannot alter sampling or create
+an authentication candidate.
+
+On the current four-image physical corpus the anchor is unavailable for frontal
+`foto stampa` because the exact unwrap is not applicable. On all three ambiguous cases it is
+available and prefers the exact top-1 continuously, but the rounded integer-cycle agreement
+is **0/9 for both top-1 and runner-up**. Mean anchor confidence is low: about 0.0575 on the
+inclined smartphone image, 0.0168 on scanner 001 and 0.0798 on scanner 002. Scanner 001 is
+a particularly important contradiction because held-out repetition evidence had preferred
+the runner-up, while the independent pairwise anchor prefers top-1. Scanner 002, the negative
+control, also prefers top-1. Build20 therefore does **not** promote this observer as an
+absolute cycle anchor; it records that pairwise registration measures useful continuous
+relative shape but does not yet identify the integer field. `make all-test` now contains 27
+targets including `cycle-anchor-test`.
+
+## What v0.3.0-build19 adds
+
+Build19 keeps build18 scheduling and every decoder decision rule frozen, then asks whether
+the integer-cycle field becomes reproducible when the same key-independent repetition
+evidence is repartitioned many different ways. It is a diagnostic-only
+**multi-partition stability experiment**: 8 fixed coded-bit-group partitions are tested
+in both proposal/validation directions, for at most 16 held-out exact-unwrap trials on
+the single best ambiguous bit candidate.
+
+Each partition keeps all repeated positions for one coded bit together, so proposal and
+validation remain disjoint exactly as in build17. Partition 0 deliberately reproduces
+the original A/B split for continuity; seven additional deterministic, non-complementary
+partitions probe sensitivity to the evidence split. For every available trial build19
+records held-out support and the recentered local integer-cycle field. It then reports
+full-field uniqueness/modal frequency, per-cell modal cycles and fractions, supported-only
+stability, and mean pairwise field agreement. No modal field, vote or support fraction is
+ever applied to the sampler or HMAC path.
+
+On all three currently ambiguous physical cases all 16 trials are available, but all 16
+complete fields are distinct. `foto stampa storta.jpg` has 9/16 held-out-supported trials,
+yet those nine fields are also all distinct; mean per-cell modal fraction is only 0.2153
+(0.2716 among supported trials). Scanner 001 has 6/16 supported trials and scanner 002
+has 12/16, but again every supported complete field is unique. Mean pairwise cycle
+agreement is only about 0.07--0.08. The frontal photograph remains `2/24` and
+`not-applicable`, so the stability experiment is skipped.
+
+This falsifies the hypothesis that the build17 A/B disagreement was merely an unlucky
+split. On the present corpus, repartitioning repetition evidence does not reveal a hidden
+persistent integer-cycle field. Future work should therefore seek a genuinely independent
+cycle anchor rather than tune voting thresholds or add more repetition partitions.
+
+`make stability-unwrap-test` protects partition disjointness/diversity, bounded synthetic
+stability and public per-cell modal telemetry. `make all-test` now contains 26 targets.
+
+## What v0.3.0-build18 adds
+
+Build18 keeps every build17 decision rule frozen and addresses the two questions left by
+that checkpoint: where independent cycle fields disagree, and how to avoid paying the
+held-out cross-fit cost on bit candidates that cannot become the reported best result.
+
+The cross-fit is now **best-candidate-only**. Every bounded full-decode candidate still
+receives the normal blind observers, fractional lattice evidence and build16 all-pairs
+exact unwrap. The held-out A->B/B->A experiment is deferred until bit-channel ranking is
+complete, then run at most once on the single best bit candidate and only if its all-pairs
+unwrap is genuinely ambiguous with an exact runner-up. Diagnostic JSON reports cross-fit
+wall time, attempts and skipped candidates. No HMAC/full-decode/smooth-resample ceiling
+changes.
+
+Build18 also exports cell-level instability telemetry: the all-pairs proposed X/Y shift,
+A->B and B->A local cycle coordinates, each fold-specific confidence, and per-cell cycle
+agreement. Aggregate summaries compare the mean joint cross-fit confidence and lattice
+confidence of agreeing versus disagreeing cells.
+
+On the four available physical acquisitions the scientific verdict is identical to
+build17. `foto stampa.jpg` remains `2/24` and not-applicable, so cross-fit is skipped.
+`foto stampa storta.jpg` remains ambiguous (margin `0.02113`), with both held-out deltas
+positive but only `2/9` cycle agreement. Those two agreeing cells have mean joint
+cross-fit confidence `0.1337`, well below `0.3576` for the seven disagreeing cells; the
+small agreement set is therefore not evidence for a high-confidence partial consensus.
+Scanner `0270_001.jpg` remains `4/24`, both held-out directions reject top-1 and agreement
+is `0/9`. Scanner `0270_002.jpg` remains `5/24`, the two directions split and agreement is
+`0/9`.
+
+In the development environment the selected cross-fit itself costs only tens of
+milliseconds (`26--73 ms` on the three ambiguous best candidates) and is run once while
+three lower-ranked bit candidates are skipped. End-to-end physical diagnostics returned
+to roughly the pre-cross-fit range in this environment; absolute runtime must still be
+rechecked on the qualification host.
+
+## What v0.3.0-build17 adds
+
+Build17 turns build16's post-hoc split-repetition check into a genuinely held-out
+integer-cycle experiment. Repetition evidence is partitioned deterministically by
+**coded-bit group**, not by individual pair: every repeated-position constraint for a
+given coded bit belongs to exactly one fold, and no logical repetition position is
+shared between proposal and validation folds. Two symmetric directions are evaluated:
+fold A estimates the repetition controls and exact top-2 while fold B scores that
+choice, then fold B proposes and fold A validates.
+
+The proposal path remains key-independent. Each fold-specific repetition observer is
+combined with the same independent fractional lattice measurement, then ranked by the
+build16 exact `{-1,0,+1}` global solver. The held-out fold compares only the exact
+geometric top-1/top-2. Build17 reports both directional validation deltas, exact-search
+budgets, fold pair counts and agreement between the two independently proposed
+**recentered local integer-cycle fields**. Different equivalent global tile anchors are
+therefore not mistaken for local-cycle disagreement.
+
+The cross-fit is deliberately diagnostic-only and runs only after the normal all-pairs
+exact solver has already reported a genuine ambiguous top-2. It never creates another
+HMAC candidate, never changes Format v3 and never overrides transactional rollback.
+`make crossfit-unwrap-test` adds dedicated regressions and `make all-test` now contains
+25 targets.
+
+On the four physical acquisitions available in this session the experiment is
+informative but not yet promotable. `foto stampa storta.jpg` is supported by the
+opposite held-out fold in both directions (`+0.00465`, `+0.20522`) but the two proposed
+local cycle fields agree in only `2/9` cells. Scanner `0270_001.jpg` is rejected in both
+directions (`-0.18283`, `-0.02287`) and its proposals agree in `0/9`; scanner
+`0270_002.jpg` is split (`+0.05639`, `-0.24050`) with `0/9` agreement. The frontal
+`foto stampa.jpg` remains `2/24` and `not-applicable`, so cross-fit is not run there.
+No physical payload authenticates and no smooth HMAC slot is consumed.
+
 ## What v0.3.0-build16 adds
 
 Build16 hardens the global integer-cycle barrier introduced in build15. The former
@@ -73,8 +197,9 @@ Format-v3 repetition pairs. This `split-repetition-top2` signal is intentionally
 pair set, so the split is consistency evidence, not a sufficiently independent
 held-out certificate and cannot override an exact ambiguous result.
 
-The physical-corpus contract is also hardened. `PRINT_CAMERA_KEY` no longer has a
-source-tree default, both smartphone and scanner directories are ignored by Git, and
+The physical-corpus contract is also clarified. The acquisition files remain private,
+while the intentionally public/reproducible test key defaults to `Piccotti` via
+`PRINT_CAMERA_KEY`. Both smartphone and scanner directories are ignored by Git, and
 `make private-corpus-manifest` can generate a local SHA-256 manifest. The canonical
 smartphone filenames now use `.jpg`, matching their actual JPEG encoding; see
 [`docs/PRIVATE_CORPUS.md`](docs/PRIVATE_CORPUS.md).
@@ -720,10 +845,10 @@ The local shell suites use `original pics/`, which is private and excluded from
 source archives. An empty qualification corpus is an error rather than a false
 PASS. `print-camera-test` separately scans every PNG/JPEG directly inside the
 private print-camera directory and cleanly reports `SKIP` when that corpus is
-absent or empty; when present, `PRINT_CAMERA_KEY` must be supplied locally and each
-image can report `PASS` only if the authenticated Format v3 payload is recovered.
-The same key policy applies to `print-scan-test`. No physical-corpus key is stored in
-the source archive.
+absent or empty; when present, the test key defaults to `Piccotti` and can still be
+overridden with `PRINT_CAMERA_KEY=...`. Each image can report `PASS` only if the
+authenticated Format v3 payload is recovered. The same key policy applies to
+`print-scan-test`. `Piccotti` is an intentional corpus test key, not a private credential.
 
 The full shell qualification harness is intended for **Linux/WSL with Bash >= 4,
 GNU-compatible userland (including `timeout` and `sort -z`) and ImageMagick**.
@@ -735,11 +860,11 @@ This harness requirement is separate from reusable-core portability.
 - Minimum aligned embed geometry: 280x256 pixels.
 - CLI embedding currently accepts text via `-message`; the core stores bytes.
 - General affine/projective print-camera recovery is not a v0.2.0 guarantee.
-- v0.3.0-build16 retains the bounded lattice/projective/photometric/reliability
-  research path, build12 repetition controls, build14 fractional lattice phase and
-  build15 transactional global unwrap, but certifies the bounded discrete top-2 by
-  exact enumeration. No real smartphone or scanner acquisition has authenticated;
-  lattice/sync/ECC/spatial/blind/unwrap/smooth-field evidence remains diagnostic only.
+- v0.3.0-build17 retains the bounded lattice/projective/photometric/reliability
+  research path and build16 exact top-2, then adds a coded-bit-group-disjoint
+  A->B/B->A repetition cross-fit as diagnostic telemetry. No real smartphone or
+  scanner acquisition has authenticated; lattice/sync/ECC/spatial/blind/unwrap/
+  cross-fit/smooth-field evidence remains diagnostic only.
 - Experimental rotation/affine performance is image-content dependent.
 - Failed extraction can be substantially more expensive than successful
   extraction because bounded candidates must be exhausted.
@@ -748,10 +873,11 @@ This harness requirement is separate from reusable-core portability.
 
 ## Release status
 
-**v0.3.0-build16** is an experimental development snapshot. It preserves the
+**v0.3.0-build17** is an experimental development snapshot. It preserves the
 qualified v0.2.0 encoder/Format-v3/production-extractor baseline and changes only the
-separate diagnostic research path. Build16 replaces the heuristic build15 beam top-2
-with exact bounded enumeration and adds diagnostic split-repetition top-2 consistency.
+separate diagnostic research path. Build17 retains build16 exact bounded enumeration
+and adds symmetric coded-bit-group-disjoint repetition proposal/validation cross-fit.
+The cross-fit is diagnostic-only and cannot promote an ambiguous unwrap.
 
 **v0.2.0** remains the qualified stable release of the Format v3 line. It was
 promoted from RC4 after the stable release baseline passed on the private

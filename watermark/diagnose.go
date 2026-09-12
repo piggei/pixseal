@@ -128,6 +128,16 @@ type DiagnosticBudgets struct {
 	GlobalUnwrapSearch                  string  `json:"global_unwrap_search"`
 	GlobalUnwrapMaxShift                int     `json:"global_unwrap_max_shift_blocks"`
 	MaxGlobalUnwrapEvaluatedStates      int     `json:"max_global_unwrap_evaluated_states"`
+	CrossfitUnwrapFolds                 int     `json:"crossfit_unwrap_folds"`
+	CrossfitUnwrapPartition             string  `json:"crossfit_unwrap_partition"`
+	CrossfitUnwrapAmbiguousOnly         bool    `json:"crossfit_unwrap_ambiguous_only"`
+	CrossfitUnwrapBestCandidateOnly     bool    `json:"crossfit_unwrap_best_candidate_only"`
+	MaxCrossfitUnwrapEvaluatedStates    int     `json:"max_crossfit_unwrap_evaluated_states"`
+	PartitionStabilityPartitions        int     `json:"partition_stability_partitions"`
+	PartitionStabilityTrials            int     `json:"partition_stability_trials"`
+	PartitionStabilityAmbiguousOnly     bool    `json:"partition_stability_ambiguous_only"`
+	PartitionStabilityBestCandidateOnly bool    `json:"partition_stability_best_candidate_only"`
+	MaxPartitionStabilityStates         int     `json:"max_partition_stability_evaluated_states"`
 	SmoothPhaseMinControls              int     `json:"smooth_phase_min_controls"`
 	SmoothPhaseQuadraticMinControls     int     `json:"smooth_phase_quadratic_min_controls"`
 	SmoothPhaseMinMeanConfidence        float64 `json:"smooth_phase_min_mean_confidence"`
@@ -266,6 +276,16 @@ func DiagnoseGeometry(src image.Image, key []byte, options DiagnosticOptions) (D
 		GlobalUnwrapSearch:                  "exact-enumeration",
 		GlobalUnwrapMaxShift:                diagnosticDiscreteUnwrapMaxShift,
 		MaxGlobalUnwrapEvaluatedStates:      2 * diagnosticDiscreteUnwrapMaxAssignmentsPerAxis,
+		CrossfitUnwrapFolds:                 diagnosticUnwrapCrossfitFolds,
+		CrossfitUnwrapPartition:             "coded-bit-group",
+		CrossfitUnwrapAmbiguousOnly:         true,
+		CrossfitUnwrapBestCandidateOnly:     true,
+		MaxCrossfitUnwrapEvaluatedStates:    diagnosticUnwrapCrossfitFolds * 2 * diagnosticDiscreteUnwrapMaxAssignmentsPerAxis,
+		PartitionStabilityPartitions:        diagnosticUnwrapStabilityPartitions,
+		PartitionStabilityTrials:            diagnosticUnwrapStabilityPartitions * 2,
+		PartitionStabilityAmbiguousOnly:     true,
+		PartitionStabilityBestCandidateOnly: true,
+		MaxPartitionStabilityStates:         diagnosticUnwrapStabilityPartitions * 2 * 2 * diagnosticDiscreteUnwrapMaxAssignmentsPerAxis,
 		SmoothPhaseMinControls:              diagnosticSmoothPhaseMinControls,
 		SmoothPhaseQuadraticMinControls:     diagnosticSmoothPhaseQuadraticMinControls,
 		SmoothPhaseMinMeanConfidence:        diagnosticSmoothPhaseMinMeanConfidence,

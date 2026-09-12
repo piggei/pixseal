@@ -8,7 +8,7 @@ if [[ -n "$REPORT" ]]; then
     exec > >(tee "$REPORT") 2>&1
 fi
 
-default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test smooth-phase-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
+default_targets="version-check vet release-unit test-images deep-test extreme-test research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test crossfit-unwrap-test stability-unwrap-test cycle-anchor-test smooth-phase-test geometry-test affine-test composition-test lattice-test perspective-test core-target-check"
 read -r -a targets <<< "${ALL_TEST_TARGETS:-$default_targets}"
 if (( ${#targets[@]} == 0 )); then
     echo "error: ALL_TEST_TARGETS resolved to an empty list" >&2
@@ -34,6 +34,9 @@ label_for() {
         blind-phase-test) echo "v0.3 repetition/cross-cell blind phase" ;;
         lattice-phase-test) echo "v0.3 local fractional lattice phase" ;;
         global-unwrap-test) echo "v0.3 global discrete phase unwrap" ;;
+        crossfit-unwrap-test) echo "v0.3 disjoint repetition cross-fit" ;;
+        stability-unwrap-test) echo "v0.3 multi-partition integer-cycle stability" ;;
+        cycle-anchor-test) echo "v0.3 independent cross-cell cycle anchor" ;;
         smooth-phase-test) echo "v0.3 bounded smooth phase field" ;;
         geometry-test) echo "rotation/combined geometry" ;;
         affine-test) echo "axis-aligned affine" ;;
@@ -47,7 +50,7 @@ label_for() {
 
 release_targets=(version-check vet release-unit test-images core-target-check)
 qualification_targets=(deep-test extreme-test)
-research_targets=(research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test smooth-phase-test geometry-test affine-test composition-test lattice-test perspective-test)
+research_targets=(research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test crossfit-unwrap-test stability-unwrap-test cycle-anchor-test smooth-phase-test geometry-test affine-test composition-test lattice-test perspective-test)
 
 in_list() {
     local needle="$1"; shift

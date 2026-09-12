@@ -502,6 +502,58 @@ first/second margin; those solutions are intentionally rejected. In particular, 
 large build14 `foto stampa storta.jpg` 5 -> 2 diagnostic cannot yet be justified by an
 independent unique global unwrap and is not promoted.
 
+## v0.3.0-build19 — multi-partition integer-cycle stability
+
+Build19 tests the remaining build18 hypothesis directly: perhaps the A/B split was merely
+unlucky, and a persistent integer-cycle field would emerge if the repetition constraints
+were partitioned in several independent deterministic ways. Eight coded-bit-group
+partitions are fixed in advance and evaluated in both directions. The experiment remains
+best-candidate-only, ambiguous-only and diagnostic-only.
+
+The physical result is strongly negative for repetition-only cycle identification. Every
+ambiguous acquisition yields all 16 trials, yet all 16 complete local cycle fields are
+different. Filtering to held-out-supported trials does not create a stable field: the
+inclined photo has 9 supported fields and 9 unique fields, scanner 001 has 6/6 unique,
+and scanner 002 has 12/12 unique. Per-cell modal fractions remain low and pairwise field
+agreement is about 7--8%. No vote is promoted.
+
+This checkpoint closes the simple repartition/voting branch on the current four-case
+physical corpus. Further decoder research should introduce a genuinely independent
+integer-cycle anchor or a stronger physical model, not lower ambiguity thresholds.
+
+## v0.3.0-build18 — lazy cross-fit and cell-level instability map
+
+Build18 does not introduce another cycle solver. It preserves build17's all-pairs exact
+unwrap and held-out criterion, but defers the expensive research-only cross-fit until the
+bit-channel ranking has identified the single best candidate. Lower-ranked candidates
+retain all earlier diagnostics but cannot consume duplicate A/B cross-fit searches.
+
+The checkpoint also records the local cycle proposed by each independent fold in every
+3x3 control cell together with primary/lattice confidence. This directly tests whether
+the small A/B agreement observed in build17 is concentrated in unusually strong cells.
+It is not: on the inclined smartphone acquisition the two agreeing cells have lower mean
+joint fold confidence than the seven disagreeing cells. Scanner 001 and 002 have zero
+agreement. No partial field is promoted and the production/HMAC path remains unchanged.
+
+## v0.3.0-build17 — held-out repetition cross-fit
+
+Build17 addresses the limitation left explicitly open by build16: its two
+`split-repetition-top2` folds were evaluated after the primary controls had already
+consumed the complete repetition-pair set. Build17 partitions repetition evidence by
+coded-bit group before control estimation. Fold A constructs a proposal that fold B
+alone validates, then the roles are reversed. The normal all-pairs exact solver remains
+the authoritative conservative gate; cross-fit is research telemetry and cannot create
+an HMAC candidate.
+
+The four available real acquisitions produce three distinct negative/diagnostic
+patterns. The inclined smartphone case receives positive held-out support in both
+directions but the proposed local integer fields disagree strongly (2/9 agreement).
+Scanner 001 receives negative held-out support in both directions, and scanner 002
+splits directionally. No case meets the deliberately strict condition of symmetric
+held-out support plus full proposal agreement. The result narrows the remaining problem
+from "find independent evidence" to "obtain a stable cycle proposal across independent
+evidence partitions".
+
 ## v0.3.0-build16 — exact global top-2 certification
 
 Build16 closes two correctness/reporting issues found in the build15 audit. The global
@@ -518,13 +570,26 @@ split-repetition top-2 comparison partitions the
 key-independent repeated-position evidence into two deterministic folds. It is not an
 acceptance gate because the primary repetition observer used the complete pair set.
 
-The source package also removes the physical-corpus key default, protects both private
-acquisition directories in `.gitignore`, documents canonical `.jpg` names for the two
-historically mis-suffixed smartphone JPEGs, and provides a local SHA-256 corpus-manifest
-target.
+The source package keeps the intentional corpus test key `Piccotti` as the default
+`PRINT_CAMERA_KEY` for reproducible physical tests, while protecting both private
+acquisition directories in `.gitignore`. It also documents canonical `.jpg` names for
+the two historically mis-suffixed smartphone JPEGs and provides a local SHA-256
+corpus-manifest target. The key is a public test constant; the acquisition files remain
+private research material.
 
 On the four physical acquisitions available during development, exact ranking preserves
 the build15 conservative conclusions. Scanner 0270_002's first/second margin tightens
 from the beam value around 0.02634 to the exact value around 0.01780; the proposal
 remains ambiguous and no smooth HMAC slot is consumed. Full six-image validation still
 requires the two bicycle photographs.
+
+## v0.3.0-build20 — independent pairwise cycle-anchor experiment
+
+Build20 tested whether the pre-existing unguided cross-cell image-domain registration graph
+could break the integer-cycle ambiguity independently of repetition evidence. The comparison
+was made gauge-invariant and diagnostic-only against the exact all-pairs top-1 and runner-up.
+All three ambiguous real acquisitions produced a continuous preference for top-1, but none
+produced even one rounded-cycle agreement cell after gauge alignment (0/9 for both candidates).
+Scanner 001 contradicted held-out repetition, while negative-control scanner 002 also preferred
+top-1. The observer is therefore retained only as relative-shape evidence; it is not promoted
+as a cycle anchor and no decoder/HMAC budget changed.

@@ -270,3 +270,191 @@ Exact bounded enumeration is retained and replaces beam ranking. Split-repetitio
 validation is retained as research telemetry only. The next integer-cycle experiment
 must use proposal and validation evidence that are disjoint by construction and must be
 evaluated on the complete six-image corpus before it can relax an ambiguity decision.
+
+## build17 — coded-bit-group-disjoint repetition cross-fit
+
+### Hypothesis
+
+Build16 showed that repetition scores contain information about the geometric top-1 vs
+runner-up, but its fold scores were not truly held out because the primary repetition
+controls had already been estimated from all repetition pairs. The build17 hypothesis
+was that a proposal constructed from one independent subset of Format-v3 repetition
+structure could be validated by the other subset strongly enough to discriminate the
+integer cycle without expected bits, key material or HMAC.
+
+### Predeclared construction
+
+- Keep Format v3, encoder, production decoder, exact build16 unwrap objective and
+  HMAC/smooth-resample budgets frozen.
+- Partition by coded-bit group, not by individual pair. All repeated positions belonging
+  to one coded bit stay in one fold. The two folds therefore share no logical repetition
+  position.
+- Direction A->B: estimate global/local repetition controls using fold A only, combine
+  with the existing key-independent fractional lattice phase, enumerate exact top-1/
+  top-2, then score only those two assignments with fold B.
+- Direction B->A repeats the experiment with roles reversed.
+- Compare the two independently proposed recentered local integer-cycle fields. Do not
+  compare fold-specific absolute global tile anchors.
+- `crossfit_supports_best` requires both held-out directions to favor their own top-1,
+  at least three comparable cells and complete local-cycle agreement. This flag is
+  diagnostic only and cannot override all-pairs ambiguity.
+- Run cross-fit only when the normal all-pairs exact solver is already `ambiguous` and
+  has an exact runner-up. This bounds duplicate search and prevents the experiment from
+  becoming a general candidate multiplier.
+
+### Synthetic regressions
+
+`make crossfit-unwrap-test` verifies:
+
+1. robust and balanced repetition groups partition into two non-empty folds;
+2. no logical repetition position appears in both folds;
+3. fold-specific repetition estimation uses the bounded proposal subset;
+4. a held-out fold can prefer a known correct phase over a one-cycle alternative;
+5. both symmetric directions execute through the exact solver on a bounded synthetic
+   field.
+
+### Physical evidence (four available acquisitions)
+
+| acquisition | all-pairs result | A->B delta | B->A delta | cycle agreement | overall cross-fit |
+|---|---|---:|---:|---:|---|
+| `foto stampa.jpg` | not-applicable, best hard 2/24 | n/a | n/a | n/a | not run |
+| `foto stampa storta.jpg` | ambiguous, margin 0.02113 | +0.00465 | +0.20522 | 2/9 | reject |
+| `0270_001.jpg` | ambiguous, margin 0.02144 | -0.18283 | -0.02287 | 0/9 | reject |
+| `0270_002.jpg` | ambiguous, margin 0.01780 | +0.05639 | -0.24050 | 0/9 | reject |
+
+The best-candidate fold profile is balanced in all three ambiguous cases; the group
+partition yields 220 proposal pairs in fold A and 228 in fold B. Exact cross-fit state
+counts remain below the declared worst-case ceiling. Measured end-to-end diagnostic
+runtime remains around 10--15 seconds for the reported best cases once cross-fit is
+restricted to already-ambiguous candidates.
+
+### Interpretation
+
+The hypothesis is only partially supported. Truly held-out repetition evidence is
+clearly informative: scanner 001 independently rejects the geometric top-1 twice, while
+scanner 002 exposes directional instability. However, even the inclined smartphone case
+where both held-out directions are positive does not reproduce the same integer-cycle
+field across folds. Positive top-1 validation alone is therefore insufficient.
+
+Build17 does **not** promote any unwrap, does not consume an extra HMAC slot and does not
+reinterpret lower known-header errors as success. The next problem is candidate
+stability/reconciliation across independent evidence partitions, or an additional
+key-independent signal that can anchor the cycle field itself.
+
+
+
+## build18 — lazy cross-fit and cell-level instability localization
+
+### Hypothesis
+
+Build17 showed useful held-out information but unstable local cycle fields. Before
+adding another observer, determine whether agreement is concentrated in high-quality
+controls, and remove duplicated cross-fit work from candidates that cannot become the
+reported best bit-channel result.
+
+### Implementation
+
+- Freeze Format v3, production extraction, all-pairs exact objective/thresholds,
+  build17 fold partition and held-out scoring.
+- Run all-pairs exact unwrap on every existing bit diagnostic as before.
+- Defer A->B/B->A cross-fit until bit diagnostics are ranked; run it at most once on the
+  final best candidate and only for `ambiguous` + exact-runner-up cases.
+- Export cross-fit milliseconds, attempts and skipped candidates.
+- Export per-cell all-pairs proposed shifts, A/B local cycles, A/B confidence and cycle
+  agreement. Summarize agreeing/disagreeing joint fold confidence and lattice confidence.
+
+### Four-case physical result
+
+The scientific decisions are identical to build17. The frontal photograph remains
+`2/24` and not-applicable. The inclined photograph remains ambiguous with both held-out
+deltas positive and only 2/9 cycle agreement. Scanner 001 remains 4/24 with both
+held-out deltas negative and 0/9 agreement. Scanner 002 remains 5/24, directionally
+split, with 0/9 agreement.
+
+The new localization falsifies a simple partial-consensus hypothesis. On the inclined
+photo, the two agreeing cells are `(0,1)` and `(1,2)`, but their mean joint fold
+confidence is only `0.1337`; the seven disagreeing cells average `0.3576`. Lattice
+confidence is `0.4059` for agreeing versus `0.3772` for disagreeing cells, not enough to
+rescue the weak repetition consensus. The agreement subset is therefore not a
+high-confidence core that can be promoted safely.
+
+On the development host the selected held-out experiment costs only tens of milliseconds
+(26/48/73 ms on the three ambiguous best candidates), with three lower-ranked bit
+candidates skipped. Absolute end-to-end timings are host-dependent; the invariant to
+preserve is one cross-fit attempt maximum per image candidate ranking.
+
+### Status
+
+Retain build18 telemetry and lazy scheduling. Do not build a decoder correction from the
+2/9 inclined-photo agreement. The next experiment should add or derive a genuinely
+independent cycle anchor, or demonstrate stability across additional deterministic
+partitions/acquisitions, before relaxing any ambiguity gate.
+
+
+## build19 — multi-partition integer-cycle stability
+
+### Hypothesis
+
+Build17/18 may have observed an unlucky two-way split. If repetition evidence contains a
+real cycle anchor, the same recentered local integer field should recur when coded-bit
+groups are repartitioned several deterministic ways, especially among proposals that are
+positively validated by their held-out complement.
+
+### Frozen experimental design
+
+- 8 deterministic binary partitions, fixed before physical evaluation.
+- Each coded-bit group is indivisible; proposal and validation evidence never share a
+  repetition group.
+- Both directions are evaluated for each partition: 16 maximum trials.
+- Partition 0 is exactly the historical build17 A/B split; the other seven are distinct
+  modulo complement.
+- The experiment runs only on the final best bit candidate, only after all-pairs exact
+  unwrap is ambiguous with an exact runner-up.
+- No modal vote, supported-trial filter or stability statistic can alter sampling, smooth
+  resampling, full-decode count or HMAC attempts.
+
+### Four-case result
+
+| case | trials | held-out supported | unique complete fields | supported unique fields | mean cell modal | supported mean modal | mean pairwise agreement |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| frontal photo | not run | n/a | n/a | n/a | n/a | n/a | n/a |
+| inclined photo | 16/16 | 9 | 16/16 | 9/9 | 0.2153 | 0.2716 | 0.0731 |
+| scanner 001 | 16/16 | 6 | 16/16 | 6/6 | 0.2153 | 0.2963 | 0.0759 |
+| scanner 002 | 16/16 | 12 | 16/16 | 12/12 | 0.2361 | 0.2593 | 0.0824 |
+
+No cell is unanimous across all 16 trials in any ambiguous case. Even the most frequent
+per-cell cycle receives only a small minority of votes. Scanner 002 is particularly
+instructive: 75% of trials positively validate their own top-1, yet all 12 supported
+complete fields are different. Positive held-out validation therefore does not imply a
+reproducible field.
+
+### Interpretation / decision
+
+The hypothesis is rejected on the current corpus. The build17 A/B instability is not an
+artifact of one unlucky split: repetition-derived cycle fields are highly partition
+sensitive. Additional repetition voting or threshold relaxation would convert instability
+into confidence rather than add independent information. Keep exact rollback and all HMAC
+budgets unchanged. The next research branch must add a genuinely independent cycle anchor
+or physical model.
+
+## build20 — independent cross-cell cycle-anchor experiment
+
+Hypothesis: unguided cross-cell image-domain registration, which uses neither coded-bit
+repetition nor any key/header oracle, may supply an independent absolute-relative anchor for
+the exact integer-cycle top-2 ambiguity.
+
+Predeclared construction: run only on the final best candidate when the exact all-pairs solver
+is ambiguous and has a runner-up. Build the existing unguided pairwise correlation graph,
+solve its zero-mean relative offsets, and score exact top-1 and runner-up after removing the
+best common integer x/y gauge. No threshold can promote a field in build20; sign and agreement
+are telemetry only.
+
+Physical result: inclined smartphone delta(second-top1)=+0.5083, mean confidence 0.0575;
+scanner001 +0.2277, confidence 0.0168; scanner002 +0.0956, confidence 0.0798. All three prefer
+top-1 continuously, but both top-1 and runner-up have 0/9 rounded-cycle agreement with the
+anchor. Frontal smartphone is not-applicable and the anchor is not run. Scanner001 contradicts
+the repetition held-out preference; scanner002 negative control also prefers top-1.
+
+Conclusion: pairwise registration contains continuous relative-shape information but is not an
+absolute integer-cycle anchor on the current corpus. No unwrap, HMAC, encoder or format rule is
+changed.

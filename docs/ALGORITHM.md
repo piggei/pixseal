@@ -1030,3 +1030,113 @@ cannot be promoted by this diagnostic.
 Format v3, encoder behavior, the production decoder, whitening, Hamming ECC, mapping,
 HMAC, the four full/HMAC-attempt ceiling and the two smooth-resample ceiling remain
 unchanged.
+
+## 36. v0.3.0-build17 held-out repetition cross-fit (non-normative)
+
+Build17 adds a diagnostic cross-fit around the exact build16 integer-cycle solver. It
+changes neither Format v3 nor the production extractor.
+
+For profile-specific repetition groups `G_j`, where every logical position in `G_j`
+maps to the same coded bit, a deterministic hash of `j` assigns the complete group to
+fold `A` or `B`. This is stronger than build16's pair-level split: every pair and every
+logical repetition position for a group stays on one side.
+
+For each direction:
+
+```text
+proposal fold
+    -> global repetition phase/profile
+    -> local repetition controls
+    -> fractional lattice fusion
+    -> exact {-1,0,+1} top-1/top-2
+    -> held-out opposite-fold repetition score(top-1 - top-2)
+```
+
+Then the roles reverse. The directional delta is positive when the held-out fold favors
+the proposal's exact top-1. No key, expected magic/header bit, payload, CRC or HMAC
+result enters proposal or validation.
+
+Because the two subset observers may choose different but equivalent global tile
+anchors, cross-direction agreement is evaluated on the recentered local integer field:
+
+```text
+k_i^F = round(offset_i^F + exact_shift_i^F)
+```
+
+for each fold direction `F`. Build17 reports the fraction of comparable controls with
+identical `(k_x, k_y)`. The strict aggregate diagnostic flag requires positive held-out
+support in both directions and 100% local-cycle agreement over at least three controls.
+It remains telemetry only: the ordinary all-pairs exact unwrap/rollback decision is
+unchanged.
+
+Cross-fit is invoked only when the all-pairs solver is already ambiguous and has an
+exact second solution. Worst-case duplicate exact work is explicitly bounded at two
+directions times two axes times `3^9`, i.e. 78,732 state evaluations, with no additional
+full decode or HMAC attempts.
+
+
+
+## 37. v0.3.0-build18 lazy best-candidate cross-fit and instability telemetry (non-normative)
+
+Build18 changes only when the build17 cross-fit is evaluated, not its mathematics.
+Every bit candidate still receives the all-pairs blind/lattice/exact pipeline. After
+bit-channel ranking selects the best diagnostic candidate, held-out cross-fit runs only
+if that candidate is `ambiguous` and has an exact second solution:
+
+```text
+all bit candidates
+    -> all-pairs blind + lattice + exact unwrap
+    -> bit-channel ranking
+    -> best candidate only
+         -> if ambiguous + exact runner-up
+              -> A->B / B->A cross-fit once
+```
+
+The research JSON also exports, per 3x3 cell, the all-pairs proposed discrete shift and
+both fold-specific recentered local cycles. Cross-fold confidence is the repetition
+observer confidence of each proposal fold. `blind_crossfit_cycle_agreement` means the
+A->B and B->A local `(kx,ky)` are identical after removing fold-specific global anchors.
+
+For summary analysis build18 reports mean joint fold confidence using
+`min(conf_A, conf_B)` separately for agreeing and disagreeing cells, plus the same split
+for lattice confidence. These fields are observational only. No agreement threshold,
+confidence statistic or runtime optimization can override the all-pairs ambiguity gate
+or create another HMAC candidate.
+
+
+## 38. v0.3.0-build19 multi-partition cycle stability (non-normative)
+
+Build19 adds no production decoding rule. For the single best bit candidate, and only when
+the existing all-pairs exact unwrap is ambiguous with an exact runner-up, the diagnostic
+path evaluates eight fixed binary partitions of Format-v3 repetition groups. A coded-bit
+group is assigned wholly to one side of a partition. Each partition is evaluated in both
+directions, giving at most 16 proposal/held-out-validation trials.
+
+For trial `t` and spatial control `i`, the reported recentered local cycle remains:
+
+```text
+k_i^t = round(offset_i^t + exact_shift_i^t)
+```
+
+The diagnostic accumulates the complete field signature across trials, the modal cycle of
+each cell, the number of distinct cycles observed, and the same statistics after filtering
+to trials whose held-out validation delta is positive. It also reports mean pairwise cell
+agreement between all available trial fields.
+
+The state budget is bounded by 8 partitions * 2 directions * 2 axes * `3^9`, at most
+629,856 exact axis-state evaluations. This work is best-candidate-only and ambiguous-only.
+No stability result is an acceptance gate, and no modal cycle is applied to the sampler,
+full decode or HMAC path.
+
+## 39. v0.3.0-build20 independent pairwise cycle anchor (non-normative)
+
+For an ambiguous best diagnostic candidate, build20 computes the existing unguided cross-cell
+registration graph directly from normalized per-cell DCT-margin grids. For candidate field
+`c_i` and anchor offset `a_i`, it minimizes only the common integer gauge and reports a weighted
+mean squared relative-offset objective. The weight is the lower of candidate and anchor
+confidence with a small floor. Exact top-1 and exact runner-up are compared using the same
+anchor. Rounded-cycle agreement is also reported after integer gauge alignment.
+
+The anchor is structurally independent of repetition grouping and never reads key, expected
+Format-v3 bits, payload, CRC or HMAC. It is research telemetry only and cannot change the
+production decoder or diagnostic HMAC candidate budget.

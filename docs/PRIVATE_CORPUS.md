@@ -1,9 +1,13 @@
 # Private physical corpus
 
 The physical print/camera and scanner acquisitions are research material and are
-**not distributed with PixSeal source archives**. Build16 also removes the physical
-corpus key from source defaults; provide it only through local configuration or the
-environment when running physical tests.
+**not distributed with PixSeal source archives**. Their test key is intentionally
+public and reproducible: `Piccotti`. Build17 keeps it as the default
+`PRINT_CAMERA_KEY` so the historical corpus can be decoded without extra setup.
+It is a project test constant, not a personal or production credential. If PixSeal is
+ever promoted to a production deployment, replace this Makefile/script default with a
+different production key. The private research corpus itself is not part of production
+artifacts, so production compatibility with `Piccotti` is not required.
 
 Canonical smartphone filenames:
 
@@ -40,9 +44,18 @@ acquisitions.
 Physical regression examples:
 
 ```bash
-PRINT_CAMERA_KEY='local-secret' make print-camera-test
-PRINT_CAMERA_KEY='local-secret' make print-scan-test
+make print-camera-test        # defaults to PRINT_CAMERA_KEY=Piccotti
+make print-scan-test           # defaults to PRINT_CAMERA_KEY=Piccotti
+PRINT_CAMERA_KEY='other-test-key' make print-camera-test  # optional override
 ```
 
 Only a valid Format-v3 HMAC counts as a PASS. Geometry, lattice, error-count and
 unwrap diagnostics remain research evidence.
+
+## Build20
+
+Build20 continues to use `Piccotti` as the intentional public/reproducible research key. The
+private acquisition files remain excluded from source archives. The independent pairwise cycle
+anchor was evaluated on the same four available physical acquisitions; the two bicycle photos
+are still absent from the current corpus. A future production release must replace the default
+research key and will not distribute this private corpus.

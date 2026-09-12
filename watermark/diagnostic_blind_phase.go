@@ -102,8 +102,36 @@ type diagnosticBlindPhaseResult struct {
 	unwrapValidationFold1Delta   float64
 	unwrapValidationMeanDelta    float64
 	unwrapValidationSupportsBest bool
-	unwrapShiftX                 []int
-	unwrapShiftY                 []int
+
+	unwrapCrossfitMethod            string
+	unwrapCrossfitAvailable         bool
+	unwrapCrossfitAToBAvailable     bool
+	unwrapCrossfitBToAAvailable     bool
+	unwrapCrossfitAToBProfile       Profile
+	unwrapCrossfitBToAProfile       Profile
+	unwrapCrossfitProposalPairsA    int
+	unwrapCrossfitProposalPairsB    int
+	unwrapCrossfitValidationPairsA  int
+	unwrapCrossfitValidationPairsB  int
+	unwrapCrossfitAToBCells         int
+	unwrapCrossfitBToACells         int
+	unwrapCrossfitAToBStates        int
+	unwrapCrossfitBToAStates        int
+	unwrapCrossfitAToBMargin        float64
+	unwrapCrossfitBToAMargin        float64
+	unwrapCrossfitAToBDelta         float64
+	unwrapCrossfitBToADelta         float64
+	unwrapCrossfitAToBSupportsBest  bool
+	unwrapCrossfitBToASupportsBest  bool
+	unwrapCrossfitComparedCells     int
+	unwrapCrossfitAgreementCells    int
+	unwrapCrossfitAgreementFraction float64
+	unwrapCrossfitSupportsBest      bool
+
+	unwrapShiftX         []int
+	unwrapShiftY         []int
+	unwrapProposedShiftX []int
+	unwrapProposedShiftY []int
 }
 
 const (
@@ -146,6 +174,14 @@ func diagnosticEstimateBlindSpatialPhase(cells []diagnosticSpatialGridCell, aggr
 // lattice result is candidate-specific and already key-independent; the older
 // guided cross-cell observer remains attached as a diagnostic control.
 func diagnosticEstimateBlindSpatialPhaseWithLattice(cells []diagnosticSpatialGridCell, aggregate []float64, lattice diagnosticBlindPhaseResult, latticeOK bool) (diagnosticBlindPhaseResult, bool) {
+	return diagnosticEstimateBlindSpatialPhaseWithLatticeOptions(cells, aggregate, lattice, latticeOK, true)
+}
+
+// diagnosticEstimateBlindSpatialPhaseWithLatticeOptions lets build18 defer the
+// expensive held-out cross-fit until the bit-channel ranking has selected the
+// single best candidate. All-pairs exact unwrap and every pre-build17 observer
+// still run for every candidate; only research-only cross-fit telemetry is lazy.
+func diagnosticEstimateBlindSpatialPhaseWithLatticeOptions(cells []diagnosticSpatialGridCell, aggregate []float64, lattice diagnosticBlindPhaseResult, latticeOK bool, runCrossfit bool) (diagnosticBlindPhaseResult, bool) {
 	base, ok := diagnosticEstimateBlindSpatialPhase(cells, aggregate)
 	if !ok {
 		return base, false
@@ -153,7 +189,41 @@ func diagnosticEstimateBlindSpatialPhaseWithLattice(cells []diagnosticSpatialGri
 	if !latticeOK {
 		return base, true
 	}
-	return diagnosticFuseBlindLatticePhase(base, lattice, cells), true
+	result := diagnosticFuseBlindLatticePhase(base, lattice, cells)
+	// Cross-fit is intentionally evaluated only when the all-pairs exact solver
+	// has already identified a genuine top-2 ambiguity. It is a discriminator
+	// experiment, not another general phase-search path, and this gate keeps its
+	// bounded but more expensive duplicate exact searches away from candidates
+	// that are already no-change, accepted or not applicable.
+	if !runCrossfit || result.unwrapStatus != "ambiguous" || !result.unwrapSecondAvailable {
+		return result, true
+	}
+	crossfit := diagnosticGlobalUnwrapCrossfit(cells, aggregate, lattice)
+	result.unwrapCrossfitMethod = crossfit.method
+	result.unwrapCrossfitAvailable = crossfit.available
+	result.unwrapCrossfitAToBAvailable = crossfit.aToB.available
+	result.unwrapCrossfitBToAAvailable = crossfit.bToA.available
+	result.unwrapCrossfitAToBProfile = crossfit.aToB.profile
+	result.unwrapCrossfitBToAProfile = crossfit.bToA.profile
+	result.unwrapCrossfitProposalPairsA = crossfit.aToB.proposalPairs
+	result.unwrapCrossfitProposalPairsB = crossfit.bToA.proposalPairs
+	result.unwrapCrossfitValidationPairsA = crossfit.bToA.validationPairs
+	result.unwrapCrossfitValidationPairsB = crossfit.aToB.validationPairs
+	result.unwrapCrossfitAToBCells = crossfit.aToB.cells
+	result.unwrapCrossfitBToACells = crossfit.bToA.cells
+	result.unwrapCrossfitAToBStates = crossfit.aToB.evaluatedStates
+	result.unwrapCrossfitBToAStates = crossfit.bToA.evaluatedStates
+	result.unwrapCrossfitAToBMargin = crossfit.aToB.margin
+	result.unwrapCrossfitBToAMargin = crossfit.bToA.margin
+	result.unwrapCrossfitAToBDelta = crossfit.aToB.delta
+	result.unwrapCrossfitBToADelta = crossfit.bToA.delta
+	result.unwrapCrossfitAToBSupportsBest = crossfit.aToB.supportsBest
+	result.unwrapCrossfitBToASupportsBest = crossfit.bToA.supportsBest
+	result.unwrapCrossfitComparedCells = crossfit.comparedCells
+	result.unwrapCrossfitAgreementCells = crossfit.agreementCells
+	result.unwrapCrossfitAgreementFraction = crossfit.agreementFraction
+	result.unwrapCrossfitSupportsBest = crossfit.supportsBest
+	return result, true
 }
 
 func diagnosticFuseBlindObservers(primary, secondary diagnosticBlindPhaseResult) diagnosticBlindPhaseResult {

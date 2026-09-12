@@ -452,7 +452,7 @@ No private acquisition produces a valid Format-v3 HMAC.
 
 Build10 was evaluated on the same six private print-acquisition cases used by
 build9. No private image is distributed with the source archive. All figures below
-refer to the final build10 code and the unchanged the private physical-corpus key. `Best hard` is the
+refer to the final build10 code and the unchanged physical-corpus test key `Piccotti`. `Best hard` is the
 best hard bit-channel candidate overall. `Smooth before -> after` compares the same
 candidate on both sides and therefore must not be confused with `Best hard`.
 
@@ -492,7 +492,7 @@ produces a valid Format-v3 HMAC.
 ## v0.3.0-build11 continuous-control checkpoint — 2026-09-10
 
 Build11 was evaluated on the same six private print-acquisition cases as builds 8--10
-with the private physical-corpus key. The images remain private and are not distributed. The table uses
+with the physical-corpus test key `Piccotti`. The images remain private and are not distributed. The table uses
 the final boundary-aware confidence implementation. `Best hard` is the existing hard
 bit-channel summary. `Best measured smooth` compares the same candidate before and
 after a build11 corrected-grid resample; `--` means no candidate passed the diagnostic
@@ -544,7 +544,7 @@ a fragile gain.
 
 ## v0.3.0-build12 blind-registration checkpoint — 2026-09-11
 
-Build12 was evaluated on the same six private acquisitions with the private physical-corpus key; the
+Build12 was evaluated on the same six private acquisitions with the physical-corpus test key `Piccotti`; the
 key is used only by the ordinary bit/HMAC diagnostic after the blind observer has
 constructed its controls. `Local oracle` is the build11 key-assisted local-phase
 majority result and is shown only for comparison. `Blind score/confidence/oracle
@@ -620,7 +620,7 @@ No acquisition authenticates in build13.
 ## v0.3.0-build14 local lattice-phase checkpoint — 2026-09-11
 
 Build14 was evaluated on the same four private smartphone captures and two private
-scanner acquisitions with the private physical-corpus key. Originals remain outside source archives.
+scanner acquisitions with the physical-corpus test key `Piccotti`. Originals remain outside source archives.
 `Best smooth` is always a same-candidate before/after comparison; it must not be
 compared directly with `Best hard` when the base value differs.
 
@@ -724,3 +724,93 @@ construct proposal and validation evidence that are disjoint by design and then 
 frozen before the complete six-image corpus is evaluated. A lower known-header error
 count remains research evidence only; success still requires an ordinary valid Format-v3
 HMAC.
+
+## v0.3.0-build17 held-out cross-fit checkpoint — 2026-09-11
+
+Build17 preserves the exact all-pairs build16 results and adds two genuinely disjoint
+repetition proposal/validation directions. The folds are assigned by coded-bit group,
+so the proposal fold and held-out fold do not reuse a repetition group or logical
+repetition position.
+
+Only the four physical acquisitions available in the current private corpus were
+measured; the two bicycle photographs remain absent.
+
+| Acquisition | Best hard /24 | All-pairs unwrap | A->B delta | B->A delta | A/B support | Local-cycle agreement | Cross-fit support | HMAC |
+|---|---:|---|---:|---:|---|---:|---|---|
+| `foto stampa.jpg` | **2** | not-applicable | n/a | n/a | n/a | n/a | not run | no |
+| `foto stampa storta.jpg` | 7 | ambiguous (0.02113) | +0.00465 | +0.20522 | yes / yes | 2/9 (0.222) | no | no |
+| scanner `0270_001.jpg` | **4** | ambiguous (0.02144) | -0.18283 | -0.02287 | no / no | 0/9 | no | no |
+| scanner `0270_002.jpg` | 5 | ambiguous (0.01780) | +0.05639 | -0.24050 | yes / no | 0/9 | no | no |
+
+The inclined smartphone result shows why both parts of the build17 criterion matter:
+held-out validation is positive in both directions, yet the independently estimated
+cycle fields mostly disagree. Scanner 001 provides the complementary result: both
+held-out folds prefer the runner-up rather than the proposal's top-1. Scanner 002 remains
+the historical negative control and is directionally inconsistent.
+
+No cross-fit result overrides the all-pairs ambiguity gate, no smooth HMAC attempt is
+added, and no physical acquisition authenticates. The result is therefore scientific
+progress in failure characterization rather than decoder success.
+
+
+
+## v0.3.0-build18 lazy cross-fit / instability checkpoint — 2026-09-12
+
+Build18 preserves build17's all-pairs and held-out decisions while running cross-fit only
+on the final best bit candidate. The four available physical cases were re-evaluated with
+the same public test key and no HMAC success:
+
+| Acquisition | Best hard /24 | all-pairs | A->B delta | B->A delta | A/B cycles | cross-fit attempts/skipped | selected cross-fit ms |
+|---|---:|---|---:|---:|---:|---:|---:|
+| `foto stampa.jpg` | **2** | not-applicable | n/a | n/a | n/a | 0 / 4 | 0 |
+| `foto stampa storta.jpg` | 7 | ambiguous (0.02113) | +0.00465 | +0.20522 | 2/9 | 1 / 3 | 26 |
+| scanner `0270_001.jpg` | **4** | ambiguous (0.02144) | -0.18283 | -0.02287 | 0/9 | 1 / 3 | 48 |
+| scanner `0270_002.jpg` | 5 | ambiguous (0.01780) | +0.05639 | -0.24050 | 0/9 | 1 / 3 | 73 |
+
+For `foto stampa storta.jpg`, the mean of `min(conf_A, conf_B)` is `0.1337` on the two
+agreeing cells and `0.3576` on the seven disagreements. Mean lattice confidence is
+`0.4059` versus `0.3772`, respectively. Thus the agreement subset is not distinguished
+by stronger independent repetition evidence; a partial-consensus decoder change is not
+supported. Scanner 001/002 provide no agreeing cells at all.
+
+These timings are measurements from the build18 development environment, not a direct
+speed comparison with another host. Their methodological value is that the selected
+cross-fit itself is small and explicitly counted, while three lower-ranked candidates
+are skipped. Production decode/HMAC budgets remain unchanged.
+
+
+## v0.3.0-build19 multi-partition stability checkpoint — 2026-09-12
+
+Build19 re-evaluates only the final best ambiguous bit candidate using 8 fixed
+coded-bit-group partitions in both directions (16 held-out trials maximum). Production
+decode and HMAC budgets are unchanged.
+
+| Acquisition | Best hard /24 | trials available | supported | unique fields | supported unique | mean cell modal | min cell modal | pairwise agreement | stability ms |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| `foto stampa.jpg` | **2** | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| `foto stampa storta.jpg` | 7 | 16 | 9 | **16** | **9** | 0.2153 | 0.1250 | 0.0731 | 439 |
+| scanner `0270_001.jpg` | **4** | 16 | 6 | **16** | **6** | 0.2153 | 0.1250 | 0.0759 | 501 |
+| scanner `0270_002.jpg` | 5 | 16 | 12 | **16** | **12** | 0.2361 | 0.1875 | 0.0824 | 1048 |
+
+The full-field modal fraction is therefore exactly `1/16 = 0.0625` in every ambiguous
+case. Restricting to positively held-out-supported trials does not improve reproducibility:
+all supported complete fields remain unique. No cell is unanimous. The frontal case stays
+`not-applicable` and pays no stability cost.
+
+This is negative but decisive evidence: on the current physical corpus repetition
+constraints provide useful local scoring, but not a persistent integer-cycle field.
+Further repartition/voting is not justified without a new independent signal.
+
+## v0.3.0-build20 independent cycle-anchor checkpoint — 2026-09-12
+
+| acquisition | anchor conf | top-1 obj | second obj | delta second-top1 | top-1 agreement | second agreement |
+|---|---:|---:|---:|---:|---:|---:|
+| foto stampa storta | 0.0575 | 5.9922 | 6.5005 | +0.5083 | 0/9 | 0/9 |
+| foto stampa | n/a | n/a | n/a | n/a | n/a | n/a |
+| 0270_001 | 0.0168 | 8.7807 | 9.0084 | +0.2277 | 0/9 | 0/9 |
+| 0270_002 | 0.0798 | 14.6072 | 14.7028 | +0.0956 | 0/9 | 0/9 |
+
+All three ambiguous cases produce a lower continuous anchor objective for top-1, but none
+shares an integer-cycle cell with either top-1 or runner-up after gauge alignment. Scanner001
+contradicts the held-out repetition preference and scanner002 remains a negative control. The
+anchor is therefore not promoted. No physical payload authenticates.

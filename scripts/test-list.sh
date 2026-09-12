@@ -36,6 +36,9 @@ row phase-surface-test RESEARCH source 'confidence-weighted phase surface regres
 row blind-phase-test RESEARCH source 'repetition + cross-cell blind phase regressions'
 row lattice-phase-test RESEARCH source 'local fractional lattice-phase regressions'
 row global-unwrap-test RESEARCH source 'exact global +/-1 unwrap + exact top-2/split-repetition/rollback regressions'
+row crossfit-unwrap-test RESEARCH source 'disjoint coded-bit-group proposal/validation cross-fit regressions'
+row stability-unwrap-test RESEARCH source '8-partition/16-trial integer-cycle field stability regressions'
+row cycle-anchor-test RESEARCH source 'unguided cross-cell image-domain cycle-anchor regressions'
 row smooth-phase-test RESEARCH source 'bounded smooth phase-field regressions'
 row geometry-test RESEARCH pics 'strict rotation/combined geometry suite; corpus-sensitive'
 row affine-test RESEARCH pics 'strict axis-aligned affine suite; corpus-sensitive'
@@ -52,6 +55,6 @@ row extreme-test QUALIFICATION pics 'progressive resize/crop limit map; non-stri
 row test-unit COMPATIBILITY source 'complete go test ./... suite'
 row test AGGREGATE source+pics 'build + test-unit + image round-trips'
 row all AGGREGATE source+pics 'test + baseline transformation suite'
-row all-test AGGREGATE source+pics '24-target qualification matrix with final summary'
+row all-test AGGREGATE source+pics '27-target qualification matrix with final summary'
 
 printf '\nTip: use make <target>. For all-test, optionally set ALL_TEST_REPORT=path/to/report.txt.\n'

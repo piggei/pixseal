@@ -4,7 +4,7 @@ SHELL := /bin/bash
 
 PIXSEAL := dist/pixseal
 ORIGINAL_PICS_DIR := original pics
-TEST_KEY ?= Piccotti
+TEST_KEY ?= pixseal-test-key
 TEST_PROFILES ?= robust balanced capacity
 TEST_MESSAGE_ROBUST ?= PixSeal robust
 TEST_MESSAGE_BALANCED ?= PixSeal balanced profile test
@@ -46,7 +46,7 @@ ALL_TEST_TARGETS ?=
 ALL_TEST_STRICT ?=1
 GO_SOURCES := $(shell find cmd internal watermark -type f -name '*.go')
 
-.PHONY: test-list private-corpus-manifest print-scan-test build test test-unit release-unit research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test smooth-phase-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
+.PHONY: test-list private-corpus-manifest print-scan-test build test test-unit release-unit research-unit lattice-estimator-test homography-test photometric-test bit-channel-test reliability-test spatial-channel-test phase-surface-test blind-phase-test lattice-phase-test global-unwrap-test crossfit-unwrap-test stability-unwrap-test cycle-anchor-test smooth-phase-test print-camera-test test-images deep-test extreme-test geometry-test affine-test composition-test lattice-test perspective-test all-test release-check version-check all build-all core-target-check vet clean
 
 # Print a categorized index of all test/check targets without running them.
 test-list:
@@ -124,6 +124,18 @@ lattice-phase-test:
 global-unwrap-test:
 	@echo "Running v0.3 global discrete phase-unwrapping regressions..."
 	@go test ./watermark -run '^TestDiagnosticGlobalDiscreteUnwrap' -count=1
+
+crossfit-unwrap-test:
+	@echo "Running v0.3 held-out repetition cross-fit regressions..."
+	@go test ./watermark -run '^TestDiagnostic(Crossfit|GlobalUnwrapCrossfit|ApplyCrossfit)' -count=1
+
+stability-unwrap-test:
+	@echo "Running v0.3 multi-partition integer-cycle stability regressions..."
+	@go test ./watermark -run '^TestDiagnostic(StabilityPartitions|GlobalUnwrapPartitionStability|ApplyStability)' -count=1
+
+cycle-anchor-test:
+	@echo "Running v0.3 independent cross-cell cycle-anchor regressions..."
+	@go test ./watermark -run '^TestDiagnosticCycleAnchor' -count=1
 
 smooth-phase-test:
 	@echo "Running v0.3 bounded smooth phase-field regressions..."

@@ -70,10 +70,21 @@ and `CHANGELOG.md`.
 - [x] Add a first **split-repetition top-1/top-2 consistency diagnostic**.
       Build16 partitions key-independent repetition pairs deterministically into two folds.
       It remains diagnostic-only because the primary repetition controls used the full pair set.
-- [ ] Build a genuinely **held-out integer-cycle discriminator** that can resolve, not merely
-      reject, real ambiguous top-2 fields. The fit/proposal evidence and validation evidence
-      must be disjoint by construction (for example fit-set vs held-out repetition groups),
-      and the fixed rule must generalize across all six physical acquisitions before promotion.
+- [x] Build a genuinely **held-out integer-cycle discriminator experiment** with
+      proposal and validation evidence disjoint by coded-bit group. Build17 performs
+      symmetric A->B/B->A exact-top2 cross-fit. It is informative but does not yet
+      resolve a stable real cycle field, so it remains diagnostic-only.
+- [x] Localize build17 cross-fold instability cell-by-cell and remove duplicate cross-fit
+      work from lower-ranked bit candidates. Build18 shows the two agreeing cells on
+      `foto stampa storta.jpg` are not the strongest controls, so naive partial consensus
+      is not justified; held-out work now runs only on the final best bit candidate.
+- [x] Test stability/reconciliation across held-out folds and an independent image-domain
+      cycle anchor. Build19 shows repetition-only fields are non-persistent across 16 trials;
+      build20 shows unguided pairwise registration prefers top-1 continuously but gives 0/9
+      integer-cycle agreement on every ambiguous physical case, so neither route is promoted.
+- [ ] Find a genuinely **absolute key-independent cycle reference** from the existing v3
+      signal/geometry, or prove that Format v3 lacks enough asymmetry for absolute cycle
+      identification. Do not use known header/HMAC to choose the reference.
 - [ ] Test whether a jointly regularized spatial model can improve several acquisitions
       from blind controls without per-cell oracle freedom; do not increase HMAC slots or
       model order unless cross-validation improves out-of-sample controls.
@@ -85,9 +96,9 @@ and `CHANGELOG.md`.
 
 ## v0.3.0 — print-camera research
 
-- [x] Remove the private physical-corpus key from source defaults/documentation and ignore both private acquisition directories.
+- [x] Clarify that the physical acquisition files are private but the test key `Piccotti` is intentionally public/reproducible; keep it as the Makefile/script default and ignore both acquisition directories.
 - [x] Add a Git-ignored local SHA-256 corpus manifest target and canonical `.jpg` smartphone names.
-- [ ] Re-run build16 on the complete six-image physical corpus; the current build16 session had only four acquisitions available (the two bicycle photographs were absent).
+- [ ] Re-run build20 on the complete six-image physical corpus; the current corpus still contains only four acquisitions (the two bicycle photographs are absent).
 
 - [x] Provide a private full-resolution smartphone regression target that never
       ships the corpus, SKIPs when absent and PASSes only on valid v3 HMAC.
@@ -95,6 +106,8 @@ and `CHANGELOG.md`.
       real smartphone captures; build2 obtains lattice evidence on both, build3 adds
       phase-aware refinement and build4 separates the fundamental scale from
       supported aliases/harmonics.
+- [x] Test integer-cycle stability across 8 deterministic coded-bit-group partitions / 16 held-out directions; all three ambiguous physical cases produce a different complete field in every trial, so repetition-only repartition/voting is not a viable promotion path on the current corpus.
+- [ ] Design a genuinely independent integer-cycle anchor (geometric/spectral/gradient or other physical-channel evidence) before any further unwrap promotion.
 - [ ] **IN PROGRESS:** Recover a valid Format-v3 HMAC from the frontal photograph.
 - [ ] Recover a valid Format-v3 HMAC from the inclined photograph.
 - [ ] Quantify signal survival more strongly than key-known header scores; those

@@ -1,5 +1,142 @@
 # Changelog
 
+## v0.3.0-build20 — 2026-09-12
+
+Twentieth print-acquisition research checkpoint. Build19 repetition-only conclusions remain
+frozen; this build tests an independent image-domain cycle anchor without changing Format v3
+or production decode.
+
+### Added
+
+- Diagnostic-only `cross-cell-pairwise-cycle-anchor` based on unguided cross-cell margin-grid
+  registration, independent of repetition partitions, key/header/HMAC or payload semantics.
+- Gauge-invariant top-1 versus exact-runner-up objective, per-cell anchor telemetry and
+  explicit runtime/attempt counters.
+- `make cycle-anchor-test`; `make all-test` now contains 27 targets.
+
+### Research result
+
+- Inclined smartphone: anchor available, 12 pair constraints, mean confidence 0.0575; top-1
+  objective 5.9922 vs runner-up 6.5005 (delta +0.5083), but 0/9 rounded-cycle agreement.
+- Scanner 001: mean confidence 0.0168; top-1 8.7807 vs runner-up 9.0084 (delta +0.2277), yet
+  0/9 agreement. This conflicts with the held-out repetition result that preferred runner-up.
+- Scanner 002 negative control: mean confidence 0.0798; top-1 14.6072 vs runner-up 14.7028
+  (delta +0.0956), also 0/9 agreement.
+- Frontal smartphone remains `2/24`, unwrap not-applicable and anchor not run.
+- No physical HMAC authenticates. The pairwise observer remains diagnostic-only and is not a
+  sufficient absolute integer-cycle anchor.
+
+## v0.3.0-build19 — 2026-09-12
+
+Nineteenth print-acquisition research checkpoint. Build18 decisions and lazy scheduling
+remain frozen; this checkpoint tests integer-cycle stability across multiple disjoint
+repetition partitions.
+
+### Added
+
+- Eight deterministic coded-bit-group partitions, each evaluated in both held-out
+  directions for at most 16 exact integer-cycle trials on the final best ambiguous bit
+  candidate.
+- Full-field stability telemetry: available/supported trials, complete-field count,
+  unique fields, modal-field frequency, supported-only field statistics and mean pairwise
+  cycle agreement.
+- Per-cell modal cycle, unique-cycle count and modal fraction across all trials and across
+  held-out-supported trials only.
+- `partition_stability_ms` / attempt counters, explicit bounded state budgets and
+  `make stability-unwrap-test`; `make all-test` now contains 26 targets.
+
+### Research result
+
+- `foto stampa.jpg` remains `2/24` and `not-applicable`; stability is not run.
+- `foto stampa storta.jpg`: 16/16 trials available, 9 supported, **16 distinct complete
+  fields**; supported trials also produce 9/9 distinct fields. Mean cell modal fraction
+  is 0.2153 (0.2716 supported-only), minimum 0.125, mean pairwise agreement 0.0731.
+- Scanner `0270_001.jpg`: 16/16 available, 6 supported, 16 distinct fields; all six
+  supported fields distinct. Mean cell modal fraction 0.2153, pairwise agreement 0.0759.
+- Scanner `0270_002.jpg`: 16/16 available, 12 supported, 16 distinct fields; all twelve
+  supported fields distinct. Mean cell modal fraction 0.2361, pairwise agreement 0.0824.
+- No physical acquisition authenticates. Multi-partition evidence therefore rejects the
+  hypothesis that build17 instability was caused by one unlucky A/B split. Repetition
+  evidence alone is not a stable cycle anchor on the current corpus.
+
+## v0.3.0-build18 — 2026-09-12
+
+Eighteenth print-acquisition research checkpoint. Build17 decisions are frozen; this
+checkpoint localizes cross-fold instability and makes held-out work lazy.
+
+### Added
+
+- Per-cell integer-cycle telemetry for the all-pairs exact proposal and both held-out
+  cross-fit directions, including fold confidence and A/B agreement.
+- Aggregate agreeing-vs-disagreeing mean joint cross-fit confidence and lattice
+  confidence.
+- Explicit `crossfit_unwrap_ms`, attempt and skipped-candidate counters.
+- Diagnostic budget flag documenting that cross-fit is best-candidate-only.
+
+### Changed
+
+- A/B cross-fit is no longer repeated for every bit diagnostic. All candidates retain
+  all-pairs exact unwrap, but held-out cross-fit runs at most once on the final best bit
+  candidate, and still only for an exact ambiguous top-2.
+- `crossfit-unwrap-test` now also covers public per-cell telemetry.
+- Private acquisition summaries expose the new runtime and confidence aggregates.
+
+### Research result
+
+- Physical decisions are unchanged from build17: frontal `2/24` not-applicable;
+  inclined `7/24` ambiguous with 2/9 A/B agreement; scanner 001 `4/24` with 0/9;
+  scanner 002 `5/24` with 0/9.
+- The two agreeing inclined-photo cells are not the strongest cross-fit controls: mean
+  joint confidence is `0.1337` for agreeing cells versus `0.3576` for disagreements.
+  A naive partial-consensus promotion is therefore rejected.
+- On the local development host the selected cross-fit costs only `26--73 ms` and is
+  executed once, with three lower-ranked candidates skipped in each ambiguous case.
+
+## v0.3.0-build17 — 2026-09-11
+
+Seventeenth print-acquisition research checkpoint. Format v3, deterministic encoding,
+production extraction and all HMAC/smooth-resample ceilings remain frozen.
+
+### Added
+
+- True held-out repetition cross-fit for ambiguous integer-cycle fields. Repetition
+  constraints are partitioned by coded-bit group so proposal and validation folds do
+  not reuse a repeated-position group or logical repetition position.
+- Symmetric `A -> B` and `B -> A` experiments: one fold estimates blind repetition
+  controls and exact top-1/top-2; only the opposite fold scores that distinction.
+- Cross-fit telemetry for fold profiles/pair budgets, exact states, directional
+  margins/deltas, directional support, local-cycle proposal agreement and aggregate
+  support.
+- `make crossfit-unwrap-test`; `make all-test` now contains 25 targets.
+- Explicit cross-fit budgets in diagnostic JSON: two folds, coded-bit-group partition,
+  ambiguous-only execution and a declared worst-case exact-state ceiling.
+
+### Changed
+
+- Cross-fit runs only when the normal all-pairs exact solver is already ambiguous with
+  an available second solution. This keeps the new research work away from accepted,
+  no-change and not-applicable candidates and preserves bounded runtime.
+- Proposal agreement compares recentered local integer cycles rather than fold-specific
+  absolute tile phase, because equivalent global tile anchors are not the cycle field
+  under study.
+- Private print-camera/scan summaries now expose the build17 cross-fit fields.
+
+### Research result
+
+- `foto stampa.jpg`: unchanged best hard `2/24`, global unwrap `not-applicable`; no
+  cross-fit is run and no HMAC authenticates.
+- `foto stampa storta.jpg`: both held-out directions favor their own exact top-1
+  (`+0.00465`, `+0.20522`), but the independently proposed local cycle fields agree in
+  only `2/9` cells. The all-pairs unwrap therefore remains ambiguous and rolled back.
+- Scanner `0270_001.jpg`: both held-out directions prefer the exact runner-up
+  (`-0.18283`, `-0.02287`) and the proposed local cycle fields agree in `0/9` cells.
+- Scanner `0270_002.jpg`: the two directions disagree (`+0.05639`, `-0.24050`) and
+  proposal agreement is `0/9`. The historical bad-unwrap counterexample remains safely
+  rejected.
+- No available real acquisition authenticates. Build17 therefore demonstrates that
+  genuinely disjoint repetition evidence is informative but still insufficient to
+  identify one stable integer-cycle field across the current physical corpus.
+
 ## v0.3.0-build16 — 2026-09-11
 
 Sixteenth print-acquisition research checkpoint. Format v3, deterministic encoding,
@@ -15,7 +152,7 @@ production extraction and the existing HMAC/smooth-resample ceilings remain froz
   unwrap paths and added a JSON-serialization regression.
 - Made mixed-axis ambiguity atomic: if either X or Y is ambiguous, no otherwise
   acceptable axis is partially committed and the global status remains `ambiguous`.
-- Removed the private physical-corpus key from Makefile/script/documentation defaults.
+- Clarified the physical-corpus credential model: acquisition files remain private, while the intentional test key `Piccotti` remains a public/reproducible Makefile/script default.
 - Added `/print-scan private/` and local private-manifest/config artifacts to `.gitignore`.
 - Updated the two historical smartphone filenames to canonical `.jpg` names matching
   their actual JPEG content.

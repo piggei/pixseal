@@ -56,6 +56,8 @@ func diagnosticGlobalDiscreteUnwrap(primary, lattice diagnosticBlindPhaseResult,
 	result.unwrapStatus = "not-applicable"
 	result.unwrapShiftX = make([]int, len(result.controls))
 	result.unwrapShiftY = make([]int, len(result.controls))
+	result.unwrapProposedShiftX = make([]int, len(result.controls))
+	result.unwrapProposedShiftY = make([]int, len(result.controls))
 
 	if len(cells) != len(result.controls) {
 		result.unwrapStatus = "invalid-input"
@@ -142,6 +144,8 @@ func diagnosticGlobalDiscreteUnwrap(primary, lattice diagnosticBlindPhaseResult,
 		if i < len(y.shifts) {
 			py = y.shifts[i]
 		}
+		result.unwrapProposedShiftX[i] = px
+		result.unwrapProposedShiftY[i] = py
 		if px != 0 || py != 0 {
 			result.unwrapProposedChanged++
 		}

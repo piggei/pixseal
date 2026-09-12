@@ -359,183 +359,258 @@ func homographyForPrintBoundary(width, height float64, boundary PrintBoundaryEst
 // it is never treated as a recovered watermark; AuthenticatedPayload still
 // requires the ordinary Format v3 HMAC to pass.
 type DiagnosticProjectiveAuthentication struct {
-	CandidatesProbed                                   int                                      `json:"candidates_probed"`
-	FullDecodeAttempts                                 int                                      `json:"full_decode_attempts"`
-	ReliabilityDecodeAttempts                          int                                      `json:"reliability_decode_attempts"`
-	FullGridBoundedUses                                int                                      `json:"full_grid_bounded_uses"`
-	MaxFullGridSampledBlocks                           int                                      `json:"max_full_grid_sampled_blocks"`
-	MaxFullGridSampledTiles                            int                                      `json:"max_full_grid_sampled_tiles"`
-	CoarseProbeMilliseconds                            int64                                    `json:"coarse_probe_ms"`
-	RefinementMilliseconds                             int64                                    `json:"refinement_ms"`
-	PhotometricMilliseconds                            int64                                    `json:"photometric_ms"`
-	FullDecodeMilliseconds                             int64                                    `json:"full_decode_ms"`
-	ProbeResults                                       []DiagnosticProjectiveProbeEvidence      `json:"probe_results,omitempty"`
-	RefinedResults                                     []DiagnosticProjectiveRefinementEvidence `json:"refined_results,omitempty"`
-	PhaseRefinementAttempts                            int                                      `json:"phase_refinement_attempts"`
-	PhaseHomographyFits                                int                                      `json:"phase_homography_fits"`
-	ResidualWarpFits                                   int                                      `json:"residual_warp_fits"`
-	BestResidualControls                               int                                      `json:"best_residual_controls"`
-	BestResidualRMSPixels                              float64                                  `json:"best_residual_rms_px"`
-	SubpixelRefinements                                int                                      `json:"subpixel_refinements"`
-	SubpixelProbeAttempts                              int                                      `json:"subpixel_probe_attempts"`
-	FundamentalScaleProbes                             int                                      `json:"fundamental_scale_probe_attempts"`
-	BestFundamentalWidthPx                             float64                                  `json:"best_fundamental_width_px,omitempty"`
-	BestFundamentalHeightPx                            float64                                  `json:"best_fundamental_height_px,omitempty"`
-	BestFundamentalSyncZ                               float64                                  `json:"best_fundamental_sync_z_score"`
-	BestSubpixelOffsetX                                float64                                  `json:"best_subpixel_offset_x"`
-	BestSubpixelOffsetY                                float64                                  `json:"best_subpixel_offset_y"`
-	BestSubpixelZScore                                 float64                                  `json:"best_subpixel_z_score"`
-	BestSyncProfile                                    Profile                                  `json:"best_sync_profile,omitempty"`
-	BestSyncFraction                                   float64                                  `json:"best_sync_fraction"`
-	BestSyncZScore                                     float64                                  `json:"best_sync_z_score"`
-	BestCanonicalWidthPx                               float64                                  `json:"best_canonical_width_px,omitempty"`
-	BestCanonicalHeightPx                              float64                                  `json:"best_canonical_height_px,omitempty"`
-	BestPhaseProfile                                   Profile                                  `json:"best_phase_profile,omitempty"`
-	BestPhaseConsistency                               float64                                  `json:"best_phase_consistency"`
-	BestPhaseXCoherence                                float64                                  `json:"best_phase_x_coherence"`
-	BestPhaseYCoherence                                float64                                  `json:"best_phase_y_coherence"`
-	BestPhaseCanonicalWidth                            float64                                  `json:"best_phase_canonical_width_px,omitempty"`
-	BestPhaseCanonicalHeight                           float64                                  `json:"best_phase_canonical_height_px,omitempty"`
-	PhotometricProbeAttempts                           int                                      `json:"photometric_probe_attempts"`
-	PhotometricResults                                 []DiagnosticPhotometricEvidence          `json:"photometric_results,omitempty"`
-	BestPhotometricMode                                string                                   `json:"best_photometric_mode,omitempty"`
-	BestPhotometricProfile                             Profile                                  `json:"best_photometric_profile,omitempty"`
-	BestPhotometricFraction                            float64                                  `json:"best_photometric_sync_fraction"`
-	BestPhotometricZScore                              float64                                  `json:"best_photometric_sync_z_score"`
-	BestPhotometricMeanAbs                             float64                                  `json:"best_photometric_mean_absolute_margin"`
-	BestPhotometricMargin                              float64                                  `json:"best_photometric_normalized_sync_margin"`
-	BitDiagnosticAttempts                              int                                      `json:"bit_diagnostic_attempts"`
-	BitDiagnostics                                     []DiagnosticBitChannelEvidence           `json:"bit_diagnostics,omitempty"`
-	BestBitProfile                                     Profile                                  `json:"best_bit_profile,omitempty"`
-	BestBitMode                                        string                                   `json:"best_bit_mode,omitempty"`
-	BestBitGeometrySource                              string                                   `json:"best_bit_geometry_source,omitempty"`
-	BestKnownHeaderClean                               int                                      `json:"best_known_header_hamming_clean_words"`
-	BestKnownHeaderOneBit                              int                                      `json:"best_known_header_hamming_one_bit_words"`
-	BestKnownHeaderErrors                              int                                      `json:"best_known_header_coded_bit_errors"`
-	BestKnownHeaderMulti                               int                                      `json:"best_known_header_hamming_multi_error_words"`
-	BestPostECCHeaderErrors                            int                                      `json:"best_post_ecc_known_header_bit_errors"`
-	BestSoftPostECCHeaderErrors                        int                                      `json:"best_soft_post_ecc_known_header_bit_errors"`
-	BestSoftHeaderImprovement                          int                                      `json:"best_soft_known_header_bit_improvement"`
-	BestSoftProfile                                    Profile                                  `json:"best_soft_profile,omitempty"`
-	BestSoftMode                                       string                                   `json:"best_soft_mode,omitempty"`
-	BestSoftGeometrySource                             string                                   `json:"best_soft_geometry_source,omitempty"`
-	BestHardCandidateSoftErrors                        int                                      `json:"best_hard_candidate_soft_post_ecc_known_header_bit_errors"`
-	BestHardCandidateSoftGain                          int                                      `json:"best_hard_candidate_soft_known_header_bit_improvement"`
-	BestSoftCandidateHardErrors                        int                                      `json:"best_soft_candidate_hard_post_ecc_known_header_bit_errors"`
-	SpatialDiagnosticAttempts                          int                                      `json:"spatial_diagnostic_attempts"`
-	BestSpatialProfile                                 Profile                                  `json:"best_spatial_profile,omitempty"`
-	BestSpatialMode                                    string                                   `json:"best_spatial_mode,omitempty"`
-	BestSpatialGeometrySource                          string                                   `json:"best_spatial_geometry_source,omitempty"`
-	BestSpatialCells                                   int                                      `json:"best_spatial_cells"`
-	BestSpatialTileAgreement                           float64                                  `json:"best_spatial_mean_tile_position_sign_agreement"`
-	BestSpatialTileUnstable                            float64                                  `json:"best_spatial_unstable_tile_position_fraction"`
-	BestSpatialStableWrongBits                         int                                      `json:"best_spatial_stable_wrong_known_header_bits"`
-	BestSpatialMixedBits                               int                                      `json:"best_spatial_mixed_known_header_bits"`
-	BestSpatialMajorityErrors                          int                                      `json:"best_spatial_majority_coded_bit_errors"`
-	BestSpatialMajorityPostECC                         int                                      `json:"best_spatial_majority_post_ecc_known_header_bit_errors"`
-	BestSpatialMajorityGain                            int                                      `json:"best_spatial_majority_post_ecc_improvement"`
-	BestSpatialAllAgreement                            float64                                  `json:"best_spatial_mean_all_coded_bit_agreement"`
-	BestSpatialUnstableFraction                        float64                                  `json:"best_spatial_unstable_all_coded_bit_fraction"`
-	BestSpatialLocalPhaseSame                          int                                      `json:"best_spatial_local_phase_same_as_global_cells"`
-	BestSpatialMeanPhaseOffset                         float64                                  `json:"best_spatial_mean_local_phase_offset_blocks"`
-	BestSpatialMaxPhaseOffset                          float64                                  `json:"best_spatial_max_local_phase_offset_blocks"`
-	BestSpatialMeanSubblockPhaseOffset                 float64                                  `json:"best_spatial_mean_local_phase_subblock_offset_blocks"`
-	BestSpatialMaxSubblockPhaseOffset                  float64                                  `json:"best_spatial_max_local_phase_subblock_offset_blocks"`
-	BestSpatialMeanPhaseConfidence                     float64                                  `json:"best_spatial_mean_local_phase_confidence"`
-	BestSpatialMinPhaseConfidence                      float64                                  `json:"best_spatial_min_local_phase_confidence"`
-	BestSpatialBlindMethod                             string                                   `json:"best_spatial_blind_phase_method,omitempty"`
-	BestSpatialBlindProfile                            Profile                                  `json:"best_spatial_blind_phase_profile,omitempty"`
-	BestSpatialBlindGlobalX                            int                                      `json:"best_spatial_blind_phase_global_x"`
-	BestSpatialBlindGlobalY                            int                                      `json:"best_spatial_blind_phase_global_y"`
-	BestSpatialBlindGlobalScore                        float64                                  `json:"best_spatial_blind_phase_global_score"`
-	BestSpatialBlindCells                              int                                      `json:"best_spatial_blind_phase_cells"`
-	BestSpatialBlindPairs                              int                                      `json:"best_spatial_blind_phase_pairs"`
-	BestSpatialBlindMeanPairScore                      float64                                  `json:"best_spatial_blind_phase_mean_pair_score"`
-	BestSpatialBlindMeanOffset                         float64                                  `json:"best_spatial_blind_phase_mean_offset_blocks"`
-	BestSpatialBlindMaxOffset                          float64                                  `json:"best_spatial_blind_phase_max_offset_blocks"`
-	BestSpatialBlindMeanConfidence                     float64                                  `json:"best_spatial_blind_phase_mean_confidence"`
-	BestSpatialBlindMinConfidence                      float64                                  `json:"best_spatial_blind_phase_min_confidence"`
-	BestSpatialBlindRobustOutliers                     int                                      `json:"best_spatial_blind_phase_robust_pair_outliers"`
-	BestSpatialBlindSecondaryMethod                    string                                   `json:"best_spatial_blind_secondary_method,omitempty"`
-	BestSpatialBlindSecondaryCells                     int                                      `json:"best_spatial_blind_secondary_cells"`
-	BestSpatialBlindSecondaryMeanScore                 float64                                  `json:"best_spatial_blind_secondary_mean_pair_score"`
-	BestSpatialBlindConsensusCells                     int                                      `json:"best_spatial_blind_consensus_cells"`
-	BestSpatialBlindCycleSlipFixes                     int                                      `json:"best_spatial_blind_cycle_slip_corrections"`
-	BestSpatialBlindMeanObserverDist                   float64                                  `json:"best_spatial_blind_mean_observer_distance_blocks"`
-	BestSpatialBlindMaxObserverDist                    float64                                  `json:"best_spatial_blind_max_observer_distance_blocks"`
-	BestSpatialBlindLatticeMethod                      string                                   `json:"best_spatial_blind_lattice_phase_method,omitempty"`
-	BestSpatialBlindLatticeCells                       int                                      `json:"best_spatial_blind_lattice_phase_cells"`
-	BestSpatialBlindLatticeMeanConf                    float64                                  `json:"best_spatial_blind_lattice_phase_mean_confidence"`
-	BestSpatialBlindLatticeMinConf                     float64                                  `json:"best_spatial_blind_lattice_phase_min_confidence"`
-	BestSpatialBlindLatticeMeanDist                    float64                                  `json:"best_spatial_blind_lattice_mean_fraction_distance_blocks"`
-	BestSpatialBlindLatticeMaxDist                     float64                                  `json:"best_spatial_blind_lattice_max_fraction_distance_blocks"`
-	BestSpatialBlindLatticeConsensus                   int                                      `json:"best_spatial_blind_lattice_consensus_cells"`
-	BestSpatialBlindLatticeCycleFixes                  int                                      `json:"best_spatial_blind_lattice_cycle_slip_corrections"`
-	BestSpatialBlindGlobalUnwrapMethod                 string                                   `json:"best_spatial_blind_global_unwrap_method,omitempty"`
-	BestSpatialBlindGlobalUnwrapStatus                 string                                   `json:"best_spatial_blind_global_unwrap_status,omitempty"`
-	BestSpatialBlindGlobalUnwrapStatusX                string                                   `json:"best_spatial_blind_global_unwrap_status_x,omitempty"`
-	BestSpatialBlindGlobalUnwrapStatusY                string                                   `json:"best_spatial_blind_global_unwrap_status_y,omitempty"`
-	BestSpatialBlindGlobalUnwrapStates                 int                                      `json:"best_spatial_blind_global_unwrap_evaluated_states"`
-	BestSpatialBlindGlobalUnwrapEligible               int                                      `json:"best_spatial_blind_global_unwrap_eligible_cells"`
-	BestSpatialBlindGlobalUnwrapEligibleX              int                                      `json:"best_spatial_blind_global_unwrap_eligible_cells_x"`
-	BestSpatialBlindGlobalUnwrapEligibleY              int                                      `json:"best_spatial_blind_global_unwrap_eligible_cells_y"`
-	BestSpatialBlindGlobalUnwrapChanged                int                                      `json:"best_spatial_blind_global_unwrap_changed_cells"`
-	BestSpatialBlindGlobalUnwrapProposedChanged        int                                      `json:"best_spatial_blind_global_unwrap_proposed_changed_cells"`
-	BestSpatialBlindGlobalUnwrapAcceptedAxes           int                                      `json:"best_spatial_blind_global_unwrap_accepted_axes"`
-	BestSpatialBlindGlobalUnwrapBaseline               float64                                  `json:"best_spatial_blind_global_unwrap_baseline_objective"`
-	BestSpatialBlindGlobalUnwrapObjective              float64                                  `json:"best_spatial_blind_global_unwrap_proposed_objective"`
-	BestSpatialBlindGlobalUnwrapAppliedObjective       float64                                  `json:"best_spatial_blind_global_unwrap_applied_objective"`
-	BestSpatialBlindGlobalUnwrapSecond                 float64                                  `json:"best_spatial_blind_global_unwrap_second_objective"`
-	BestSpatialBlindGlobalUnwrapSecondAvailable        bool                                     `json:"best_spatial_blind_global_unwrap_second_objective_available"`
-	BestSpatialBlindGlobalUnwrapImprovement            float64                                  `json:"best_spatial_blind_global_unwrap_improvement"`
-	BestSpatialBlindGlobalUnwrapMargin                 float64                                  `json:"best_spatial_blind_global_unwrap_margin"`
-	BestSpatialBlindGlobalUnwrapAmbiguous              bool                                     `json:"best_spatial_blind_global_unwrap_ambiguous"`
-	BestSpatialBlindGlobalUnwrapValidationMethod       string                                   `json:"best_spatial_blind_global_unwrap_validation_method,omitempty"`
-	BestSpatialBlindGlobalUnwrapValidationAvailable    bool                                     `json:"best_spatial_blind_global_unwrap_validation_available"`
-	BestSpatialBlindGlobalUnwrapValidationCells        int                                      `json:"best_spatial_blind_global_unwrap_validation_cells"`
-	BestSpatialBlindGlobalUnwrapValidationPairsFold0   int                                      `json:"best_spatial_blind_global_unwrap_validation_pairs_fold0"`
-	BestSpatialBlindGlobalUnwrapValidationPairsFold1   int                                      `json:"best_spatial_blind_global_unwrap_validation_pairs_fold1"`
-	BestSpatialBlindGlobalUnwrapValidationFold0Delta   float64                                  `json:"best_spatial_blind_global_unwrap_validation_fold0_delta"`
-	BestSpatialBlindGlobalUnwrapValidationFold1Delta   float64                                  `json:"best_spatial_blind_global_unwrap_validation_fold1_delta"`
-	BestSpatialBlindGlobalUnwrapValidationMeanDelta    float64                                  `json:"best_spatial_blind_global_unwrap_validation_mean_delta"`
-	BestSpatialBlindGlobalUnwrapValidationSupportsBest bool                                     `json:"best_spatial_blind_global_unwrap_validation_supports_best"`
-	BestSpatialBlindOracleCells                        int                                      `json:"best_spatial_blind_phase_oracle_compared_cells"`
-	BestSpatialBlindMeanOracleDistance                 float64                                  `json:"best_spatial_blind_phase_mean_oracle_distance_blocks"`
-	BestSpatialBlindMaxOracleDistance                  float64                                  `json:"best_spatial_blind_phase_max_oracle_distance_blocks"`
-	BestSpatialLocalStableWrong                        int                                      `json:"best_spatial_local_phase_stable_wrong_known_header_bits"`
-	BestSpatialLocalMixed                              int                                      `json:"best_spatial_local_phase_mixed_known_header_bits"`
-	BestSpatialLocalMajorityECC                        int                                      `json:"best_spatial_local_phase_majority_post_ecc_known_header_bit_errors"`
-	BestSpatialLocalAgreement                          float64                                  `json:"best_spatial_local_phase_mean_all_coded_bit_agreement"`
-	BestSpatialLocalUnstable                           float64                                  `json:"best_spatial_local_phase_unstable_all_coded_bit_fraction"`
-	SmoothPhaseFitAttempts                             int                                      `json:"smooth_phase_fit_attempts"`
-	SmoothPhaseEligibleFits                            int                                      `json:"smooth_phase_eligible_fits"`
-	SmoothPhaseResampleAttempts                        int                                      `json:"smooth_phase_resample_attempts"`
-	SmoothPhaseDecodeAttempts                          int                                      `json:"smooth_phase_decode_attempts"`
-	BestSmoothPhaseProfile                             Profile                                  `json:"best_smooth_phase_profile,omitempty"`
-	BestSmoothPhaseMode                                string                                   `json:"best_smooth_phase_mode,omitempty"`
-	BestSmoothPhaseGeometry                            string                                   `json:"best_smooth_phase_geometry_source,omitempty"`
-	BestSmoothPhaseControls                            int                                      `json:"best_smooth_phase_controls"`
-	BestSmoothPhaseModel                               string                                   `json:"best_smooth_phase_model,omitempty"`
-	BestSmoothPhaseControlSource                       string                                   `json:"best_smooth_phase_control_source,omitempty"`
-	BestSmoothPhaseMeanConfidence                      float64                                  `json:"best_smooth_phase_mean_control_confidence"`
-	BestSmoothPhaseMinConfidence                       float64                                  `json:"best_smooth_phase_min_control_confidence"`
-	BestSmoothPhaseRobustOutliers                      int                                      `json:"best_smooth_phase_robust_outliers"`
-	BestSmoothPhaseAffineFitRMS                        float64                                  `json:"best_smooth_phase_affine_fit_rms_blocks"`
-	BestSmoothPhaseAffineLOORMS                        float64                                  `json:"best_smooth_phase_affine_leave_one_out_rms_blocks"`
-	BestSmoothPhaseQuadraticAvailable                  bool                                     `json:"best_smooth_phase_quadratic_available"`
-	BestSmoothPhaseQuadraticFitRMS                     float64                                  `json:"best_smooth_phase_quadratic_fit_rms_blocks"`
-	BestSmoothPhaseQuadraticLOORMS                     float64                                  `json:"best_smooth_phase_quadratic_leave_one_out_rms_blocks"`
-	BestSmoothPhaseQuadraticSelected                   bool                                     `json:"best_smooth_phase_quadratic_selected"`
-	BestSmoothPhaseFitRMS                              float64                                  `json:"best_smooth_phase_fit_rms_blocks"`
-	BestSmoothPhaseLOORMS                              float64                                  `json:"best_smooth_phase_leave_one_out_rms_blocks"`
-	BestSmoothPhaseMaxCorrection                       float64                                  `json:"best_smooth_phase_max_correction_blocks"`
-	BestSmoothPhaseBasePostECC                         int                                      `json:"best_smooth_phase_base_post_ecc_known_header_bit_errors"`
-	BestSmoothPhasePostECC                             int                                      `json:"best_smooth_phase_post_ecc_known_header_bit_errors"`
-	BestSmoothPhaseImprovement                         int                                      `json:"best_smooth_phase_post_ecc_improvement"`
-	BestSmoothPhaseCodedErrors                         int                                      `json:"best_smooth_phase_known_header_coded_bit_errors"`
-	BestSmoothPhaseSyncZ                               float64                                  `json:"best_smooth_phase_sync_z_score"`
-	BestSyndromeFraction                               float64                                  `json:"best_hamming_nonzero_syndrome_fraction"`
-	BestWrongMarginRatio                               float64                                  `json:"best_known_wrong_to_correct_margin_ratio"`
+	CandidatesProbed                                               int                                      `json:"candidates_probed"`
+	FullDecodeAttempts                                             int                                      `json:"full_decode_attempts"`
+	ReliabilityDecodeAttempts                                      int                                      `json:"reliability_decode_attempts"`
+	FullGridBoundedUses                                            int                                      `json:"full_grid_bounded_uses"`
+	MaxFullGridSampledBlocks                                       int                                      `json:"max_full_grid_sampled_blocks"`
+	MaxFullGridSampledTiles                                        int                                      `json:"max_full_grid_sampled_tiles"`
+	CoarseProbeMilliseconds                                        int64                                    `json:"coarse_probe_ms"`
+	RefinementMilliseconds                                         int64                                    `json:"refinement_ms"`
+	PhotometricMilliseconds                                        int64                                    `json:"photometric_ms"`
+	FullDecodeMilliseconds                                         int64                                    `json:"full_decode_ms"`
+	CrossfitUnwrapMilliseconds                                     int64                                    `json:"crossfit_unwrap_ms"`
+	CrossfitUnwrapAttempts                                         int                                      `json:"crossfit_unwrap_attempts"`
+	CrossfitUnwrapSkippedCandidates                                int                                      `json:"crossfit_unwrap_skipped_candidates"`
+	PartitionStabilityMilliseconds                                 int64                                    `json:"partition_stability_ms"`
+	PartitionStabilityAttempts                                     int                                      `json:"partition_stability_attempts"`
+	CycleAnchorMilliseconds                                        int64                                    `json:"cycle_anchor_ms"`
+	CycleAnchorAttempts                                            int                                      `json:"cycle_anchor_attempts"`
+	ProbeResults                                                   []DiagnosticProjectiveProbeEvidence      `json:"probe_results,omitempty"`
+	RefinedResults                                                 []DiagnosticProjectiveRefinementEvidence `json:"refined_results,omitempty"`
+	PhaseRefinementAttempts                                        int                                      `json:"phase_refinement_attempts"`
+	PhaseHomographyFits                                            int                                      `json:"phase_homography_fits"`
+	ResidualWarpFits                                               int                                      `json:"residual_warp_fits"`
+	BestResidualControls                                           int                                      `json:"best_residual_controls"`
+	BestResidualRMSPixels                                          float64                                  `json:"best_residual_rms_px"`
+	SubpixelRefinements                                            int                                      `json:"subpixel_refinements"`
+	SubpixelProbeAttempts                                          int                                      `json:"subpixel_probe_attempts"`
+	FundamentalScaleProbes                                         int                                      `json:"fundamental_scale_probe_attempts"`
+	BestFundamentalWidthPx                                         float64                                  `json:"best_fundamental_width_px,omitempty"`
+	BestFundamentalHeightPx                                        float64                                  `json:"best_fundamental_height_px,omitempty"`
+	BestFundamentalSyncZ                                           float64                                  `json:"best_fundamental_sync_z_score"`
+	BestSubpixelOffsetX                                            float64                                  `json:"best_subpixel_offset_x"`
+	BestSubpixelOffsetY                                            float64                                  `json:"best_subpixel_offset_y"`
+	BestSubpixelZScore                                             float64                                  `json:"best_subpixel_z_score"`
+	BestSyncProfile                                                Profile                                  `json:"best_sync_profile,omitempty"`
+	BestSyncFraction                                               float64                                  `json:"best_sync_fraction"`
+	BestSyncZScore                                                 float64                                  `json:"best_sync_z_score"`
+	BestCanonicalWidthPx                                           float64                                  `json:"best_canonical_width_px,omitempty"`
+	BestCanonicalHeightPx                                          float64                                  `json:"best_canonical_height_px,omitempty"`
+	BestPhaseProfile                                               Profile                                  `json:"best_phase_profile,omitempty"`
+	BestPhaseConsistency                                           float64                                  `json:"best_phase_consistency"`
+	BestPhaseXCoherence                                            float64                                  `json:"best_phase_x_coherence"`
+	BestPhaseYCoherence                                            float64                                  `json:"best_phase_y_coherence"`
+	BestPhaseCanonicalWidth                                        float64                                  `json:"best_phase_canonical_width_px,omitempty"`
+	BestPhaseCanonicalHeight                                       float64                                  `json:"best_phase_canonical_height_px,omitempty"`
+	PhotometricProbeAttempts                                       int                                      `json:"photometric_probe_attempts"`
+	PhotometricResults                                             []DiagnosticPhotometricEvidence          `json:"photometric_results,omitempty"`
+	BestPhotometricMode                                            string                                   `json:"best_photometric_mode,omitempty"`
+	BestPhotometricProfile                                         Profile                                  `json:"best_photometric_profile,omitempty"`
+	BestPhotometricFraction                                        float64                                  `json:"best_photometric_sync_fraction"`
+	BestPhotometricZScore                                          float64                                  `json:"best_photometric_sync_z_score"`
+	BestPhotometricMeanAbs                                         float64                                  `json:"best_photometric_mean_absolute_margin"`
+	BestPhotometricMargin                                          float64                                  `json:"best_photometric_normalized_sync_margin"`
+	BitDiagnosticAttempts                                          int                                      `json:"bit_diagnostic_attempts"`
+	BitDiagnostics                                                 []DiagnosticBitChannelEvidence           `json:"bit_diagnostics,omitempty"`
+	BestBitProfile                                                 Profile                                  `json:"best_bit_profile,omitempty"`
+	BestBitMode                                                    string                                   `json:"best_bit_mode,omitempty"`
+	BestBitGeometrySource                                          string                                   `json:"best_bit_geometry_source,omitempty"`
+	BestKnownHeaderClean                                           int                                      `json:"best_known_header_hamming_clean_words"`
+	BestKnownHeaderOneBit                                          int                                      `json:"best_known_header_hamming_one_bit_words"`
+	BestKnownHeaderErrors                                          int                                      `json:"best_known_header_coded_bit_errors"`
+	BestKnownHeaderMulti                                           int                                      `json:"best_known_header_hamming_multi_error_words"`
+	BestPostECCHeaderErrors                                        int                                      `json:"best_post_ecc_known_header_bit_errors"`
+	BestSoftPostECCHeaderErrors                                    int                                      `json:"best_soft_post_ecc_known_header_bit_errors"`
+	BestSoftHeaderImprovement                                      int                                      `json:"best_soft_known_header_bit_improvement"`
+	BestSoftProfile                                                Profile                                  `json:"best_soft_profile,omitempty"`
+	BestSoftMode                                                   string                                   `json:"best_soft_mode,omitempty"`
+	BestSoftGeometrySource                                         string                                   `json:"best_soft_geometry_source,omitempty"`
+	BestHardCandidateSoftErrors                                    int                                      `json:"best_hard_candidate_soft_post_ecc_known_header_bit_errors"`
+	BestHardCandidateSoftGain                                      int                                      `json:"best_hard_candidate_soft_known_header_bit_improvement"`
+	BestSoftCandidateHardErrors                                    int                                      `json:"best_soft_candidate_hard_post_ecc_known_header_bit_errors"`
+	SpatialDiagnosticAttempts                                      int                                      `json:"spatial_diagnostic_attempts"`
+	BestSpatialProfile                                             Profile                                  `json:"best_spatial_profile,omitempty"`
+	BestSpatialMode                                                string                                   `json:"best_spatial_mode,omitempty"`
+	BestSpatialGeometrySource                                      string                                   `json:"best_spatial_geometry_source,omitempty"`
+	BestSpatialCells                                               int                                      `json:"best_spatial_cells"`
+	BestSpatialTileAgreement                                       float64                                  `json:"best_spatial_mean_tile_position_sign_agreement"`
+	BestSpatialTileUnstable                                        float64                                  `json:"best_spatial_unstable_tile_position_fraction"`
+	BestSpatialStableWrongBits                                     int                                      `json:"best_spatial_stable_wrong_known_header_bits"`
+	BestSpatialMixedBits                                           int                                      `json:"best_spatial_mixed_known_header_bits"`
+	BestSpatialMajorityErrors                                      int                                      `json:"best_spatial_majority_coded_bit_errors"`
+	BestSpatialMajorityPostECC                                     int                                      `json:"best_spatial_majority_post_ecc_known_header_bit_errors"`
+	BestSpatialMajorityGain                                        int                                      `json:"best_spatial_majority_post_ecc_improvement"`
+	BestSpatialAllAgreement                                        float64                                  `json:"best_spatial_mean_all_coded_bit_agreement"`
+	BestSpatialUnstableFraction                                    float64                                  `json:"best_spatial_unstable_all_coded_bit_fraction"`
+	BestSpatialLocalPhaseSame                                      int                                      `json:"best_spatial_local_phase_same_as_global_cells"`
+	BestSpatialMeanPhaseOffset                                     float64                                  `json:"best_spatial_mean_local_phase_offset_blocks"`
+	BestSpatialMaxPhaseOffset                                      float64                                  `json:"best_spatial_max_local_phase_offset_blocks"`
+	BestSpatialMeanSubblockPhaseOffset                             float64                                  `json:"best_spatial_mean_local_phase_subblock_offset_blocks"`
+	BestSpatialMaxSubblockPhaseOffset                              float64                                  `json:"best_spatial_max_local_phase_subblock_offset_blocks"`
+	BestSpatialMeanPhaseConfidence                                 float64                                  `json:"best_spatial_mean_local_phase_confidence"`
+	BestSpatialMinPhaseConfidence                                  float64                                  `json:"best_spatial_min_local_phase_confidence"`
+	BestSpatialBlindMethod                                         string                                   `json:"best_spatial_blind_phase_method,omitempty"`
+	BestSpatialBlindProfile                                        Profile                                  `json:"best_spatial_blind_phase_profile,omitempty"`
+	BestSpatialBlindGlobalX                                        int                                      `json:"best_spatial_blind_phase_global_x"`
+	BestSpatialBlindGlobalY                                        int                                      `json:"best_spatial_blind_phase_global_y"`
+	BestSpatialBlindGlobalScore                                    float64                                  `json:"best_spatial_blind_phase_global_score"`
+	BestSpatialBlindCells                                          int                                      `json:"best_spatial_blind_phase_cells"`
+	BestSpatialBlindPairs                                          int                                      `json:"best_spatial_blind_phase_pairs"`
+	BestSpatialBlindMeanPairScore                                  float64                                  `json:"best_spatial_blind_phase_mean_pair_score"`
+	BestSpatialBlindMeanOffset                                     float64                                  `json:"best_spatial_blind_phase_mean_offset_blocks"`
+	BestSpatialBlindMaxOffset                                      float64                                  `json:"best_spatial_blind_phase_max_offset_blocks"`
+	BestSpatialBlindMeanConfidence                                 float64                                  `json:"best_spatial_blind_phase_mean_confidence"`
+	BestSpatialBlindMinConfidence                                  float64                                  `json:"best_spatial_blind_phase_min_confidence"`
+	BestSpatialBlindRobustOutliers                                 int                                      `json:"best_spatial_blind_phase_robust_pair_outliers"`
+	BestSpatialBlindSecondaryMethod                                string                                   `json:"best_spatial_blind_secondary_method,omitempty"`
+	BestSpatialBlindSecondaryCells                                 int                                      `json:"best_spatial_blind_secondary_cells"`
+	BestSpatialBlindSecondaryMeanScore                             float64                                  `json:"best_spatial_blind_secondary_mean_pair_score"`
+	BestSpatialBlindConsensusCells                                 int                                      `json:"best_spatial_blind_consensus_cells"`
+	BestSpatialBlindCycleSlipFixes                                 int                                      `json:"best_spatial_blind_cycle_slip_corrections"`
+	BestSpatialBlindMeanObserverDist                               float64                                  `json:"best_spatial_blind_mean_observer_distance_blocks"`
+	BestSpatialBlindMaxObserverDist                                float64                                  `json:"best_spatial_blind_max_observer_distance_blocks"`
+	BestSpatialBlindLatticeMethod                                  string                                   `json:"best_spatial_blind_lattice_phase_method,omitempty"`
+	BestSpatialBlindLatticeCells                                   int                                      `json:"best_spatial_blind_lattice_phase_cells"`
+	BestSpatialBlindLatticeMeanConf                                float64                                  `json:"best_spatial_blind_lattice_phase_mean_confidence"`
+	BestSpatialBlindLatticeMinConf                                 float64                                  `json:"best_spatial_blind_lattice_phase_min_confidence"`
+	BestSpatialBlindLatticeMeanDist                                float64                                  `json:"best_spatial_blind_lattice_mean_fraction_distance_blocks"`
+	BestSpatialBlindLatticeMaxDist                                 float64                                  `json:"best_spatial_blind_lattice_max_fraction_distance_blocks"`
+	BestSpatialBlindLatticeConsensus                               int                                      `json:"best_spatial_blind_lattice_consensus_cells"`
+	BestSpatialBlindLatticeCycleFixes                              int                                      `json:"best_spatial_blind_lattice_cycle_slip_corrections"`
+	BestSpatialBlindGlobalUnwrapMethod                             string                                   `json:"best_spatial_blind_global_unwrap_method,omitempty"`
+	BestSpatialBlindGlobalUnwrapStatus                             string                                   `json:"best_spatial_blind_global_unwrap_status,omitempty"`
+	BestSpatialBlindGlobalUnwrapStatusX                            string                                   `json:"best_spatial_blind_global_unwrap_status_x,omitempty"`
+	BestSpatialBlindGlobalUnwrapStatusY                            string                                   `json:"best_spatial_blind_global_unwrap_status_y,omitempty"`
+	BestSpatialBlindGlobalUnwrapStates                             int                                      `json:"best_spatial_blind_global_unwrap_evaluated_states"`
+	BestSpatialBlindGlobalUnwrapEligible                           int                                      `json:"best_spatial_blind_global_unwrap_eligible_cells"`
+	BestSpatialBlindGlobalUnwrapEligibleX                          int                                      `json:"best_spatial_blind_global_unwrap_eligible_cells_x"`
+	BestSpatialBlindGlobalUnwrapEligibleY                          int                                      `json:"best_spatial_blind_global_unwrap_eligible_cells_y"`
+	BestSpatialBlindGlobalUnwrapChanged                            int                                      `json:"best_spatial_blind_global_unwrap_changed_cells"`
+	BestSpatialBlindGlobalUnwrapProposedChanged                    int                                      `json:"best_spatial_blind_global_unwrap_proposed_changed_cells"`
+	BestSpatialBlindGlobalUnwrapAcceptedAxes                       int                                      `json:"best_spatial_blind_global_unwrap_accepted_axes"`
+	BestSpatialBlindGlobalUnwrapBaseline                           float64                                  `json:"best_spatial_blind_global_unwrap_baseline_objective"`
+	BestSpatialBlindGlobalUnwrapObjective                          float64                                  `json:"best_spatial_blind_global_unwrap_proposed_objective"`
+	BestSpatialBlindGlobalUnwrapAppliedObjective                   float64                                  `json:"best_spatial_blind_global_unwrap_applied_objective"`
+	BestSpatialBlindGlobalUnwrapSecond                             float64                                  `json:"best_spatial_blind_global_unwrap_second_objective"`
+	BestSpatialBlindGlobalUnwrapSecondAvailable                    bool                                     `json:"best_spatial_blind_global_unwrap_second_objective_available"`
+	BestSpatialBlindGlobalUnwrapImprovement                        float64                                  `json:"best_spatial_blind_global_unwrap_improvement"`
+	BestSpatialBlindGlobalUnwrapMargin                             float64                                  `json:"best_spatial_blind_global_unwrap_margin"`
+	BestSpatialBlindGlobalUnwrapAmbiguous                          bool                                     `json:"best_spatial_blind_global_unwrap_ambiguous"`
+	BestSpatialBlindGlobalUnwrapValidationMethod                   string                                   `json:"best_spatial_blind_global_unwrap_validation_method,omitempty"`
+	BestSpatialBlindGlobalUnwrapValidationAvailable                bool                                     `json:"best_spatial_blind_global_unwrap_validation_available"`
+	BestSpatialBlindGlobalUnwrapValidationCells                    int                                      `json:"best_spatial_blind_global_unwrap_validation_cells"`
+	BestSpatialBlindGlobalUnwrapValidationPairsFold0               int                                      `json:"best_spatial_blind_global_unwrap_validation_pairs_fold0"`
+	BestSpatialBlindGlobalUnwrapValidationPairsFold1               int                                      `json:"best_spatial_blind_global_unwrap_validation_pairs_fold1"`
+	BestSpatialBlindGlobalUnwrapValidationFold0Delta               float64                                  `json:"best_spatial_blind_global_unwrap_validation_fold0_delta"`
+	BestSpatialBlindGlobalUnwrapValidationFold1Delta               float64                                  `json:"best_spatial_blind_global_unwrap_validation_fold1_delta"`
+	BestSpatialBlindGlobalUnwrapValidationMeanDelta                float64                                  `json:"best_spatial_blind_global_unwrap_validation_mean_delta"`
+	BestSpatialBlindGlobalUnwrapValidationSupportsBest             bool                                     `json:"best_spatial_blind_global_unwrap_validation_supports_best"`
+	BestSpatialBlindGlobalUnwrapCrossfitMethod                     string                                   `json:"best_spatial_blind_global_unwrap_crossfit_method,omitempty"`
+	BestSpatialBlindGlobalUnwrapCrossfitAvailable                  bool                                     `json:"best_spatial_blind_global_unwrap_crossfit_available"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBAvailable              bool                                     `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_available"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToAAvailable              bool                                     `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_available"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBProfile                Profile                                  `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_profile,omitempty"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToAProfile                Profile                                  `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_profile,omitempty"`
+	BestSpatialBlindGlobalUnwrapCrossfitProposalPairsA             int                                      `json:"best_spatial_blind_global_unwrap_crossfit_proposal_pairs_a"`
+	BestSpatialBlindGlobalUnwrapCrossfitProposalPairsB             int                                      `json:"best_spatial_blind_global_unwrap_crossfit_proposal_pairs_b"`
+	BestSpatialBlindGlobalUnwrapCrossfitValidationPairsA           int                                      `json:"best_spatial_blind_global_unwrap_crossfit_validation_pairs_a"`
+	BestSpatialBlindGlobalUnwrapCrossfitValidationPairsB           int                                      `json:"best_spatial_blind_global_unwrap_crossfit_validation_pairs_b"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBCells                  int                                      `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_cells"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToACells                  int                                      `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_cells"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBStates                 int                                      `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_evaluated_states"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToAStates                 int                                      `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_evaluated_states"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBMargin                 float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_margin"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToAMargin                 float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_margin"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBDelta                  float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_validation_delta"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToADelta                  float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_validation_delta"`
+	BestSpatialBlindGlobalUnwrapCrossfitAToBSupportsBest           bool                                     `json:"best_spatial_blind_global_unwrap_crossfit_a_to_b_supports_best"`
+	BestSpatialBlindGlobalUnwrapCrossfitBToASupportsBest           bool                                     `json:"best_spatial_blind_global_unwrap_crossfit_b_to_a_supports_best"`
+	BestSpatialBlindGlobalUnwrapCrossfitComparedCells              int                                      `json:"best_spatial_blind_global_unwrap_crossfit_compared_cells"`
+	BestSpatialBlindGlobalUnwrapCrossfitAgreementCells             int                                      `json:"best_spatial_blind_global_unwrap_crossfit_agreement_cells"`
+	BestSpatialBlindGlobalUnwrapCrossfitAgreementFraction          float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_agreement_fraction"`
+	BestSpatialBlindGlobalUnwrapCrossfitAgreementMeanConfidence    float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_agreement_mean_confidence"`
+	BestSpatialBlindGlobalUnwrapCrossfitDisagreementMeanConfidence float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_disagreement_mean_confidence"`
+	BestSpatialBlindGlobalUnwrapCrossfitAgreementMeanLattice       float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_agreement_mean_lattice_confidence"`
+	BestSpatialBlindGlobalUnwrapCrossfitDisagreementMeanLattice    float64                                  `json:"best_spatial_blind_global_unwrap_crossfit_disagreement_mean_lattice_confidence"`
+	BestSpatialBlindGlobalUnwrapCrossfitSupportsBest               bool                                     `json:"best_spatial_blind_global_unwrap_crossfit_supports_best"`
+	BestSpatialBlindGlobalUnwrapStabilityMethod                    string                                   `json:"best_spatial_blind_global_unwrap_stability_method,omitempty"`
+	BestSpatialBlindGlobalUnwrapStabilityAvailable                 bool                                     `json:"best_spatial_blind_global_unwrap_stability_available"`
+	BestSpatialBlindGlobalUnwrapStabilityPartitions                int                                      `json:"best_spatial_blind_global_unwrap_stability_partitions"`
+	BestSpatialBlindGlobalUnwrapStabilityTrialsRequested           int                                      `json:"best_spatial_blind_global_unwrap_stability_trials_requested"`
+	BestSpatialBlindGlobalUnwrapStabilityTrialsAvailable           int                                      `json:"best_spatial_blind_global_unwrap_stability_trials_available"`
+	BestSpatialBlindGlobalUnwrapStabilityTrialsSupported           int                                      `json:"best_spatial_blind_global_unwrap_stability_trials_supported"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedTrialFraction    float64                                  `json:"best_spatial_blind_global_unwrap_stability_supported_trial_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilityEvaluatedStates           int                                      `json:"best_spatial_blind_global_unwrap_stability_evaluated_states"`
+	BestSpatialBlindGlobalUnwrapStabilityMeanMargin                float64                                  `json:"best_spatial_blind_global_unwrap_stability_mean_margin"`
+	BestSpatialBlindGlobalUnwrapStabilityMeanValidationDelta       float64                                  `json:"best_spatial_blind_global_unwrap_stability_mean_validation_delta"`
+	BestSpatialBlindGlobalUnwrapStabilityCompleteFields            int                                      `json:"best_spatial_blind_global_unwrap_stability_complete_field_trials"`
+	BestSpatialBlindGlobalUnwrapStabilityUniqueFields              int                                      `json:"best_spatial_blind_global_unwrap_stability_unique_fields"`
+	BestSpatialBlindGlobalUnwrapStabilityModalFieldCount           int                                      `json:"best_spatial_blind_global_unwrap_stability_modal_field_count"`
+	BestSpatialBlindGlobalUnwrapStabilityModalFieldFraction        float64                                  `json:"best_spatial_blind_global_unwrap_stability_modal_field_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedCompleteFields   int                                      `json:"best_spatial_blind_global_unwrap_stability_supported_complete_field_trials"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedUniqueFields     int                                      `json:"best_spatial_blind_global_unwrap_stability_supported_unique_fields"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedModalFieldCount  int                                      `json:"best_spatial_blind_global_unwrap_stability_supported_modal_field_count"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedModalFieldFrac   float64                                  `json:"best_spatial_blind_global_unwrap_stability_supported_modal_field_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilityComparedCells             int                                      `json:"best_spatial_blind_global_unwrap_stability_compared_cells"`
+	BestSpatialBlindGlobalUnwrapStabilityUnanimousCells            int                                      `json:"best_spatial_blind_global_unwrap_stability_unanimous_cells"`
+	BestSpatialBlindGlobalUnwrapStabilityMeanCellModalFraction     float64                                  `json:"best_spatial_blind_global_unwrap_stability_mean_cell_modal_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilityMinCellModalFraction      float64                                  `json:"best_spatial_blind_global_unwrap_stability_min_cell_modal_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedComparedCells    int                                      `json:"best_spatial_blind_global_unwrap_stability_supported_compared_cells"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedUnanimousCells   int                                      `json:"best_spatial_blind_global_unwrap_stability_supported_unanimous_cells"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedMeanCellModal    float64                                  `json:"best_spatial_blind_global_unwrap_stability_supported_mean_cell_modal_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilitySupportedMinCellModal     float64                                  `json:"best_spatial_blind_global_unwrap_stability_supported_min_cell_modal_fraction"`
+	BestSpatialBlindGlobalUnwrapStabilityMeanPairwiseAgreement     float64                                  `json:"best_spatial_blind_global_unwrap_stability_mean_pairwise_agreement_fraction"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorMethod                  string                                   `json:"best_spatial_blind_global_unwrap_cycle_anchor_method,omitempty"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorAvailable               bool                                     `json:"best_spatial_blind_global_unwrap_cycle_anchor_available"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorPairs                   int                                      `json:"best_spatial_blind_global_unwrap_cycle_anchor_pairs"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorCells                   int                                      `json:"best_spatial_blind_global_unwrap_cycle_anchor_cells"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorMeanConfidence          float64                                  `json:"best_spatial_blind_global_unwrap_cycle_anchor_mean_confidence"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorTop1Objective           float64                                  `json:"best_spatial_blind_global_unwrap_cycle_anchor_top1_objective"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorSecondObjective         float64                                  `json:"best_spatial_blind_global_unwrap_cycle_anchor_second_objective"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorDelta                   float64                                  `json:"best_spatial_blind_global_unwrap_cycle_anchor_delta_second_minus_top1"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorPrefersTop1             bool                                     `json:"best_spatial_blind_global_unwrap_cycle_anchor_prefers_top1"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorTop1AgreementCells      int                                      `json:"best_spatial_blind_global_unwrap_cycle_anchor_top1_agreement_cells"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorTop1AgreementFraction   float64                                  `json:"best_spatial_blind_global_unwrap_cycle_anchor_top1_agreement_fraction"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorSecondAgreementCells    int                                      `json:"best_spatial_blind_global_unwrap_cycle_anchor_second_agreement_cells"`
+	BestSpatialBlindGlobalUnwrapCycleAnchorSecondAgreementFraction float64                                  `json:"best_spatial_blind_global_unwrap_cycle_anchor_second_agreement_fraction"`
+	BestSpatialBlindOracleCells                                    int                                      `json:"best_spatial_blind_phase_oracle_compared_cells"`
+	BestSpatialBlindMeanOracleDistance                             float64                                  `json:"best_spatial_blind_phase_mean_oracle_distance_blocks"`
+	BestSpatialBlindMaxOracleDistance                              float64                                  `json:"best_spatial_blind_phase_max_oracle_distance_blocks"`
+	BestSpatialLocalStableWrong                                    int                                      `json:"best_spatial_local_phase_stable_wrong_known_header_bits"`
+	BestSpatialLocalMixed                                          int                                      `json:"best_spatial_local_phase_mixed_known_header_bits"`
+	BestSpatialLocalMajorityECC                                    int                                      `json:"best_spatial_local_phase_majority_post_ecc_known_header_bit_errors"`
+	BestSpatialLocalAgreement                                      float64                                  `json:"best_spatial_local_phase_mean_all_coded_bit_agreement"`
+	BestSpatialLocalUnstable                                       float64                                  `json:"best_spatial_local_phase_unstable_all_coded_bit_fraction"`
+	SmoothPhaseFitAttempts                                         int                                      `json:"smooth_phase_fit_attempts"`
+	SmoothPhaseEligibleFits                                        int                                      `json:"smooth_phase_eligible_fits"`
+	SmoothPhaseResampleAttempts                                    int                                      `json:"smooth_phase_resample_attempts"`
+	SmoothPhaseDecodeAttempts                                      int                                      `json:"smooth_phase_decode_attempts"`
+	BestSmoothPhaseProfile                                         Profile                                  `json:"best_smooth_phase_profile,omitempty"`
+	BestSmoothPhaseMode                                            string                                   `json:"best_smooth_phase_mode,omitempty"`
+	BestSmoothPhaseGeometry                                        string                                   `json:"best_smooth_phase_geometry_source,omitempty"`
+	BestSmoothPhaseControls                                        int                                      `json:"best_smooth_phase_controls"`
+	BestSmoothPhaseModel                                           string                                   `json:"best_smooth_phase_model,omitempty"`
+	BestSmoothPhaseControlSource                                   string                                   `json:"best_smooth_phase_control_source,omitempty"`
+	BestSmoothPhaseMeanConfidence                                  float64                                  `json:"best_smooth_phase_mean_control_confidence"`
+	BestSmoothPhaseMinConfidence                                   float64                                  `json:"best_smooth_phase_min_control_confidence"`
+	BestSmoothPhaseRobustOutliers                                  int                                      `json:"best_smooth_phase_robust_outliers"`
+	BestSmoothPhaseAffineFitRMS                                    float64                                  `json:"best_smooth_phase_affine_fit_rms_blocks"`
+	BestSmoothPhaseAffineLOORMS                                    float64                                  `json:"best_smooth_phase_affine_leave_one_out_rms_blocks"`
+	BestSmoothPhaseQuadraticAvailable                              bool                                     `json:"best_smooth_phase_quadratic_available"`
+	BestSmoothPhaseQuadraticFitRMS                                 float64                                  `json:"best_smooth_phase_quadratic_fit_rms_blocks"`
+	BestSmoothPhaseQuadraticLOORMS                                 float64                                  `json:"best_smooth_phase_quadratic_leave_one_out_rms_blocks"`
+	BestSmoothPhaseQuadraticSelected                               bool                                     `json:"best_smooth_phase_quadratic_selected"`
+	BestSmoothPhaseFitRMS                                          float64                                  `json:"best_smooth_phase_fit_rms_blocks"`
+	BestSmoothPhaseLOORMS                                          float64                                  `json:"best_smooth_phase_leave_one_out_rms_blocks"`
+	BestSmoothPhaseMaxCorrection                                   float64                                  `json:"best_smooth_phase_max_correction_blocks"`
+	BestSmoothPhaseBasePostECC                                     int                                      `json:"best_smooth_phase_base_post_ecc_known_header_bit_errors"`
+	BestSmoothPhasePostECC                                         int                                      `json:"best_smooth_phase_post_ecc_known_header_bit_errors"`
+	BestSmoothPhaseImprovement                                     int                                      `json:"best_smooth_phase_post_ecc_improvement"`
+	BestSmoothPhaseCodedErrors                                     int                                      `json:"best_smooth_phase_known_header_coded_bit_errors"`
+	BestSmoothPhaseSyncZ                                           float64                                  `json:"best_smooth_phase_sync_z_score"`
+	BestSyndromeFraction                                           float64                                  `json:"best_hamming_nonzero_syndrome_fraction"`
+	BestWrongMarginRatio                                           float64                                  `json:"best_known_wrong_to_correct_margin_ratio"`
 }
 
 // DiagnosticProjectiveProbeEvidence exposes the bounded known-header score for
@@ -582,6 +657,14 @@ type diagnosticProjectiveProbe struct {
 	profile   Profile
 	fraction  float64
 	z         float64
+}
+
+type diagnosticCrossfitCandidateContext struct {
+	bitIndex  int
+	cells     []diagnosticSpatialGridCell
+	aggregate []float64
+	lattice   diagnosticBlindPhaseResult
+	latticeOK bool
 }
 
 func attemptDiagnosticProjectiveAuthentication(src image.Image, key []byte, estimate DiagnosticProjectiveEstimate) ([]byte, ExtractInfo, DiagnosticProjectiveAuthentication, bool) {
@@ -766,6 +849,64 @@ func attemptDiagnosticProjectiveAuthentication(src image.Image, key []byte, esti
 	evidence.PhotometricMilliseconds = time.Since(photometricStarted).Milliseconds()
 	decodeStarted := time.Now()
 	decodeCandidates := selectDiagnosticPhotometricDecodeCandidates(photometricCandidates, diagnosticMaxProjectiveFullDecodes)
+	crossfitContexts := make([]diagnosticCrossfitCandidateContext, 0, len(decodeCandidates))
+	finalizedBitDiagnostics := false
+	finalizeBitDiagnostics := func() {
+		if finalizedBitDiagnostics {
+			return
+		}
+		finalizedBitDiagnostics = true
+
+		bestIndex := -1
+		for i := range evidence.BitDiagnostics {
+			if bestIndex < 0 || diagnosticBitEvidenceBetter(evidence.BitDiagnostics[i], evidence.BitDiagnostics[bestIndex]) {
+				bestIndex = i
+			}
+		}
+		if bestIndex >= 0 {
+			for _, context := range crossfitContexts {
+				if context.bitIndex != bestIndex {
+					continue
+				}
+				spatial := evidence.BitDiagnostics[bestIndex].Spatial
+				if spatial != nil && context.latticeOK && spatial.BlindGlobalUnwrapStatus == "ambiguous" && spatial.BlindGlobalUnwrapSecondAvailable {
+					started := time.Now()
+					crossfit := diagnosticGlobalUnwrapCrossfit(context.cells, context.aggregate, context.lattice)
+					evidence.CrossfitUnwrapMilliseconds += time.Since(started).Milliseconds()
+					evidence.CrossfitUnwrapAttempts++
+					diagnosticApplyCrossfitSpatialEvidence(spatial, crossfit, context.cells)
+
+					// Build19 extends the same best-candidate-only, ambiguous-only
+					// scheduling discipline to a fixed eight-partition stability
+					// experiment. The result is telemetry only: no sampler/HMAC
+					// candidate is created and no all-pairs unwrap decision changes.
+					stabilityStarted := time.Now()
+					stability := diagnosticGlobalUnwrapPartitionStability(context.cells, context.aggregate, context.lattice)
+					evidence.PartitionStabilityMilliseconds += time.Since(stabilityStarted).Milliseconds()
+					evidence.PartitionStabilityAttempts++
+					diagnosticApplyStabilitySpatialEvidence(spatial, stability, context.cells)
+
+					// Build20 adds an independent cycle anchor from unguided cross-cell
+					// image-domain registration. It is diagnostic-only and compares
+					// exact top-1/top-2 fields without creating a decode/HMAC path.
+					anchorStarted := time.Now()
+					cycleAnchor := diagnosticIndependentCycleAnchor(spatial, context.cells)
+					evidence.CycleAnchorMilliseconds += time.Since(anchorStarted).Milliseconds()
+					evidence.CycleAnchorAttempts++
+					diagnosticApplyCycleAnchorSpatialEvidence(spatial, cycleAnchor, context.cells)
+				}
+				break
+			}
+		}
+		evidence.CrossfitUnwrapSkippedCandidates = len(crossfitContexts) - evidence.CrossfitUnwrapAttempts
+		if evidence.CrossfitUnwrapSkippedCandidates < 0 {
+			evidence.CrossfitUnwrapSkippedCandidates = 0
+		}
+		for i := range evidence.BitDiagnostics {
+			updateDiagnosticBitSummary(&evidence, evidence.BitDiagnostics[i])
+		}
+	}
+
 	for _, candidate := range decodeCandidates {
 		width := int(math.Round(candidate.geometry.candidate.CanonicalWidthPixels))
 		height := int(math.Round(candidate.geometry.candidate.CanonicalHeightPixels))
@@ -789,7 +930,11 @@ func attemptDiagnosticProjectiveAuthentication(src image.Image, key []byte, esti
 		smoothSelected := false
 		if bitEvidence, bitOK = diagnosticAnalyzeBitChannel(grid, key, decoder, candidate.geometry.source, candidate.mode); bitOK {
 			latticePhase, latticePhaseOK := diagnosticEstimateLocalLatticeFractionalPhase(candidate.geometry.candidate, candidate.geometry.mapper, stats.spatialCells, estimate.localRegions)
-			diagnosticAttachSpatialBitEvidenceWithGridAndLattice(&bitEvidence, stats.spatialCells, grid, key, latticePhase, latticePhaseOK)
+			// Build18 keeps the all-pairs exact unwrap on every candidate but defers
+			// the research-only held-out cross-fit until bit-channel ranking has
+			// selected the single best candidate. This preserves decisions while
+			// removing duplicate fold construction and exact searches.
+			diagnosticAttachSpatialBitEvidenceWithGridAndLatticeOptions(&bitEvidence, stats.spatialCells, grid, key, latticePhase, latticePhaseOK, false)
 			evidence.BitDiagnosticAttempts++
 			if bitEvidence.Spatial != nil {
 				evidence.SpatialDiagnosticAttempts++
@@ -819,7 +964,13 @@ func attemptDiagnosticProjectiveAuthentication(src image.Image, key []byte, esti
 				}
 			}
 			evidence.BitDiagnostics = append(evidence.BitDiagnostics, bitEvidence)
-			updateDiagnosticBitSummary(&evidence, bitEvidence)
+			crossfitContexts = append(crossfitContexts, diagnosticCrossfitCandidateContext{
+				bitIndex:  len(evidence.BitDiagnostics) - 1,
+				cells:     stats.spatialCells,
+				aggregate: grid,
+				lattice:   latticePhase,
+				latticeOK: latticePhaseOK,
+			})
 		}
 
 		evidence.FullDecodeAttempts++
@@ -837,6 +988,7 @@ func attemptDiagnosticProjectiveAuthentication(src image.Image, key []byte, esti
 			payload, info, _, found = decoder.decodeGrid(decodeGrid)
 		}
 		if found {
+			finalizeBitDiagnostics()
 			method := "hard"
 			if smoothSelected {
 				method = "smooth-phase-hard"
@@ -848,6 +1000,7 @@ func attemptDiagnosticProjectiveAuthentication(src image.Image, key []byte, esti
 			return payload, info, evidence, true
 		}
 	}
+	finalizeBitDiagnostics()
 	evidence.FullDecodeMilliseconds = time.Since(decodeStarted).Milliseconds()
 	return nil, ExtractInfo{}, evidence, false
 }
@@ -1511,6 +1664,74 @@ func updateDiagnosticBitSummary(evidence *DiagnosticProjectiveAuthentication, bi
 			evidence.BestSpatialBlindGlobalUnwrapValidationFold1Delta = bit.Spatial.BlindGlobalUnwrapValidationFold1Delta
 			evidence.BestSpatialBlindGlobalUnwrapValidationMeanDelta = bit.Spatial.BlindGlobalUnwrapValidationMeanDelta
 			evidence.BestSpatialBlindGlobalUnwrapValidationSupportsBest = bit.Spatial.BlindGlobalUnwrapValidationSupportsBest
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitMethod = bit.Spatial.BlindGlobalUnwrapCrossfitMethod
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAvailable = bit.Spatial.BlindGlobalUnwrapCrossfitAvailable
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBAvailable = bit.Spatial.BlindGlobalUnwrapCrossfitAToBAvailable
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToAAvailable = bit.Spatial.BlindGlobalUnwrapCrossfitBToAAvailable
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBProfile = bit.Spatial.BlindGlobalUnwrapCrossfitAToBProfile
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToAProfile = bit.Spatial.BlindGlobalUnwrapCrossfitBToAProfile
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitProposalPairsA = bit.Spatial.BlindGlobalUnwrapCrossfitProposalPairsA
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitProposalPairsB = bit.Spatial.BlindGlobalUnwrapCrossfitProposalPairsB
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitValidationPairsA = bit.Spatial.BlindGlobalUnwrapCrossfitValidationPairsA
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitValidationPairsB = bit.Spatial.BlindGlobalUnwrapCrossfitValidationPairsB
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBCells = bit.Spatial.BlindGlobalUnwrapCrossfitAToBCells
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToACells = bit.Spatial.BlindGlobalUnwrapCrossfitBToACells
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBStates = bit.Spatial.BlindGlobalUnwrapCrossfitAToBStates
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToAStates = bit.Spatial.BlindGlobalUnwrapCrossfitBToAStates
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBMargin = bit.Spatial.BlindGlobalUnwrapCrossfitAToBMargin
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToAMargin = bit.Spatial.BlindGlobalUnwrapCrossfitBToAMargin
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBDelta = bit.Spatial.BlindGlobalUnwrapCrossfitAToBDelta
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToADelta = bit.Spatial.BlindGlobalUnwrapCrossfitBToADelta
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAToBSupportsBest = bit.Spatial.BlindGlobalUnwrapCrossfitAToBSupportsBest
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitBToASupportsBest = bit.Spatial.BlindGlobalUnwrapCrossfitBToASupportsBest
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitComparedCells = bit.Spatial.BlindGlobalUnwrapCrossfitComparedCells
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAgreementCells = bit.Spatial.BlindGlobalUnwrapCrossfitAgreementCells
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAgreementFraction = bit.Spatial.BlindGlobalUnwrapCrossfitAgreementFraction
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAgreementMeanConfidence = bit.Spatial.BlindGlobalUnwrapCrossfitAgreementMeanConfidence
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitDisagreementMeanConfidence = bit.Spatial.BlindGlobalUnwrapCrossfitDisagreementMeanConfidence
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitAgreementMeanLattice = bit.Spatial.BlindGlobalUnwrapCrossfitAgreementMeanLattice
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitDisagreementMeanLattice = bit.Spatial.BlindGlobalUnwrapCrossfitDisagreementMeanLattice
+			evidence.BestSpatialBlindGlobalUnwrapCrossfitSupportsBest = bit.Spatial.BlindGlobalUnwrapCrossfitSupportsBest
+			evidence.BestSpatialBlindGlobalUnwrapStabilityMethod = bit.Spatial.BlindGlobalUnwrapStabilityMethod
+			evidence.BestSpatialBlindGlobalUnwrapStabilityAvailable = bit.Spatial.BlindGlobalUnwrapStabilityAvailable
+			evidence.BestSpatialBlindGlobalUnwrapStabilityPartitions = bit.Spatial.BlindGlobalUnwrapStabilityPartitions
+			evidence.BestSpatialBlindGlobalUnwrapStabilityTrialsRequested = bit.Spatial.BlindGlobalUnwrapStabilityTrialsRequested
+			evidence.BestSpatialBlindGlobalUnwrapStabilityTrialsAvailable = bit.Spatial.BlindGlobalUnwrapStabilityTrialsAvailable
+			evidence.BestSpatialBlindGlobalUnwrapStabilityTrialsSupported = bit.Spatial.BlindGlobalUnwrapStabilityTrialsSupported
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedTrialFraction = bit.Spatial.BlindGlobalUnwrapStabilitySupportedFraction
+			evidence.BestSpatialBlindGlobalUnwrapStabilityEvaluatedStates = bit.Spatial.BlindGlobalUnwrapStabilityEvaluatedStates
+			evidence.BestSpatialBlindGlobalUnwrapStabilityMeanMargin = bit.Spatial.BlindGlobalUnwrapStabilityMeanMargin
+			evidence.BestSpatialBlindGlobalUnwrapStabilityMeanValidationDelta = bit.Spatial.BlindGlobalUnwrapStabilityMeanValidationDelta
+			evidence.BestSpatialBlindGlobalUnwrapStabilityCompleteFields = bit.Spatial.BlindGlobalUnwrapStabilityCompleteFields
+			evidence.BestSpatialBlindGlobalUnwrapStabilityUniqueFields = bit.Spatial.BlindGlobalUnwrapStabilityUniqueFields
+			evidence.BestSpatialBlindGlobalUnwrapStabilityModalFieldCount = bit.Spatial.BlindGlobalUnwrapStabilityModalFieldCount
+			evidence.BestSpatialBlindGlobalUnwrapStabilityModalFieldFraction = bit.Spatial.BlindGlobalUnwrapStabilityModalFieldFraction
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedCompleteFields = bit.Spatial.BlindGlobalUnwrapStabilitySupportedCompleteFields
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedUniqueFields = bit.Spatial.BlindGlobalUnwrapStabilitySupportedUniqueFields
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedModalFieldCount = bit.Spatial.BlindGlobalUnwrapStabilitySupportedModalFieldCount
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedModalFieldFrac = bit.Spatial.BlindGlobalUnwrapStabilitySupportedModalFieldFrac
+			evidence.BestSpatialBlindGlobalUnwrapStabilityComparedCells = bit.Spatial.BlindGlobalUnwrapStabilityComparedCells
+			evidence.BestSpatialBlindGlobalUnwrapStabilityUnanimousCells = bit.Spatial.BlindGlobalUnwrapStabilityUnanimousCells
+			evidence.BestSpatialBlindGlobalUnwrapStabilityMeanCellModalFraction = bit.Spatial.BlindGlobalUnwrapStabilityMeanCellModalFraction
+			evidence.BestSpatialBlindGlobalUnwrapStabilityMinCellModalFraction = bit.Spatial.BlindGlobalUnwrapStabilityMinCellModalFraction
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedComparedCells = bit.Spatial.BlindGlobalUnwrapStabilitySupportedComparedCells
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedUnanimousCells = bit.Spatial.BlindGlobalUnwrapStabilitySupportedUnanimousCells
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedMeanCellModal = bit.Spatial.BlindGlobalUnwrapStabilitySupportedMeanCellModal
+			evidence.BestSpatialBlindGlobalUnwrapStabilitySupportedMinCellModal = bit.Spatial.BlindGlobalUnwrapStabilitySupportedMinCellModal
+			evidence.BestSpatialBlindGlobalUnwrapStabilityMeanPairwiseAgreement = bit.Spatial.BlindGlobalUnwrapStabilityMeanPairwiseAgreement
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorMethod = bit.Spatial.BlindGlobalUnwrapCycleAnchorMethod
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorAvailable = bit.Spatial.BlindGlobalUnwrapCycleAnchorAvailable
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorPairs = bit.Spatial.BlindGlobalUnwrapCycleAnchorPairs
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorCells = bit.Spatial.BlindGlobalUnwrapCycleAnchorCells
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorMeanConfidence = bit.Spatial.BlindGlobalUnwrapCycleAnchorMeanConfidence
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorTop1Objective = bit.Spatial.BlindGlobalUnwrapCycleAnchorTop1Objective
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorSecondObjective = bit.Spatial.BlindGlobalUnwrapCycleAnchorSecondObjective
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorDelta = bit.Spatial.BlindGlobalUnwrapCycleAnchorDelta
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorPrefersTop1 = bit.Spatial.BlindGlobalUnwrapCycleAnchorPrefersTop1
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorTop1AgreementCells = bit.Spatial.BlindGlobalUnwrapCycleAnchorTop1AgreementCells
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorTop1AgreementFraction = bit.Spatial.BlindGlobalUnwrapCycleAnchorTop1AgreementFraction
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorSecondAgreementCells = bit.Spatial.BlindGlobalUnwrapCycleAnchorSecondAgreementCells
+			evidence.BestSpatialBlindGlobalUnwrapCycleAnchorSecondAgreementFraction = bit.Spatial.BlindGlobalUnwrapCycleAnchorSecondAgreementFraction
 			evidence.BestSpatialBlindOracleCells = bit.Spatial.BlindPhaseOracleComparedCells
 			evidence.BestSpatialBlindMeanOracleDistance = bit.Spatial.BlindPhaseMeanOracleDistanceBlocks
 			evidence.BestSpatialBlindMaxOracleDistance = bit.Spatial.BlindPhaseMaxOracleDistanceBlocks
